@@ -1,4 +1,4 @@
-# Investigation: Soniox Microphone Live-Transcription CLI (`mic-tool`)
+# Investigation: Soniox Microphone Live-Transcription CLI (`mic-tool-ts`)
 
 ## Executive Summary
 
@@ -8,12 +8,12 @@ The recommendation prioritizes minimum runtime-dependency surface area, strong t
 
 ## Context
 
-- Refined request: `/Users/giorgosmarinos/aiwork/coding-platform/mic-tool/docs/design/refined-request-soniox-mic-transcriber.md`
-- Goal: a single TypeScript CLI binary (`mic-tool`) that captures macOS mic audio, streams it to Soniox real-time WSS, and renders partial + final transcripts to `stdout`.
+- Refined request: `/Users/giorgosmarinos/aiwork/coding-platform/mic-tool-ts/docs/design/refined-request-soniox-mic-transcriber.md`
+- Goal: a single TypeScript CLI binary (`mic-tool-ts`) that captures macOS mic audio, streams it to Soniox real-time WSS, and renders partial + final transcripts to `stdout`.
 - Hard constraints recap:
   - TypeScript only, Node.js LTS (>= 20).
   - macOS (Darwin) v1 only; mic-capture layer must be abstracted for future Linux/Windows.
-  - pnpm package manager; `mic-tool` binary name; fail-fast on WS drop (no reconnect in v1).
+  - pnpm package manager; `mic-tool-ts` binary name; fail-fast on WS drop (no reconnect in v1).
   - No fallback config values; API key precedence is CLI flag > local `.env` > shell env.
   - Dependency vetting required for every new runtime dep; prefer latest non-vulnerable major; audit must be clean.
 - 14 acceptance criteria already drive the implementation contract; this investigation only resolves the *how*.
@@ -182,7 +182,7 @@ No existing open-source TypeScript mic-to-Soniox CLI was found. We will be the f
 **Prerequisites/caveats:**
 
 - README must instruct users to `brew install sox` and to grant terminal-app mic permission in System Settings → Privacy & Security → Microphone (AC-9).
-- The `mic-tool` process inherits mic permission from its parent terminal; this is the standard macOS behaviour and the cause of most first-run "no audio" complaints.
+- The `mic-tool-ts` process inherits mic permission from its parent terminal; this is the standard macOS behaviour and the cause of most first-run "no audio" complaints.
 - On `SIGINT`, the shutdown order must be: (1) stop `sox` child process, (2) call `session.finish()` to send the end-of-stream frame and drain finals, (3) close the WebSocket, (4) exit 0 — matches AC-8.
 
 ## Technical Research Guidance
@@ -213,7 +213,7 @@ No further research is needed on the mic-capture layer, CLI framework, or `.env`
 
 - **Dependencies / prerequisites:**
   - `brew install sox` on every dev/test machine.
-  - macOS mic permission granted to the terminal app running `mic-tool`.
+  - macOS mic permission granted to the terminal app running `mic-tool-ts`.
   - Soniox account + API key for end-to-end manual tests; mocked SDK for AC-14 unit tests.
   - Node.js >= 20.12 (required for `process.loadEnvFile`).
 
@@ -256,7 +256,7 @@ No further research is needed on the mic-capture layer, CLI framework, or `.env`
 
 ## Original Request
 
-See refined specification at `/Users/giorgosmarinos/aiwork/coding-platform/mic-tool/docs/design/refined-request-soniox-mic-transcriber.md` (scope, 10 FRs, 7 NFRs, 14 ACs, 10 assumptions, 5 open questions OQ-1..OQ-5).
+See refined specification at `/Users/giorgosmarinos/aiwork/coding-platform/mic-tool-ts/docs/design/refined-request-soniox-mic-transcriber.md` (scope, 10 FRs, 7 NFRs, 14 ACs, 10 assumptions, 5 open questions OQ-1..OQ-5).
 
 Raw request preserved at line 124 of the refined spec:
 > I want you to create a command line tool capable of listening to the microphone and transcribing the input through the Soniox API. The user will provide the API key required by Soniox. The tool must stream the transcribed text to the console.

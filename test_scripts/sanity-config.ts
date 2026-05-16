@@ -69,7 +69,7 @@ const originalCwd = getCwd();
 const originalKey = process.env.SONIOX_API_KEY;
 
 function withTempCwd(envContents: string | null, body: () => void): void {
-  const dir = mkdtempSync(join(tmpdir(), "mic-tool-sanity-"));
+  const dir = mkdtempSync(join(tmpdir(), "mic-tool-ts-sanity-"));
   if (envContents !== null) {
     writeFileSync(join(dir, ".env"), envContents, "utf8");
   }
@@ -95,7 +95,7 @@ function withShellEnv(value: string | undefined, body: () => void): void {
 }
 
 function argv(...flags: string[]): string[] {
-  return ["node", "mic-tool", ...flags];
+  return ["node", "mic-tool-ts", "--no-refine", ...flags];
 }
 
 // ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@ withTempCwd(null, () => {
   withShellEnv(undefined, () => {
     const cfg: ResolvedConfig = resolveConfig(argv("--api-key", "sk_from_flag"));
     assertEq("apiKey", cfg.apiKey, "sk_from_flag");
-    assertEq("language default", cfg.language, "en");
+    assertEq("language default", cfg.languages.join(","), "el,en");
     assertEq("outputMode default", cfg.outputMode, "overwrite");
     assertEq("verbose default", cfg.verbose, false);
   });
@@ -160,9 +160,9 @@ withTempCwd(null, () => {
       (err) => err instanceof InvalidConfigurationError,
     );
     const cfg = resolveConfig(argv("--language", "auto"));
-    assertEq("'auto' is accepted", cfg.language, "auto");
+    assertEq("'auto' is accepted", cfg.languages.join(","), "auto");
     const cfg2 = resolveConfig(argv("--language", "pt-BR"));
-    assertEq("'pt-BR' is accepted", cfg2.language, "pt-BR");
+    assertEq("'pt-BR' is accepted", cfg2.languages.join(","), "pt-BR");
   });
 });
 

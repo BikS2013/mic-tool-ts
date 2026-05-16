@@ -1,7 +1,7 @@
 /**
  * Unit E — Orchestrator.
  *
- * Composes Units A (config), B (mic), C (Soniox transcriber) and D (renderer)
+ * Composes Units A (config), B (mic), C (STT transcriber) and D (renderer)
  * into a runnable CLI; installs SIGINT/SIGTERM handlers; owns the single
  * top-level try/catch that maps every typed error to an exit code.
  *
@@ -12,7 +12,7 @@
  * Sequencing (see docs/design/project-design.md §8 + §9):
  *   1. resolveConfig                       (sync; throws on missing key / help)
  *   2. new StdoutRenderer                  (sync; cannot fail)
- *   3. new SonioxTranscriber + wire cbs    (sync)
+ *   3. createTranscriber + wire cbs        (sync)
  *   4. await transcriber.start()           (opens WebSocket; auth-error path)
  *   5. createMicSource() + mic.start()     (spawns sox; permission-error path)
  *   6. wire mic.audio → transcriber.pushAudio
@@ -20,7 +20,7 @@
  *   8. park on the shutdown promise
  *
  * If step 5 fails AFTER step 4 succeeded, we MUST stop the transcriber before
- * returning — otherwise the Soniox session would stay open until the SDK's
+ * returning — otherwise the STT session would stay open until the provider's
  * keepalive timer noticed.
  *
  * Shutdown:
@@ -37,18 +37,23 @@
  *   the user can always escape a hung close (matches POSIX 128+SIGINT).
  */
 
+import { createWriteStream } from "node:fs";
+
 import { resolveConfig, HelpOrVersionShown, type ResolvedConfig } from "./config.js";
 import { createMicSource } from "./mic/index.js";
 import type { MicSource } from "./mic/types.js";
-import { SonioxTranscriber } from "./soniox/client.js";
+import { createTranscriber } from "./transcription/factory.js";
 import { StdoutRenderer } from "./render/renderer.js";
-import {
-  GuardPhraseTurnDetector,
-  type TurnAwareRenderer,
-} from "./turn/detector.js";
 import { createRefiner } from "./llm/factory.js";
+import type { LLMRefiner } from "./llm/types.js";
 import { warnAboutExpiry } from "./config/expiry.js";
 import { MicToolError } from "./errors.js";
+import { VoiceAgentProtocolController } from "./protocol/controller.js";
+import { JsonlProtocolWriter } from "./protocol/jsonlWriter.js";
+import type { ProtocolWriter } from "./protocol/types.js";
+
+const TRANSLATION_SYSTEM_PROMPT =
+  "You are a translation assistant for live dictated agent commands. Translate the user's text to the requested target language. Preserve technical terms, filenames, command names, and code identifiers. Respond with ONLY the translated text — no preamble, no quotes, no markdown, no explanation.";
 
 /**
  * Entry point. Returns a numeric exit code; never calls `process.exit`.
@@ -66,49 +71,66 @@ export async function main(argv: string[]): Promise<number> {
     return handleTopLevelError(err);
   }
 
-  // Operational expiry warning for the Soniox API key (per CLAUDE.md
+  // Operational expiry warning for the active STT provider API key (per CLAUDE.md
   // <configuration-guide> guidance). Non-fatal; user owns renewal.
-  warnAboutExpiry(config.apiKeyExpiresAt, config.verbose);
+  warnAboutExpiry({
+    envName: config.apiKeyEnvName,
+    isoDate: config.apiKeyExpiresAt,
+    renewUrl: config.sttProvider === "soniox"
+      ? "https://console.soniox.com"
+      : "https://elevenlabs.io/app/settings/api-keys",
+    verbose: config.verbose,
+  });
 
   if (config.verbose) {
     process.stderr.write(
-      `[mic-tool] config: outputMode=${config.outputMode}, languages=[${config.languages.join(", ")}], verbose=true\n`,
+      `[mic-tool-ts] config: sttProvider=${config.sttProvider}, outputMode=${config.outputMode}, languages=[${config.languages.join(", ")}], verbose=true\n`,
     );
     process.stderr.write(
-      `[mic-tool] platform=${process.platform}, node=${process.version}\n`,
+      `[mic-tool-ts] platform=${process.platform}, node=${process.version}\n`,
     );
   }
 
-  // ----- Step 2: build the renderer stack (sync; cannot fail) -------------
-  // Inner renderer writes to stdout; the turn detector wraps it to watch for
-  // the guard phrase across recent finals, emit a blank line on hit, and
-  // (optionally) refine the closed turn via the configured LLM.
+  // ----- Step 2: build the renderer/protocol stack (sync; cannot fail) ----
   const baseRenderer = new StdoutRenderer({
     mode: config.outputMode,
     isTTY: process.stdout.isTTY ?? false,
   });
-  let refiner;
+  let refiner: LLMRefiner | null = null;
+  let translator: LLMRefiner | null = null;
   try {
     refiner = createRefiner(config.llm);
+    translator = config.llm.enabled
+      ? createRefiner({
+          ...config.llm,
+          systemPrompt: TRANSLATION_SYSTEM_PROMPT,
+        })
+      : null;
   } catch (err) {
     // LLMConfigurationError at startup is fatal (exit code 2). Dispose the
     // renderer so the dispose chain stays balanced even though it's a no-op
     // here (we haven't written anything yet).
     try {
+      refiner?.dispose();
       baseRenderer.dispose();
     } catch {
       /* best effort */
     }
     return handleTopLevelError(err);
   }
-  const renderer: TurnAwareRenderer = new GuardPhraseTurnDetector(
-    baseRenderer,
-    {
-      guardPhrase: config.guardPhrase,
-      verbose: config.verbose,
-      refiner,
-    },
-  );
+  const protocolWriter = createProtocolWriter(config);
+  const renderer = new VoiceAgentProtocolController({
+    mode: config.protocol.interactionMode,
+    renderer: baseRenderer,
+    writer: protocolWriter,
+    markers: config.protocol.markers,
+    initialOperators: config.protocol.initialOperators,
+    translationPolicy: config.protocol.translationPolicy,
+    verbose: config.verbose,
+    refiner,
+    translator,
+  });
+  renderer.startSession();
 
   // ----- Shared state for the rest of main() ------------------------------
   let asyncError: Error | null = null;
@@ -140,7 +162,7 @@ export async function main(argv: string[]): Promise<number> {
     if (shuttingDown) return;
     shuttingDown = true;
     if (config.verbose) {
-      process.stderr.write(`[mic-tool] shutting down: ${reason}\n`);
+      process.stderr.write(`[mic-tool-ts] shutting down: ${reason}\n`);
     }
     // Run the teardown chain on the microtask queue so the caller's stack
     // (signal handler / event emitter) unwinds first.
@@ -152,7 +174,7 @@ export async function main(argv: string[]): Promise<number> {
         } catch (err) {
           if (config.verbose) {
             process.stderr.write(
-              `[mic-tool] mic.stop() error: ${err instanceof Error ? err.message : String(err)}\n`,
+              `[mic-tool-ts] mic.stop() error: ${err instanceof Error ? err.message : String(err)}\n`,
             );
           }
           recordAsyncError(err);
@@ -168,7 +190,7 @@ export async function main(argv: string[]): Promise<number> {
         } catch (err) {
           if (config.verbose) {
             process.stderr.write(
-              `[mic-tool] transcriber.stop() error: ${err instanceof Error ? err.message : String(err)}\n`,
+              `[mic-tool-ts] transcriber.stop() error: ${err instanceof Error ? err.message : String(err)}\n`,
             );
           }
           recordAsyncError(err);
@@ -176,6 +198,7 @@ export async function main(argv: string[]): Promise<number> {
       }
       // 3. Renderer cleanup — synchronous, must not throw.
       try {
+        await renderer.endSession(reason);
         renderer.dispose();
       } catch (err) {
         recordAsyncError(err);
@@ -186,7 +209,8 @@ export async function main(argv: string[]): Promise<number> {
   };
 
   // ----- Step 3: build the transcriber and wire its callbacks -------------
-  const transcriber = new SonioxTranscriber({
+  const transcriber = createTranscriber({
+    provider: config.sttProvider,
     apiKey: config.apiKey,
     model: config.model,
     endpoint: config.endpoint,
@@ -202,7 +226,7 @@ export async function main(argv: string[]): Promise<number> {
     shutdown("transcriber-error");
   });
 
-  // ----- Step 4: open the Soniox WebSocket FIRST --------------------------
+  // ----- Step 4: open the STT WebSocket FIRST -----------------------------
   // Doing transcriber.start() before mic.start() means an auth/network
   // failure aborts before we ever ask CoreAudio for the microphone — quicker
   // failure, no spurious mic-permission prompt.
@@ -210,8 +234,9 @@ export async function main(argv: string[]): Promise<number> {
     await transcriber.start();
     transcriberStarted = true;
   } catch (err) {
-    // Soniox refused (auth / network / protocol). Nothing else has started.
+    // STT provider refused (auth / network / protocol). Nothing else has started.
     try {
+      await renderer.endSession("startup-error");
       renderer.dispose();
     } catch {
       /* best effort */
@@ -234,6 +259,7 @@ export async function main(argv: string[]): Promise<number> {
       /* swallow — we already have the primary error */
     }
     try {
+      await renderer.endSession("startup-error");
       renderer.dispose();
     } catch {
       /* best effort */
@@ -252,6 +278,7 @@ export async function main(argv: string[]): Promise<number> {
       /* swallow */
     }
     try {
+      await renderer.endSession("startup-error");
       renderer.dispose();
     } catch {
       /* best effort */
@@ -278,14 +305,14 @@ export async function main(argv: string[]): Promise<number> {
   const onSigint = (): void => {
     if (shuttingDown && !shutdownDone) {
       // Already shutting down — user is impatient. Exit 130 (SIGINT).
-      process.stderr.write("[mic-tool] force quit\n");
+      process.stderr.write("[mic-tool-ts] force quit\n");
       process.exit(130);
     }
     shutdown("SIGINT");
   };
   const onSigterm = (): void => {
     if (shuttingDown && !shutdownDone) {
-      process.stderr.write("[mic-tool] force quit\n");
+      process.stderr.write("[mic-tool-ts] force quit\n");
       process.exit(143);
     }
     shutdown("SIGTERM");
@@ -293,11 +320,9 @@ export async function main(argv: string[]): Promise<number> {
   process.on("SIGINT", onSigint);
   process.on("SIGTERM", onSigterm);
 
-  if (config.verbose) {
-    process.stderr.write(
-      "[mic-tool] connected. Listening on default mic. Press Ctrl+C to stop.\n",
-    );
-  }
+  process.stderr.write(
+    "[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.\n",
+  );
 
   try {
     // ----- Step 8: park until shutdown completes --------------------------
@@ -333,4 +358,18 @@ function handleTopLevelError(err: unknown): number {
   }
   process.stderr.write(`${String(err)}\n`);
   return 1;
+}
+
+function createProtocolWriter(config: ResolvedConfig): ProtocolWriter | undefined {
+  if (config.protocol.interactionMode === "agent-protocol") {
+    return new JsonlProtocolWriter({ out: process.stdout });
+  }
+  if (config.protocol.interactionMode === "hybrid") {
+    const out = createWriteStream(config.protocol.protocolOutput as string, {
+      flags: "a",
+      encoding: "utf8",
+    });
+    return new JsonlProtocolWriter({ out, closeOnEnd: true });
+  }
+  return undefined;
 }

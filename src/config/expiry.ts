@@ -1,7 +1,7 @@
 /**
- * Operational expiry tracking for the Soniox API key (and, in future, other
- * keys). Per CLAUDE.md `<configuration-guide>`, expiring credentials should
- * have an associated YYYY-MM-DD reminder so the tool can warn proactively.
+ * Operational expiry tracking for provider API keys. Per CLAUDE.md
+ * `<configuration-guide>`, expiring credentials should have an associated
+ * YYYY-MM-DD reminder so the tool can warn proactively.
  *
  * The tool does NOT block on expiry — the user owns renewal. We only emit a
  * single stderr warning at startup.
@@ -15,6 +15,13 @@ export type ExpiryLevel = "ok" | "soon" | "expired";
 export interface ExpiryStatus {
   level: ExpiryLevel;
   daysUntil: number; // negative if already expired
+}
+
+export interface ExpiryWarningOptions {
+  readonly envName: string;
+  readonly isoDate: string | undefined;
+  readonly renewUrl: string;
+  readonly verbose: boolean;
 }
 
 export function evaluateExpiry(
@@ -35,16 +42,28 @@ export function evaluateExpiry(
  * `--verbose`, always emit a status line for diagnostics.
  */
 export function warnAboutExpiry(
-  isoDate: string | undefined,
-  verbose: boolean,
+  optionsOrIsoDate: ExpiryWarningOptions | string | undefined,
+  verbose = false,
   write: (line: string) => void = (s) => {
     process.stderr.write(s);
   },
   now: Date = new Date(),
 ): void {
+  const options: ExpiryWarningOptions =
+    typeof optionsOrIsoDate === "object" && optionsOrIsoDate !== null
+      ? optionsOrIsoDate
+      : {
+          envName: "SONIOX_API_KEY",
+          isoDate: optionsOrIsoDate,
+          renewUrl: "https://console.soniox.com",
+          verbose,
+        };
+  const { envName, isoDate, renewUrl } = options;
+  verbose = options.verbose;
+
   if (isoDate === undefined) {
     if (verbose) {
-      write("[mic-tool] SONIOX_API_KEY_EXPIRES_AT not set — expiry tracking disabled\n");
+      write(`[mic-tool-ts] ${envName}_EXPIRES_AT not set — expiry tracking disabled\n`);
     }
     return;
   }
@@ -52,20 +71,20 @@ export function warnAboutExpiry(
   if (status.level === "expired") {
     const days = Math.abs(status.daysUntil);
     write(
-      `[mic-tool] WARNING: SONIOX_API_KEY expired ${days} day${days === 1 ? "" : "s"} ago (${isoDate}). Renew at https://console.soniox.com.\n`,
+      `[mic-tool-ts] WARNING: ${envName} expired ${days} day${days === 1 ? "" : "s"} ago (${isoDate}). Renew at ${renewUrl}.\n`,
     );
     return;
   }
   if (status.level === "soon") {
     write(
-      `[mic-tool] WARNING: SONIOX_API_KEY expires in ${status.daysUntil} day${status.daysUntil === 1 ? "" : "s"} (${isoDate}). Plan a renewal.\n`,
+      `[mic-tool-ts] WARNING: ${envName} expires in ${status.daysUntil} day${status.daysUntil === 1 ? "" : "s"} (${isoDate}). Plan a renewal.\n`,
     );
     return;
   }
   // level === "ok"
   if (verbose) {
     write(
-      `[mic-tool] SONIOX_API_KEY expires in ${status.daysUntil} days (${isoDate})\n`,
+      `[mic-tool-ts] ${envName} expires in ${status.daysUntil} days (${isoDate})\n`,
     );
   }
 }

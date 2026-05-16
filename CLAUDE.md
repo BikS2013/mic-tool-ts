@@ -77,3 +77,14 @@
 </dependency-vetting>
 
 </structure-and-conventions>
+
+## Project Tool Invocation
+
+- The project/tool name is `mic-tool-ts`.
+- The supported user-facing invocation is the direct OS command `mic-tool-ts` on the user's `PATH`.
+- Do not document or recommend `node dist/index.js`, `tsx src/index.ts`, `pnpm run dev`, or package-manager scripts as the installed-tool invocation. Those are development conveniences only.
+- The per-user configuration folder is `~/.tool-agents/mic-tool-ts/`; the secrets file is `~/.tool-agents/mic-tool-ts/.env`.
+
+## Tools
+
+- `mic-tool-ts` — TypeScript CLI that captures macOS microphone audio, streams it to Soniox real-time STT, detects guard-phrase turn boundaries, and optionally refines closed turns through an LLM. Tool reference: `docs/tools/mic-tool-ts.md`.

@@ -1,6 +1,6 @@
 # `@soniox/node` v2 — SDK Deep Dive for Microphone-Streaming CLI
 
-**Document purpose**: Implementation-ready reference for the mic-tool designer and coder.  
+**Document purpose**: Implementation-ready reference for the mic-tool-ts designer and coder.  
 **SDK version researched**: `@soniox/node@2.0.3` (latest stable as of 2026-05-15)  
 **Sources**: Official Soniox docs, npm registry metadata, soniox-js GitHub README, SDK reference pages
 
@@ -153,10 +153,10 @@ interface SonioxNodeClientOptions {
 }
 ```
 
-**For the mic-tool CLI**, the only field that matters is `api_key`. All other defaults are correct.
+**For the mic-tool-ts CLI**, the only field that matters is `api_key`. All other defaults are correct.
 
 ```typescript
-// mic-tool usage: pass the resolved key, never rely on auto-read-from-env
+// mic-tool-ts usage: pass the resolved key, never rely on auto-read-from-env
 // (the CLI manages precedence before constructing the client)
 const client = new SonioxNodeClient({ api_key: resolvedApiKey });
 ```
@@ -192,7 +192,7 @@ interface SttSessionConfig {
 }
 ```
 
-**Recommended config for mic-tool**:
+**Recommended config for mic-tool-ts**:
 
 ```typescript
 const session = client.realtime.stt({
@@ -289,7 +289,7 @@ interface SendStreamOptions {
 
 Accepts **any** `AsyncIterable<Uint8Array | ArrayBuffer>`: Node.js `Readable` streams (which are `AsyncIterable`), `ReadableStream` (Web API), Bun streams, or custom async generators.
 
-For mic-tool, use `session.sendAudio()` from the `child_process` `data` event OR `session.sendStream(soxProcess.stdout)`. Both work. The `data` event approach gives explicit control over the shutdown sequence.
+For mic-tool-ts, use `session.sendAudio()` from the `child_process` `data` event OR `session.sendStream(soxProcess.stdout)`. Both work. The `data` event approach gives explicit control over the shutdown sequence.
 
 #### `session.finish(): Promise<void>`
 
@@ -736,13 +736,13 @@ Yes. `session.sendStream()` accepts **any `AsyncIterable<AudioData>`**. Node.js 
 await session.sendStream(soxProcess.stdout, { finish: true });
 ```
 
-The `sendStream({ finish: true })` variant calls `session.finish()` automatically after the iterable ends — convenient when sox exits naturally but insufficient for SIGINT (where you need to orchestrate the shutdown order yourself). For the mic-tool, prefer the `data` event approach so you control the exact moment of `sendAudio()` and `finalize()` + `finish()`.
+The `sendStream({ finish: true })` variant calls `session.finish()` automatically after the iterable ends — convenient when sox exits naturally but insufficient for SIGINT (where you need to orchestrate the shutdown order yourself). For the mic-tool-ts, prefer the `data` event approach so you control the exact moment of `sendAudio()` and `finalize()` + `finish()`.
 
 ### Backpressure
 
 `sendAudio()` is synchronous and returns `void`. The SDK does not expose any backpressure signal (no `drain` event, no watermark property). The underlying WebSocket may buffer internally.
 
-**Practical implications for mic-tool**:
+**Practical implications for mic-tool-ts**:
 - At 16 kHz, mono, 16-bit PCM, the audio data rate is ~32 KB/s. This is well within normal WebSocket throughput (~100+ KB/s on a typical network).
 - sox delivers audio in small chunks (~3–8 KB); each call to `sendAudio()` is a single WebSocket binary frame.
 - No additional throttling is needed for a live mic source.
@@ -809,7 +809,7 @@ This example demonstrates:
 - `buffer.markEndpoint()` — called on every `'endpoint'` event — returns a `RealtimeUtterance | undefined`
 - `sendStream()` with `highWaterMark: 3840` (3.84 KB per chunk = 120 ms of audio at 16 kHz 16-bit mono)
 
-**No mic-specific Node example exists in public sources.** The mic-tool will be the first public TypeScript example of mic-to-Soniox live streaming.
+**No mic-specific Node example exists in public sources.** The mic-tool-ts will be the first public TypeScript example of mic-to-Soniox live streaming.
 
 ### Third-party confirmation: `agentvoiceresponse/avr-asr-soniox`
 
@@ -831,7 +831,7 @@ The SDK was rewritten for v2. Key breaking changes (based on API surface differe
 - v2 added `session.finalize()` with `trailing_silence_ms` option.
 - v2 ships dual-format (ESM + CJS) vs v1 which was CJS only.
 
-**The mic-tool MUST depend on `@soniox/node@^2` and must not reference any v1 patterns.**
+**The mic-tool-ts MUST depend on `@soniox/node@^2` and must not reference any v1 patterns.**
 
 ### Node version constraints
 
@@ -839,7 +839,7 @@ The npm metadata shows the package was built with Node `20.20.2`. No explicit en
 
 ### `type: "module"` in package.json
 
-The package itself is published as an ES module (`"type": "module"`). However, it ships CJS via the `require` export condition, so CJS projects can `require()` it. For the mic-tool (TypeScript with `tsx`), import via ES module syntax (`import { ... } from "@soniox/node"`) is correct.
+The package itself is published as an ES module (`"type": "module"`). However, it ships CJS via the `require` export condition, so CJS projects can `require()` it. For the mic-tool-ts (TypeScript with `tsx`), import via ES module syntax (`import { ... } from "@soniox/node"`) is correct.
 
 ### Keepalive: 20-second hard timeout
 
@@ -859,7 +859,7 @@ soxProc.stdout.on("data", (chunk: Buffer) => {
 
 ### `pause()` triggers implicit finalization
 
-Calling `session.pause()` triggers server-side finalization of currently buffered audio (documented in the SDK). For the mic-tool (no pause/resume in v1), this is not a concern but is important to note for future feature additions.
+Calling `session.pause()` triggers server-side finalization of currently buffered audio (documented in the SDK). For the mic-tool-ts (no pause/resume in v1), this is not a concern but is important to note for future feature additions.
 
 ### `<end>` and `<fin>` tokens in result stream
 
@@ -897,7 +897,7 @@ const session = client.realtime.stt(
 |---|---|---|
 | `AuthError` is thrown synchronously from `connect()` (not emitted as `'error'` event) | HIGH | AC-11 error handling path changes; may need to catch both |
 | `ConnectionError` distinguishes "never connected" from "mid-stream drop" via state, not error class | HIGH | AC-10 classification may need a different approach |
-| `sendAudio()` does not buffer or apply backpressure | HIGH | No impact at mic-tool data rate; would matter for high-bandwidth streams |
+| `sendAudio()` does not buffer or apply backpressure | HIGH | No impact at mic-tool-ts data rate; would matter for high-bandwidth streams |
 | `<end>` and `<fin>` tokens appear literally in `result.tokens` with those text values | HIGH | Display-filter logic must be adjusted if the actual text differs |
 | `session.finalize()` during SIGINT ensures partials are committed before `finish()` drains them | MEDIUM | If server ignores finalize mid-shutdown, some partials may be dropped |
 | `session.state` is synchronously updated (safe to check immediately before calling `sendAudio()`) | HIGH | Race condition guard pattern would need redesign |

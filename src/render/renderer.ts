@@ -59,6 +59,13 @@ export class StdoutRenderer implements Renderer {
   private readonly mode: OutputMode;
   /** Length (in characters) of the last text written in "overwrite" mode. */
   private prevLen = 0;
+  /** Physical terminal rows occupied by the last overwrite-mode partial. */
+  private prevRows = 0;
+  /** Last partial snapshot rendered. Realtime STT providers can repeat an
+   *  identical interim snapshot several times before finalizing it; rendering
+   *  those repeats creates duplicate transcript-looking lines in append mode
+   *  and noisy copied terminal output in overwrite mode. */
+  private lastPartialText: string | null = null;
   private disposed = false;
 
   constructor(opts: RendererOptions & { out?: NodeJS.WritableStream }) {
@@ -77,12 +84,18 @@ export class StdoutRenderer implements Renderer {
   partial(text: string): void {
     if (this.disposed) return;
     if (text === "") return; // edge case: never overwrite with blanks
+    if (text === this.lastPartialText) return;
+    this.lastPartialText = text;
     switch (this.mode) {
       case "overwrite": {
         const safe = sanitizeForOverwrite(text);
-        const padding = Math.max(0, this.prevLen - safe.length);
-        this.out.write("\r" + safe + " ".repeat(padding));
-        this.prevLen = safe.length;
+        const prefix = this.overwritePrefix();
+        const safeLen = visibleLength(safe);
+        const padding =
+          this.prevRows <= 1 ? Math.max(0, this.prevLen - safeLen) : 0;
+        this.out.write(prefix + safe + " ".repeat(padding));
+        this.prevLen = safeLen;
+        this.prevRows = this.rowsForText(safe);
         return;
       }
       case "append": {
@@ -98,12 +111,17 @@ export class StdoutRenderer implements Renderer {
 
   final(text: string): void {
     if (this.disposed) return;
+    this.lastPartialText = null;
     switch (this.mode) {
       case "overwrite": {
         const safe = sanitizeForOverwrite(text);
-        const padding = Math.max(0, this.prevLen - safe.length);
-        this.out.write("\r" + safe + " ".repeat(padding) + "\n");
+        const prefix = this.overwritePrefix();
+        const safeLen = visibleLength(safe);
+        const padding =
+          this.prevRows <= 1 ? Math.max(0, this.prevLen - safeLen) : 0;
+        this.out.write(prefix + safe + " ".repeat(padding) + "\n");
         this.prevLen = 0;
+        this.prevRows = 0;
         return;
       }
       case "append": {
@@ -119,6 +137,7 @@ export class StdoutRenderer implements Renderer {
 
   turnBoundary(): void {
     if (this.disposed) return;
+    this.lastPartialText = null;
     // Emit a single blank line. The preceding final() already terminated its
     // line with "\n" (in all three modes), so one more "\n" produces the gap.
     this.out.write("\n");
@@ -127,6 +146,7 @@ export class StdoutRenderer implements Renderer {
   refined(text: string): void {
     if (this.disposed) return;
     if (text.length === 0) return;
+    this.lastPartialText = null;
     // Defensive in overwrite mode: if a partial of the NEXT turn has already
     // been written (prevLen > 0), commit it with "\n" first so the refined
     // output doesn't appear concatenated to the partial. The next partial
@@ -134,6 +154,7 @@ export class StdoutRenderer implements Renderer {
     if (this.mode === "overwrite" && this.prevLen > 0) {
       this.out.write("\n");
       this.prevLen = 0;
+      this.prevRows = 0;
     }
     // Render the refined text on its own line, then a blank line below.
     // No \r — refined output is committed content, identical across modes.
@@ -143,11 +164,13 @@ export class StdoutRenderer implements Renderer {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.lastPartialText = null;
     if (this.mode === "overwrite") {
       // Terminate any in-progress overwrite line so the shell prompt is clean.
       if (this.prevLen > 0) {
         this.out.write("\n");
         this.prevLen = 0;
+        this.prevRows = 0;
       }
       // Emit ANSI clear-line + CR only on a real TTY. In the downgraded
       // (append) case this branch is unreachable, but the guard is kept
@@ -158,6 +181,25 @@ export class StdoutRenderer implements Renderer {
       }
     }
     // append / final-only: nothing to clean up.
+  }
+
+  private overwritePrefix(): string {
+    if (this.prevRows <= 1) return "\r";
+
+    const linesUp = this.prevRows - 1;
+    let sequence = `\x1b[${linesUp}A\r`;
+    for (let row = 0; row < this.prevRows; row += 1) {
+      sequence += "\x1b[2K";
+      if (row < this.prevRows - 1) {
+        sequence += "\x1b[1B\r";
+      }
+    }
+    return sequence + `\x1b[${linesUp}A\r`;
+  }
+
+  private rowsForText(text: string): number {
+    const columns = terminalColumns(this.out);
+    return Math.max(1, Math.ceil(visibleLength(text) / columns));
   }
 }
 
@@ -170,4 +212,30 @@ export class StdoutRenderer implements Renderer {
 function sanitizeForOverwrite(text: string): string {
   if (text.indexOf("\n") === -1 && text.indexOf("\r") === -1) return text;
   return text.replace(/[\r\n]+/g, " ");
+}
+
+function visibleLength(text: string): number {
+  return Array.from(text).length;
+}
+
+function terminalColumns(out: NodeJS.WritableStream): number {
+  const outColumns = (out as { columns?: unknown }).columns;
+  if (
+    typeof outColumns === "number" &&
+    Number.isFinite(outColumns) &&
+    outColumns > 0
+  ) {
+    return Math.floor(outColumns);
+  }
+
+  const stdoutColumns = process.stdout.columns;
+  if (
+    typeof stdoutColumns === "number" &&
+    Number.isFinite(stdoutColumns) &&
+    stdoutColumns > 0
+  ) {
+    return Math.floor(stdoutColumns);
+  }
+
+  return 80;
 }

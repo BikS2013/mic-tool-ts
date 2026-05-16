@@ -7,7 +7,7 @@ framework: vitest
 test_command_full: pnpm test
 test_command_scope: pnpm exec vitest run tests/errors.test.ts tests/renderer.test.ts tests/config.test.ts --reporter=verbose
 test_dir: tests/
-target_path: /Users/giorgosmarinos/aiwork/coding-platform/mic-tool
+target_path: /Users/giorgosmarinos/aiwork/coding-platform/mic-tool-ts
 test_files_owned:
   - tests/errors.test.ts
   - tests/renderer.test.ts
@@ -213,6 +213,6 @@ No shared test infrastructure files (`conftest.py`, `vitest.config.ts`, `jest.co
 
 | # | Command | Exit Code |
 |---|---|---|
-| 1 | `mkdir -p /Users/giorgosmarinos/aiwork/coding-platform/mic-tool/tests` | 0 |
+| 1 | `mkdir -p /Users/giorgosmarinos/aiwork/coding-platform/mic-tool-ts/tests` | 0 |
 | 2 | `pnpm exec vitest run tests/errors.test.ts tests/renderer.test.ts tests/config.test.ts --reporter=verbose` | 0 |
 | 3 | LSP diagnostics check on all 3 test files | 0 (no diagnostics) |

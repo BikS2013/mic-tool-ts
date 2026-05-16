@@ -16,6 +16,7 @@ import { StdoutRenderer } from "../src/render/renderer.js";
 
 class MemoryWritable extends Writable {
   public chunks: string[] = [];
+  public columns?: number;
 
   override _write(
     chunk: Buffer | string,
@@ -43,7 +44,9 @@ function makeRenderer(
   mode: "overwrite" | "append" | "final-only",
   isTTY: boolean,
   out: MemoryWritable,
+  columns?: number,
 ): StdoutRenderer {
+  out.columns = columns;
   return new StdoutRenderer({ mode, isTTY, out });
 }
 
@@ -82,6 +85,35 @@ describe("StdoutRenderer — overwrite mode (TTY)", () => {
     expect(out.text).toBe("\rhi\rhello world");
   });
 
+  it("clears every previous terminal row before replacing a wrapped partial", () => {
+    const r = makeRenderer("overwrite", true, out, 10);
+    r.partial("abcdefghijklmnop"); // 16 chars, wraps to two rows.
+    r.partial("short");
+    expect(out.text).toBe(
+      "\rabcdefghijklmnop\x1b[1A\r\x1b[2K\x1b[1B\r\x1b[2K\x1b[1A\rshort",
+    );
+  });
+
+  it("clears wrapped rows before painting a longer wrapped partial once", () => {
+    const r = makeRenderer("overwrite", true, out, 10);
+    r.partial("abcdefghijklmnop"); // two rows.
+    r.partial("abcdefghijklmnopqrstuvwxyz"); // three rows.
+    expect(out.text).toBe(
+      "\rabcdefghijklmnop" +
+        "\x1b[1A\r\x1b[2K\x1b[1B\r\x1b[2K\x1b[1A\r" +
+        "abcdefghijklmnopqrstuvwxyz",
+    );
+  });
+
+  it("clears wrapped partial rows before committing a final line", () => {
+    const r = makeRenderer("overwrite", true, out, 10);
+    r.partial("abcdefghijklmnop"); // two rows.
+    r.final("done");
+    expect(out.text).toBe(
+      "\rabcdefghijklmnop\x1b[1A\r\x1b[2K\x1b[1B\r\x1b[2K\x1b[1A\rdone\n",
+    );
+  });
+
   it("final: erases previous partial text and terminates with \\n", () => {
     const r = makeRenderer("overwrite", true, out);
     r.partial("hello"); // prevLen = 5
@@ -104,6 +136,14 @@ describe("StdoutRenderer — overwrite mode (TTY)", () => {
     r.partial(""); // must not write
     r.final("hi there");
     expect(out.text).toBe("\rhi\rhi there\n");
+  });
+
+  it("identical consecutive partial snapshots are suppressed", () => {
+    const r = makeRenderer("overwrite", true, out);
+    r.partial("same partial");
+    r.partial("same partial");
+    r.partial("same partial");
+    expect(out.text).toBe("\rsame partial");
   });
 
   it("embedded \\n in partial text is sanitized to a space", () => {
@@ -218,6 +258,23 @@ describe("StdoutRenderer — append mode", () => {
     r.partial("hi");
     r.final("hi there");
     expect(out.text).toBe("hello\nhi\nhi there\n");
+  });
+
+  it("does not append identical consecutive partial snapshots", () => {
+    const r = makeRenderer("append", true, out);
+    r.partial("repeated snapshot");
+    r.partial("repeated snapshot");
+    r.partial("repeated snapshot");
+    r.final("repeated snapshot complete");
+    expect(out.text).toBe("repeated snapshot\nrepeated snapshot complete\n");
+  });
+
+  it("resets duplicate-partial suppression after a final", () => {
+    const r = makeRenderer("append", true, out);
+    r.partial("next");
+    r.final("next");
+    r.partial("next");
+    expect(out.text).toBe("next\nnext\nnext\n");
   });
 
   it("never writes a \\r character", () => {

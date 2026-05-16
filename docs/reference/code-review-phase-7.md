@@ -64,7 +64,7 @@ Both ran again successfully after the in-place fix described in §5.
 | No `console.log` in production paths | **OK** — `grep 'console.log'` returns 0 matches. All diagnostics use `process.stderr.write`. |
 | No `@ts-ignore` / `@ts-expect-error` | **OK** — 0 matches over `src/`. |
 | No hardcoded API keys | **OK** — `grep -i 'api_key\|apikey' src/` returns only legitimate option/property references. |
-| SIGINT graceful shutdown: second-Ctrl+C force-quit, `transcriberStarted`/`micStarted` flags, `shuttingDown` guard | **OK** — `main.ts:80-83` declares the flags, `:100-102` guards re-entry, `:234-238` handles force-quit (`process.exit(130)` after stderr `[mic-tool] force quit`), SIGTERM mirror at `:241-247` (`exit 143`). |
+| SIGINT graceful shutdown: second-Ctrl+C force-quit, `transcriberStarted`/`micStarted` flags, `shuttingDown` guard | **OK** — `main.ts:80-83` declares the flags, `:100-102` guards re-entry, `:234-238` handles force-quit (`process.exit(130)` after stderr `[mic-tool-ts] force quit`), SIGTERM mirror at `:241-247` (`exit 143`). |
 
 ---
 
@@ -114,7 +114,7 @@ All executed from project root.
 **READY for testing phase**, with the following follow-ups for downstream phases:
 
 1. **Phase 9 (Test Builders)**: produce `test_scripts/test-help.sh`, `test-version.sh`, `test-missing-key.sh` (AC-14) and Vitest unit suites per the design's §10 test matrix.
-2. **Phase 10 (Integration Verifier)**: run AC-5/AC-6/AC-7/AC-8/AC-9/AC-10/AC-11 on a real macOS host with a valid Soniox key and a microphone. Confirm AC-12 by piping `mic-tool > transcript.txt` in both default and `--output-mode append` modes.
+2. **Phase 10 (Integration Verifier)**: run AC-5/AC-6/AC-7/AC-8/AC-9/AC-10/AC-11 on a real macOS host with a valid Soniox key and a microphone. Confirm AC-12 by piping `mic-tool-ts > transcript.txt` in both default and `--output-mode append` modes.
 3. **Phase 8 (Dependency Validator / docs polish)**: optionally add `docs/design/configuration-guide.md` per the project's "configuration-guide" convention.
 
 No blockers remain in the implementation surface. The TDZ race uncovered during this review has been fixed in-place and re-verified.

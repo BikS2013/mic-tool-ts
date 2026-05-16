@@ -83,7 +83,7 @@ export class GuardPhraseTurnDetector implements TurnAwareRenderer {
 
     if (normalizeForMatch(this.buffer).includes(this.normalizedGuard)) {
       if (this.verbose) {
-        process.stderr.write("[mic-tool] turn boundary detected\n");
+        process.stderr.write("[mic-tool-ts] turn boundary detected\n");
       }
       // Capture the turn text BEFORE the reset for refinement.
       const turnText = this.buffer;
@@ -132,7 +132,7 @@ export class GuardPhraseTurnDetector implements TurnAwareRenderer {
           const tag =
             err instanceof LLMRefinementError ? `llm-${err.kind}` : "llm";
           const msg = err instanceof Error ? err.message : String(err);
-          process.stderr.write(`[mic-tool] refinement failed (${tag}): ${msg}\n`);
+          process.stderr.write(`[mic-tool-ts] refinement failed (${tag}): ${msg}\n`);
         }
       }
     })();

@@ -27,7 +27,7 @@ If the refinement fails or is disabled, only the blank line from the turn bounda
 Priority (highest first), per project convention:
 1. CLI flag
 2. local `.env` (CWD)
-3. `~/.tool-agents/mic-tool/.env`
+3. `~/.tool-agents/mic-tool-ts/.env`
 4. shell env
 
 A new helper `src/config/envChain.ts` reads keys with this precedence. Applies to:
@@ -87,8 +87,8 @@ New method `refined(text: string)`:
 - No-op after `dispose()`.
 
 ### 7. Config folder
-- `~/.tool-agents/mic-tool/` at `0700` (created on first run if missing).
-- `~/.tool-agents/mic-tool/.env` at `0600` — user-editable, holds canonical env vars.
+- `~/.tool-agents/mic-tool-ts/` at `0700` (created on first run if missing).
+- `~/.tool-agents/mic-tool-ts/.env` at `0600` — user-editable, holds canonical env vars.
 - Local `.env.example` updated with the new LLM env-var names (commented out, with explanatory comments).
 
 ## Default system prompt

@@ -1,4 +1,4 @@
-# mic-tool — Technical Design
+# mic-tool-ts — Technical Design
 
 **Document status**: Authoritative implementation specification for v1.
 **Audience**: The engineer implementing Units A–E in Phase 5 of `plan-001-soniox-mic-cli.md`.
@@ -10,7 +10,7 @@
 
 ### Elevator summary
 
-`mic-tool` is a single-binary TypeScript CLI for macOS that captures live microphone audio with a spawned `sox` process, streams it as `pcm_s16le` 16 kHz mono PCM through the `@soniox/node` v2 WebSocket SDK to Soniox's `stt-rt-v4` real-time model, and renders the returned partial and final tokens to `stdout` in one of three modes (`overwrite`, `append`, `final-only`). The tool has zero hidden defaults: the Soniox API key is resolved deterministically through `--api-key` > local `.env` > shell env, and a missing key (or any other missing required configuration) raises a typed `MicToolError` subclass with a stable exit code. SIGINT triggers a bounded graceful shutdown that finalises pending partials, drains finals, and closes the WebSocket within 1.5 s.
+`mic-tool-ts` is a direct OS-command TypeScript CLI for macOS that captures live microphone audio with a spawned `sox` process, streams it as `pcm_s16le` 16 kHz mono PCM through the `@soniox/node` v2 WebSocket SDK to Soniox's `stt-rt-v4` real-time model, and renders the returned partial and final tokens to `stdout` in one of three modes (`overwrite`, `append`, `final-only`). The package name and installed command are both `mic-tool-ts`; the per-user configuration folder is `~/.tool-agents/mic-tool-ts/`; project-specific env vars use the `MIC_TOOL_TS_*` prefix. The tool has no hidden defaults for required config: the Soniox API key is resolved deterministically through CLI flag > local `.env` > per-user tool `.env` > shell env, and a missing key raises a typed `MicToolError` subclass with a stable exit code. SIGINT triggers a bounded graceful shutdown that finalises pending partials, drains finals, and closes the WebSocket within 1.5 s.
 
 ### Data-flow diagram (audio path)
 
@@ -72,18 +72,18 @@ The codebase is partitioned into six modules. The first five map 1:1 to Phase 5'
 
 ### 2.1 `src/config.ts` — Unit A (Config & CLI entry)
 
-- **Purpose**: Parse `argv` via Commander; load `.env` via Node-native `process.loadEnvFile()`; resolve the API key through the precedence chain; produce a `ResolvedConfig`.
-- **Public interface**: `resolveConfig(argv: string[]): Promise<ResolvedConfig>` and the `ResolvedConfig` type.
+- **Purpose**: Parse `argv` via Commander; resolve configuration through the four-tier chain implemented in `src/config/envChain.ts`; validate every typed value; produce a frozen `ResolvedConfig`.
+- **Public interface**: `resolveConfig(argv: string[]): ResolvedConfig` and the `ResolvedConfig` type.
 - **Internal design**:
+  - The binary name is `mic-tool-ts`, and the installed package exposes the same name in `package.json` `bin`.
   - Commander definitions live inside `resolveConfig` (no module-level side effects).
-  - The Commander program intercepts `--help` and `--version` (both exit `0` via `process.exit`).
-  - `.env` is loaded *only* when `opts.apiKey` was not supplied (small optimisation; not behavioural).
-  - All validation happens after argv parsing and `.env` loading, before constructing `ResolvedConfig`.
-  - `--verbose` log lines (e.g. "API key source: .env") write to `stderr`. The key value itself is **never** logged.
+  - The Commander program intercepts `--help` and `--version` through `exitOverride()` and surfaces `HelpOrVersionShown`, so `main()` owns exit-code mapping.
+  - `loadEnvChain({ toolName: "mic-tool-ts" })` reads `<cwd>/.env`, `~/.tool-agents/mic-tool-ts/.env`, and `process.env` without mutating `process.env`.
+  - All validation happens after argv parsing and env-chain construction, before constructing `ResolvedConfig`.
+  - `--verbose` log lines write to `stderr`; the key value itself is **never** logged.
 - **Error responsibilities**:
-  - **Raises**: `MissingConfigurationError` (no API key found in any source).
-  - **Propagates**: Commander's own exit on `--help`/`--version` (this is intentional; not an error).
-  - **Does not raise**: any runtime/IO errors (the only IO is `process.loadEnvFile`, whose ENOENT is caught and treated as "no .env file present").
+  - **Raises**: `MissingConfigurationError` (no Soniox API key found in any source), `InvalidConfigurationError` (bad typed value), `LLMConfigurationError` (required Azure OpenAI settings missing while refinement is enabled), `HelpOrVersionShown`.
+  - **Does not mutate**: `process.env`.
 
 ### 2.2 `src/mic/` — Unit B (Mic capture)
 
@@ -156,31 +156,58 @@ These declarations are frozen. Units A–D are coded in parallel against these s
 
 ```ts
 export type OutputMode = "overwrite" | "append" | "final-only";
+export type SttProvider = "soniox" | "elevenlabs";
 
 export interface ResolvedConfig {
-  /** Soniox API key. Always non-empty (validation enforced before construction). */
+  /** Active realtime transcription provider. */
+  readonly sttProvider: SttProvider;
+
+  /** Active provider API key. Guaranteed non-empty after trim. */
   readonly apiKey: string;
 
-  /** ISO-639-1 code (e.g. "en", "es") OR the literal "auto" for language identification. */
-  readonly language: string;
+  /** Active provider API-key env var name. */
+  readonly apiKeyEnvName: "SONIOX_API_KEY" | "ELEVENLABS_API_KEY";
+
+  /** Optional YYYY-MM-DD reminder for the active provider API-key renewal. */
+  readonly apiKeyExpiresAt?: string;
+
+  /** Active provider realtime model name. */
+  readonly model: string;
+
+  /** Active provider WebSocket endpoint. */
+  readonly endpoint: string;
+
+  /** Language hints OR the single literal "auto". */
+  readonly languages: string[];
+
+  /** PCM sample rate fed to sox and to the active provider. */
+  readonly sampleRate: number;
+
+  /** Whether provider endpoint/VAD detection is enabled. */
+  readonly enableEndpointDetection: boolean;
 
   /** Stdout rendering mode. */
   readonly outputMode: OutputMode;
+
+  /** Guard phrase that closes the current turn. */
+  readonly guardPhrase: string;
+
+  /** LLM refinement settings. */
+  readonly llm: LLMConfig;
 
   /** Diagnostic logging to stderr. */
   readonly verbose: boolean;
 }
 
 /**
- * Resolves CLI args + .env + shell env into a frozen ResolvedConfig.
+ * Resolves CLI args + the four-tier env chain into a frozen ResolvedConfig.
  *
- * @throws {MissingConfigurationError} when no API key is found via any source.
- * @throws {MicToolError} on invalid --language or --output-mode value (validation).
- *
- * Side-effects: may call `process.loadEnvFile()` once (mutates `process.env`).
- * Exits the process directly (via Commander) for --help and --version.
+ * @throws {MissingConfigurationError} when the active provider API key is missing.
+ * @throws {InvalidConfigurationError} on invalid typed config.
+ * @throws {LLMConfigurationError} when enabled LLM config is incomplete.
+ * @throws {HelpOrVersionShown} when Commander prints help/version.
  */
-export function resolveConfig(argv: string[]): Promise<ResolvedConfig>;
+export function resolveConfig(argv: string[]): ResolvedConfig;
 ```
 
 ### 3.2 `MicSource` (from `src/mic/types.ts`)
@@ -223,56 +250,27 @@ export interface MicSource {
 export function createMicSource(opts: MicSourceOptions): MicSource;
 ```
 
-### 3.3 `Transcriber` (from `src/soniox/client.ts`)
+### 3.3 `Transcriber` (from `src/transcription/types.ts`)
 
 ```ts
-export interface TranscriberConfig {
-  readonly apiKey: string;
-  readonly language: string;   // "en" | "auto" | other ISO-639-1
-  readonly verbose: boolean;
-}
-
-export interface TranscriberCallbacks {
-  /** Fires on every result that contains at least one non-final token (after marker filter). */
-  onPartial: (text: string) => void;
-
-  /** Fires when the current utterance is committed (a final token arrived, or endpoint fired). */
-  onFinal: (text: string) => void;
-
-  /** Fires on the server-side semantic endpoint marker ('<end>' token). */
-  onEndpoint: () => void;
-
-  /** Mid-stream error, already mapped to a MicToolError subclass. */
-  onError: (err: Error) => void;
-
-  /** WebSocket closed (clean or unclean). */
-  onClose: () => void;
-}
+export type SttProvider = "soniox" | "elevenlabs";
 
 export interface Transcriber {
-  /**
-   * Open the WebSocket and start streaming.
-   *
-   * @throws {SonioxAuthError}     SDK AuthError.
-   * @throws {SonioxNetworkError}  SDK ConnectionError / NetworkError before connect.
-   * @throws {SonioxProtocolError} SDK BadRequestError / QuotaError / unmapped server error.
-   */
-  start(callbacks: TranscriberCallbacks): Promise<void>;
+  /** Open the provider realtime transcription session. */
+  start(): Promise<void>;
 
-  /**
-   * Push a PCM chunk. No-op if session state != "connected".
-   * Never throws (StateError is converted to a silent drop).
-   */
+  /** Forward a chunk of PCM s16le mono audio to the live session. */
   pushAudio(chunk: Buffer): void;
 
-  /**
-   * Graceful shutdown: finalize() -> finish() -> close().
-   * Bounded by a 1.5 s timeout. Idempotent.
-   */
+  /** Gracefully finalize and close the session. Idempotent. */
   stop(): Promise<void>;
+
+  onPartial(cb: (text: string) => void): void;
+  onFinal(cb: (text: string) => void): void;
+  onError(cb: (err: Error) => void): void;
 }
 
-export function createTranscriber(cfg: TranscriberConfig): Transcriber;
+export function createTranscriber(opts: TranscriberOptions): Transcriber;
 ```
 
 ### 3.4 `Renderer` (from `src/render/renderer.ts`)
@@ -338,6 +336,21 @@ export class SonioxProtocolError extends MicToolError {
   constructor(message: string) { super(message, 6); }
 }
 
+/** ElevenLabs rejected the API key or realtime access. */
+export class ElevenLabsAuthError extends MicToolError {
+  constructor(message: string) { super(message, 4); }
+}
+
+/** ElevenLabs unreachable (DNS, refused, timeout, mid-stream drop). */
+export class ElevenLabsNetworkError extends MicToolError {
+  constructor(message: string) { super(message, 5); }
+}
+
+/** ElevenLabs returned a protocol-level error (bad config, quota, rate limit). */
+export class ElevenLabsProtocolError extends MicToolError {
+  constructor(message: string) { super(message, 6); }
+}
+
 /** Mic capture invoked on a non-darwin platform in v1. */
 export class UnsupportedPlatformError extends MicToolError {
   constructor(message: string) { super(message, 3); }
@@ -365,52 +378,43 @@ Note on exit codes: the plan file (`plan-001`) used a slightly different mapping
 
 The chain is implemented in this exact order; the **first source that yields a non-empty string wins**:
 
-1. `--api-key <value>` CLI flag.
-2. `.env` file at `path.resolve(process.cwd(), ".env")` via `process.loadEnvFile(path)`. Loaded only when step 1 yielded nothing.
-3. `process.env.SONIOX_API_KEY` (the shell environment).
+1. CLI flag.
+2. `.env` file at `path.resolve(process.cwd(), ".env")`.
+3. `~/.tool-agents/mic-tool-ts/.env`.
+4. `process.env` (the shell environment).
 
-**Why `.env` wins over shell env**: this is the explicit FR-5 contract. The mechanism is straightforward — `process.loadEnvFile()` **overwrites** existing `process.env` entries by default. So once we call it (after parsing the flag and not finding one), any `.env`-defined `SONIOX_API_KEY` clobbers the shell-supplied value, and the subsequent `process.env.SONIOX_API_KEY` read returns the `.env` value.
+`src/config/envChain.ts` owns the env-chain implementation. It parses `.env` files into an internal map and never calls `process.loadEnvFile()`, because mutating `process.env` would make precedence dependent on host state and would make tests harder to isolate.
 
 ### 4.2 Safe `.env` loading
 
-```ts
-function loadDotenvIfPresent(envPath: string): void {
-  try {
-    process.loadEnvFile(envPath);
-  } catch (err) {
-    // Node throws when the file does not exist. That's allowed — .env is optional.
-    // We re-throw any other error (e.g. parse error) so the user sees it.
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code !== "ENOENT") throw err;
-  }
-}
-```
+Both `.env` files are optional. Missing files are treated as absent values. Read or parse failures raise `InvalidConfigurationError` with the path in the message, so a malformed file is never silently ignored.
 
-The function is **always called** before reading `process.env.SONIOX_API_KEY` (except when `--api-key` already supplied the value, in which case we skip `.env` loading entirely to avoid surprising env-mutation side effects).
+The per-user config segment is fixed to `mic-tool-ts`; the runtime call is `loadEnvChain({ toolName: "mic-tool-ts" })`. The tool reads the folder but does not auto-create it.
 
 ### 4.3 Validation rules (per field)
 
 | Field | Rule | Error on violation |
 |---|---|---|
 | `apiKey` | `typeof v === "string" && v.trim().length > 0` | `MissingConfigurationError("SONIOX_API_KEY is not set. Provide it via --api-key <key>, a .env file in the working directory, or the SONIOX_API_KEY environment variable.")` |
-| `language` | `v === "auto"` OR `/^[a-z]{2,3}(-[A-Z]{2})?$/.test(v)` | `MissingConfigurationError("--language must be 'auto' or an ISO-639-1/2 code (e.g. 'en', 'es', 'pt-BR'). Got: '<v>'.")` |
-| `outputMode` | One of `"overwrite" | "append" | "final-only"` | Commander rejects with its own choices error before we ever see it. |
-| `verbose` | Boolean (Commander coerces) | n/a |
+| `languages` | Each item is `auto` OR `/^[a-z]{2,3}(-[A-Z]{2})?$/`; `auto` cannot be combined with other hints. | `InvalidConfigurationError("--language must be 'auto' or an ISO 639-1/2 code ...")` |
+| `outputMode` | One of `"overwrite" | "append" | "final-only"` | `InvalidConfigurationError` |
+| `verbose` | Strict boolean parser (`true|false|yes|no|on|off|1|0`) | `InvalidConfigurationError` |
 
-Defaults applied by Commander (these are **documented defaults**, not silent fallbacks per NFR-5): `--language en`, `--output-mode overwrite`, `--verbose false`.
+Defaults are explicit constants in `src/config.ts` and are applied only when the CLI flag is absent and the env chain does not provide a value. Required settings, such as `SONIOX_API_KEY` and the Azure OpenAI key/endpoint when refinement is enabled, never receive fallback defaults.
 
 ### 4.4 Verbose-mode logging at start
 
-When `cfg.verbose === true`, the orchestrator (NOT `resolveConfig` itself) writes the following to stderr **after** `resolveConfig` returns:
+When `cfg.verbose === true`, the resolver and orchestrator write lifecycle diagnostics to stderr:
 
 ```
-[mic-tool] config: apiKeySource=<.env|env|flag>, language=<v>, outputMode=<v>
-[mic-tool] platform=darwin, node=<version>
+[mic-tool-ts] api key loaded from: <flag|.env|user|env>
+[mic-tool-ts] guard phrase: <phrase>
+[mic-tool-ts] transcription: model=<v>, endpoint=<v>, languages=[...], sample_rate=<n>, endpoint_detection=<bool>
+[mic-tool-ts] llm: enabled|disabled (provider=<v>, model=<v>)
+[mic-tool-ts] platform=darwin, node=<version>
 ```
 
-`resolveConfig` does not write to stderr itself; it returns the `apiKeySource` as an additional out-of-band value if needed. (Simplest implementation: pass a `log: (line: string) => void` callback into `resolveConfig`, or return a `{ config, sources }` tuple. The plan's signature `Promise<ResolvedConfig>` is preserved by having `resolveConfig` write to stderr directly *only when* it has already seen `--verbose` in argv. This is acceptable because `--verbose` is parsed before any sensitive logging.)
-
-**The key value is never logged. Only its source name (`flag`, `.env`, `env`) is logged.**
+**The key value is never logged. Only its source name (`flag`, `.env`, `user`, `env`) is logged.**
 
 ---
 
@@ -496,7 +500,7 @@ this.child.once("exit", (code, signal) => {
   if (code === 0 || code === null) return;
   if (/permission|not authorized|coreaudio|input device/i.test(this.stderrTail)) {
     this.emit("error", new MicPermissionDeniedError(
-      "Microphone access denied. Grant access in System Settings > Privacy & Security > Microphone, then re-run mic-tool."
+      "Microphone access denied. Grant access in System Settings > Privacy & Security > Microphone, then re-run mic-tool-ts."
     ));
   } else {
     this.emit("error", new MicToolError(
@@ -552,18 +556,17 @@ export function createMicSource(opts: MicSourceOptions): MicSource {
 ### 6.1 Session configuration
 
 ```ts
-const languageOpts = cfg.language === "auto"
+const languageOpts = cfg.languages.length === 1 && cfg.languages[0] === "auto"
   ? { enable_language_identification: true as const }
-  : { language_hints: [cfg.language] };
+  : { language_hints: cfg.languages };
 
 const session = client.realtime.stt(
   {
-    model: "stt-rt-v4",
+    model: cfg.model,
     audio_format: "pcm_s16le",
-    sample_rate: 16000,
+    sample_rate: cfg.sampleRate,
     num_channels: 1,
-    enable_endpoint_detection: true,
-    max_endpoint_delay_ms: 2000,
+    enable_endpoint_detection: cfg.enableEndpointDetection,
     ...languageOpts,
   },
   {
@@ -621,7 +624,7 @@ async start(callbacks: TranscriberCallbacks): Promise<void> {
 pushAudio(chunk: Buffer): void {
   if (!this.session || this.session.state !== "connected") {
     if (this.cfg.verbose) {
-      process.stderr.write(`[mic-tool] dropped ${chunk.length} audio bytes (session not connected)\n`);
+      process.stderr.write(`[mic-tool-ts] dropped ${chunk.length} audio bytes (session not connected)\n`);
     }
     return;
   }
@@ -636,36 +639,34 @@ pushAudio(chunk: Buffer): void {
 ### 6.5 Token handling: partial / final / marker filter
 
 ```ts
-private partialBuffer = "";
+private committedFinals = "";
 
 private onResult(result: RealtimeResult): void {
-  let producedFinal = false;
-  let finalText = "";
+  let incomingFinals = "";
+  let currentNonFinals = "";
 
   for (const tok of result.tokens) {
     if (tok.text === "<end>" || tok.text === "<fin>") continue;  // marker filter
-    if (tok.is_final) {
-      finalText += tok.text;
-      producedFinal = true;
-    } else {
-      this.partialBuffer += tok.text;
-    }
+    if (tok.is_final) incomingFinals += tok.text;
+    else currentNonFinals += tok.text;
   }
 
-  if (this.partialBuffer.length > 0) {
-    this.callbacks.onPartial(this.partialBuffer);
+  if (incomingFinals.length > 0) {
+    this.committedFinals = mergeFinalText(this.committedFinals, incomingFinals);
   }
 
-  if (producedFinal) {
-    // Promote: emit the committed line, then reset.
-    const committed = (finalText + this.partialBuffer).trim();
-    if (committed.length > 0) this.callbacks.onFinal(committed);
-    this.partialBuffer = "";
-  }
+  const display = this.committedFinals + currentNonFinals;
+  if (display.length > 0) this.callbacks.onPartial(display);
+}
+
+function mergeFinalText(committed: string, incomingFinals: string): string {
+  if (incomingFinals.startsWith(committed)) return incomingFinals; // snapshot
+  if (committed.endsWith(incomingFinals)) return committed;        // duplicate delta
+  return committed + incomingFinals.slice(longestOverlap(committed, incomingFinals));
 }
 ```
 
-This algorithm matches the SDK research §4 finality model: partials are emitted on every result; finals "promote and clear". The renderer's three modes consume these two callbacks differently (§7).
+The adapter treats Soniox result frames defensively as either deltas or current utterance snapshots. Non-final text is rebuilt from the current result. Final text is merged into `committedFinals` without appending a repeated finalized prefix. Endpoint / finalized events commit `committedFinals` as the final utterance and reset the buffer. The renderer's three modes consume these two callbacks differently (§7).
 
 ### 6.6 Error mapper
 
@@ -722,39 +723,59 @@ The 1.5 s timeout satisfies AC-8 ("exit 0 within 1 second" → the design budget
 
 #### `overwrite` (the default)
 
-State: `prevLineLen: number` (length of last text written to the current line).
+State: `prevLineLen: number` (visible length of the last overwrite snapshot), `prevRows: number` (physical terminal rows occupied by the last overwrite snapshot), and `lastPartialText: string | null` (last interim snapshot rendered).
+
+Single-row updates use the classic carriage-return overwrite path with trailing spaces when the new snapshot is shorter. When the previous snapshot wrapped across multiple terminal rows, the renderer moves the cursor back to the first row of that overwrite region, clears every row the previous snapshot occupied, returns to the first row, and writes the latest snapshot once. Terminal width comes from the TTY stream's `columns` value, falling back to `process.stdout.columns` and then `80` if no valid value is available.
 
 ```ts
 partial(text: string): void {
-  const padding = Math.max(0, this.prevLineLen - text.length);
-  this.stdout.write("\r" + text + " ".repeat(padding));
-  this.prevLineLen = text.length;
+  if (text === this.lastPartialText) return;
+  this.lastPartialText = text;
+  const prefix = overwritePrefix(this.prevRows); // "\r" for 0-1 rows; ANSI clear/reposition for >1.
+  const textLen = visibleLength(text);
+  const padding = this.prevRows <= 1 ? Math.max(0, this.prevLineLen - textLen) : 0;
+  this.stdout.write(prefix + text + " ".repeat(padding));
+  this.prevLineLen = textLen;
+  this.prevRows = rowsForText(text);
 }
 
 final(text: string): void {
-  const padding = Math.max(0, this.prevLineLen - text.length);
-  this.stdout.write("\r" + text + " ".repeat(padding) + "\n");
+  this.lastPartialText = null;
+  const prefix = overwritePrefix(this.prevRows);
+  const textLen = visibleLength(text);
+  const padding = this.prevRows <= 1 ? Math.max(0, this.prevLineLen - textLen) : 0;
+  this.stdout.write(prefix + text + " ".repeat(padding) + "\n");
   this.prevLineLen = 0;
+  this.prevRows = 0;
 }
 
 dispose(): void {
-  // Clear the current overwrite line (if any) before exit so the shell prompt is clean.
+  // Terminate any in-progress overwrite region before exit so the shell prompt is clean.
   if (this.prevLineLen > 0) {
-    this.stdout.write("\r" + " ".repeat(this.prevLineLen) + "\r");
+    this.stdout.write("\n");
     this.prevLineLen = 0;
+    this.prevRows = 0;
   }
+  this.stdout.write("\x1b[2K\r");
 }
 ```
 
 #### `append`
 
 ```ts
-partial(text: string): void { this.stdout.write(text + "\n"); }
-final(text: string):   void { this.stdout.write(text + "\n"); }
+partial(text: string): void {
+  if (text === this.lastPartialText) return;
+  this.lastPartialText = text;
+  this.stdout.write(text + "\n");
+}
+final(text: string):   void {
+  this.lastPartialText = null;
+  this.stdout.write(text + "\n");
+}
 dispose(): void {}
 ```
 
-Every `onPartial` and every `onFinal` from Unit C produces exactly one line. Maximally pipe-friendly.
+Every non-duplicate consecutive `onPartial` and every `onFinal` from Unit C produces exactly one line. Maximally pipe-friendly while avoiding repeated identical interim snapshots.
 
 #### `final-only`
 
@@ -765,6 +786,14 @@ dispose(): void {}
 ```
 
 Cleanest pipe output; one line per utterance.
+
+### 7.1.1 Duplicate partial suppression
+
+Realtime STT providers can send the same partial snapshot repeatedly while they wait for more audio or finalization. `StdoutRenderer` suppresses identical consecutive partial strings in all modes that render partials. `final()`, `turnBoundary()`, `refined()`, and `dispose()` reset the duplicate-partial cache so the same text can still appear in a later utterance or section.
+
+### 7.1.2 Wrapped overwrite cleanup
+
+`overwrite` mode is only active on a TTY. If a live partial exceeds the terminal width, a plain `\r` can only return to the beginning of the current physical row; it cannot clear the wrapped rows above it. `StdoutRenderer` therefore tracks the number of physical rows used by the previous overwrite snapshot. For `prevRows > 1`, the next `partial()` or `final()` emits ANSI cursor movement and clear-line sequences to clear the whole previous region before writing the next snapshot. The same code path is not reachable for pipes because non-TTY `overwrite` is downgraded to `append`.
 
 ### 7.2 TTY-vs-pipe behaviour
 
@@ -781,12 +810,12 @@ export function createRenderer(mode: OutputMode, stdout: NodeJS.WriteStream): Re
 }
 ```
 
-This satisfies AC-12: piping `mic-tool > file.txt` with the default mode produces a file containing only transcript text — no `\r` characters, no ANSI artifacts. Even if the user explicitly passes `--output-mode overwrite` while piping, the downgrade still applies (no `\r` ever written to a non-TTY).
+This satisfies AC-12: piping `mic-tool-ts > file.txt` with the default mode produces a file containing only transcript text — no `\r` characters, no ANSI artifacts. Even if the user explicitly passes `--output-mode overwrite` while piping, the downgrade still applies (no `\r` ever written to a non-TTY).
 
 If verbose mode is enabled and the downgrade triggers, the orchestrator logs once to stderr:
 
 ```
-[mic-tool] stdout is not a TTY: --output-mode overwrite downgraded to 'append'.
+[mic-tool-ts] stdout is not a TTY: --output-mode overwrite downgraded to 'append'.
 ```
 
 ### 7.3 Marker filter (defence-in-depth)
@@ -798,6 +827,14 @@ Unit C already strips `<end>` and `<fin>` before they reach the renderer. The re
 ## 8. Orchestrator Design (Unit E)
 
 ### 8.1 `main(argv)` happy path
+
+Once the Soniox session is connected, the mic source has started, signal handlers are installed, and the mic audio stream is wired into the transcriber, `main()` writes this unconditional operational line to stderr:
+
+```
+[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.
+```
+
+The message intentionally goes to stderr so stdout remains transcript-only for shell redirection and pipelines.
 
 ```ts
 export async function main(argv: string[]): Promise<number> {
@@ -811,7 +848,7 @@ export async function main(argv: string[]): Promise<number> {
     if (shuttingDown) return;
     shuttingDown = true;
     exitCode = code;
-    if (cfg?.verbose) process.stderr.write("[mic-tool] shutting down...\n");
+    if (cfg?.verbose) process.stderr.write("[mic-tool-ts] shutting down...\n");
     try { await mic?.stop(); } catch { /* swallow */ }
     try { await transcriber?.stop(); } catch { /* swallow */ }
     try { renderer?.dispose(); } catch { /* swallow */ }
@@ -819,10 +856,18 @@ export async function main(argv: string[]): Promise<number> {
 
   let cfg: ResolvedConfig | undefined;
   try {
-    cfg = await resolveConfig(argv);
+    cfg = resolveConfig(argv);
     renderer    = createRenderer(cfg.outputMode, process.stdout);
-    transcriber = createTranscriber({ apiKey: cfg.apiKey, language: cfg.language, verbose: cfg.verbose });
-    mic         = createMicSource({ verbose: cfg.verbose });
+    transcriber = createTranscriber({
+      apiKey: cfg.apiKey,
+      model: cfg.model,
+      endpoint: cfg.endpoint,
+      languages: cfg.languages,
+      sampleRate: cfg.sampleRate,
+      enableEndpointDetection: cfg.enableEndpointDetection,
+      verbose: cfg.verbose,
+    });
+    mic = createMicSource({ verbose: cfg.verbose, sampleRate: cfg.sampleRate });
 
     process.once("SIGINT",  () => void shutdown(0));
     process.once("SIGTERM", () => void shutdown(0));
@@ -845,7 +890,7 @@ export async function main(argv: string[]): Promise<number> {
       void shutdown((err as MicToolError).exitCode ?? 1);
     });
 
-    if (cfg.verbose) process.stderr.write("[mic-tool] connected. Listening on default mic. Press Ctrl+C to stop.\n");
+    process.stderr.write("[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.\n");
 
     // Wait for a shutdown trigger.
     await new Promise<void>((resolve) => {
@@ -985,19 +1030,19 @@ t=T+0.4  index.ts: process.exit(0)
 
 | Unit | Seams to exercise |
 |---|---|
-| `config.ts` | argv parsing: every flag combination; precedence (`--api-key` > `.env` > shell env); missing-key error; invalid `--language`; `process.loadEnvFile` ENOENT handled (use `mock-fs` or a tmpdir); precedence test sets `process.env`, writes a temp `.env`, runs `resolveConfig`. |
+| `config.ts` | argv parsing: every flag combination; four-tier precedence (`flag` > `<cwd>/.env` > `~/.tool-agents/mic-tool-ts/.env` > shell env); missing-key error; invalid typed env values; help/version sentinel; whitespace-only values treated as absent. |
 | `soxMicSource.ts` | Mock `child_process.spawn` (return a stub `ChildProcess` with controllable streams + events). Cases: ENOENT on spawn → `MicNotAvailableError`; non-zero exit with `coreaudio` in stderr → `MicPermissionDeniedError`; clean exit during stop → resolves; SIGTERM-then-SIGKILL fallback. |
 | `client.ts` | Mock `@soniox/node` module via `vi.mock`. Cases: `connect()` throws `AuthError` → wrapper throws `SonioxAuthError`; pre-connect `'error'` event → mapped & thrown; mid-stream `'error'` → forwarded via `onError`; marker tokens dropped; partial → final promotion; `stop()` timeout path triggers `session.close()`. |
-| `renderer.ts` | Drive each renderer with a canned token sequence and a stub `WriteStream` that captures all writes; assert exact byte output. Cases: overwrite padding with shrinking text; TTY downgrade (`isTTY: false`); `dispose()` clears overwrite line; append/final-only never emit `\r`. |
+| `renderer.ts` | Drive each renderer with a canned token sequence and a stub `WriteStream` that captures all writes; assert exact byte output. Cases: overwrite padding with shrinking text; wrapped overwrite rows are cleared before repaint; TTY downgrade (`isTTY: false`); `dispose()` clears overwrite line; append/final-only never emit `\r`. |
 
 ### 10.2 Integration tests (orchestrator end-to-end with stubs)
 
 - Use a `FakeMicSource` that implements `MicSource` and emits a canned PCM `Buffer` on `audio` after `start()` resolves.
 - Use a fake Soniox session (either via `vi.mock('@soniox/node')` or by injecting a `Transcriber` factory) that emits canned token sequences and an optional `'error'` event.
 - Scenarios:
-  - Missing-key path: `main(['node','mic-tool'])` returns 2; stderr matches `MissingConfigurationError`.
-  - Help path: `main(['node','mic-tool','--help'])` exits 0 (Commander); stdout lists all flags.
-  - Version path: `main(['node','mic-tool','--version'])` exits 0; stdout matches `package.json` version.
+  - Missing-key path: `main(['node','mic-tool-ts'])` returns 2; stderr matches `MissingConfigurationError`.
+  - Help path: `main(['node','mic-tool-ts','--help'])` exits 0 (Commander); stdout lists all flags.
+  - Version path: `main(['node','mic-tool-ts','--version'])` exits 0; stdout matches `package.json` version.
   - Happy path: fake tokens flow → renderer captures expected lines.
   - SIGINT simulation: `process.emit('SIGINT')` mid-stream → assert `mic.stop` then `transcriber.stop` then `renderer.dispose` invoked in order; return value 0.
   - Auth error: fake transcriber throws `SonioxAuthError` from `start()` → return value 4.
@@ -1012,11 +1057,11 @@ t=T+0.4  index.ts: process.exit(0)
 ## 11. Architectural Decisions Log
 
 - **TypeScript strict + ESM** — project convention; matches `@soniox/node` v2 dual-format publish.
-- **Node engine `>=20.12`** — required for `process.loadEnvFile()` (programmatic API); avoids `dotenv` runtime dep.
+- **Node engine `>=20.12`** — project runtime baseline for the TypeScript CLI and native `fetch` used by Azure OpenAI refinement.
 - **`@soniox/node@^2` for the WebSocket path** — 0 declared deps; absorbs auth-frame / framing / keepalive / finish; strongly typed error classes map cleanly to our taxonomy.
 - **Spawn `sox` directly** — wrappers (`node-record-lpcm16`, `mic`) are abandoned; `naudiodon` needs native build on Apple Silicon; direct spawn yields zero npm deps and the exact `pcm_s16le` output Soniox wants.
 - **Commander v14 for CLI** — zero deps; built-in `--help`/`--version`; idiomatic.
-- **`.env` wins over shell env** — explicit FR-5 contract; implemented via `process.loadEnvFile()` overwriting `process.env`.
+- **Four-tier config chain without mutating `process.env`** — explicit FR-15 contract; implemented by `src/config/envChain.ts` so precedence is deterministic and tests remain isolated.
 - **No fallback for missing config** — NFR-5 / project rule; every missing-required-config path raises `MissingConfigurationError`.
 - **Connect timeout 5 000 ms (override SDK default 20 000)** — makes AC-10 network-failure assertions feasible without hanging tests.
 - **Drop audio when `session.state !== "connected"`** — simpler than a buffer; the window is tiny (shutdown only); v1 acceptably loses ~30 ms of audio at session end.
@@ -1024,6 +1069,7 @@ t=T+0.4  index.ts: process.exit(0)
 - **Per-token partial/final discrimination** — matches the SDK's documented finality model (per-token `is_final`, not per-message).
 - **`<end>` and `<fin>` filtered in Unit C, double-filtered in Unit D** — defence in depth.
 - **TTY-vs-pipe auto-downgrade of `overwrite` → `append`** — satisfies AC-12 even when the user explicitly chooses `overwrite` while piping; no `\r` ever written to a non-TTY.
+- **Wrapped overwrite repainting uses ANSI only on TTYs** — `\r` is sufficient for a single physical row, but wrapped live partials require cursor-up and clear-line sequences to remove stale rows before repainting. This remains pipe-safe because non-TTY `overwrite` is already downgraded to `append`.
 - **`MicNotAvailableError` and `MicPermissionDeniedError` share exit code 3** — both are "no audio is reaching the wrapper"; the error message text differentiates them for the user; reduces exit-code surface vs the plan's 3/4 split.
 - **No auto-reconnect on WS drop** — explicit v1 fail-fast decision; mid-stream `NetworkError`/`ConnectionError` map to `SonioxNetworkError` and trigger shutdown.
 - **Pre-connect one-shot `'error'` listener + try/catch around `connect()`** — defends against the open SDK question of whether auth errors arrive thrown or emitted.
@@ -1168,7 +1214,7 @@ All five sub-codes are runtime-only (non-fatal). The orchestrator logs them unde
 | 2. <cwd>/.env        |
 +----------------------+
 | 3. ~/.tool-agents/   |
-|    mic-tool/.env     |   (mode 0700 / 0600 — secrets)
+|    mic-tool-ts/.env     |   (mode 0700 / 0600 — secrets)
 +----------------------+
 | 4. process.env       |
 +----------------------+   lowest priority
@@ -1182,17 +1228,20 @@ Implementation: `src/config/envChain.ts` exports `loadEnvChain({ toolName })` wh
 |-------------------------------------|----------------------------------------|------------------------------------------------------|--------------------|
 | `--api-key <value>`                 | `SONIOX_API_KEY`                       | _required_ (no fallback; throws `MissingConfigurationError`, exit 2) | trim, non-empty |
 | `--api-key-expires-at <YYYY-MM-DD>` | `SONIOX_API_KEY_EXPIRES_AT`            | _unset_                                              | `parseIsoDate` (round-trips via `Date.UTC`) |
-| `--model <name>`                    | `MIC_TOOL_MODEL`                       | `stt-rt-v4`                                          | trim, non-empty |
-| `--endpoint <wss-url>`              | `MIC_TOOL_ENDPOINT`                    | `wss://stt-rt.soniox.com/transcribe-websocket`       | `parseWsUrl` (must be `wss://` or `ws://`) |
-| `--language <code>` (repeatable)    | `MIC_TOOL_LANGUAGES` (CSV)             | `el,en`                                              | `validateLanguages` (ISO 639-1/2 OR sole `auto`) |
-| `--sample-rate <hz>`                | `MIC_TOOL_SAMPLE_RATE`                 | `16000`                                              | `parsePositiveInt`, range `[8000, 48000]` |
-| `--no-endpoint-detection`           | `MIC_TOOL_ENABLE_ENDPOINT_DETECTION`   | `true`                                               | `parseBoolean` |
-| `--output-mode <mode>`              | `MIC_TOOL_OUTPUT_MODE`                 | `overwrite`                                          | one of `overwrite`/`append`/`final-only`; auto-downgrades to `append` when stdout is piped |
-| `--guard-phrase <phrase>`           | `MIC_TOOL_GUARD_PHRASE`                | `τέλος εντολής`                                      | trim, non-empty after `normalizeGuardPhrase` |
-| `--refine` / `--no-refine`          | `MIC_TOOL_REFINE`                      | `true`                                               | `parseBoolean` |
-| `--llm-provider <name>`             | `MIC_TOOL_LLM_PROVIDER`                | `azure-openai`                                       | one of the eight `LLM_PROVIDERS`; non-Azure stubbed |
-| `--llm-model <name>`                | `MIC_TOOL_LLM_MODEL`                   | `gpt-5.4`                                            | trim, non-empty |
-| `-v, --verbose`                     | `MIC_TOOL_VERBOSE`                     | `false`                                              | `parseBoolean` |
+| `--model <name>`                    | `MIC_TOOL_TS_MODEL`                       | `stt-rt-v4`                                          | trim, non-empty |
+| `--endpoint <wss-url>`              | `MIC_TOOL_TS_ENDPOINT`                    | `wss://stt-rt.soniox.com/transcribe-websocket`       | `parseWsUrl` (must be `wss://` or `ws://`) |
+| `--language <code>` (repeatable)    | `MIC_TOOL_TS_LANGUAGES` (CSV)             | `el,en`                                              | `validateLanguages` (ISO 639-1/2 OR sole `auto`) |
+| `--sample-rate <hz>`                | `MIC_TOOL_TS_SAMPLE_RATE`                 | `16000`                                              | `parsePositiveInt`, range `[8000, 48000]` |
+| `--no-endpoint-detection`           | `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION`   | `true`                                               | `parseBoolean` |
+| `--output-mode <mode>`              | `MIC_TOOL_TS_OUTPUT_MODE`                 | `overwrite`                                          | one of `overwrite`/`append`/`final-only`; auto-downgrades to `append` when stdout is piped |
+| `--guard-phrase <phrase>`           | `MIC_TOOL_TS_GUARD_PHRASE`                | `τέλος εντολής`                                      | trim, non-empty after `normalizeGuardPhrase` |
+| `--refine` / `--no-refine`          | `MIC_TOOL_TS_REFINE`                      | `true`                                               | `parseBoolean` |
+| `--llm-provider <name>`             | `MIC_TOOL_TS_LLM_PROVIDER`                | `azure-openai`                                       | one of the eight `LLM_PROVIDERS`; non-Azure stubbed |
+| `--llm-model <name>`                | `MIC_TOOL_TS_LLM_MODEL`                   | `gpt-5.4`                                            | trim, non-empty |
+| `-v, --verbose`                     | `MIC_TOOL_TS_VERBOSE`                     | `false`                                              | `parseBoolean` |
+| `--stt-provider <name>`             | `MIC_TOOL_TS_STT_PROVIDER`                | `soniox`                                             | `soniox` / `elevenlabs` |
+| `--elevenlabs-api-key <value>`      | `ELEVENLABS_API_KEY`                      | required when provider is `elevenlabs`               | trim, non-empty |
+| `--elevenlabs-api-key-expires-at <YYYY-MM-DD>` | `ELEVENLABS_API_KEY_EXPIRES_AT` | _unset_                                              | `parseIsoDate` |
 
 Provider-specific env vars consulted only when `--refine` is on and the provider is `azure-openai`:
 
@@ -1214,31 +1263,59 @@ Single helper surface for every typed coercion. Each helper takes `(raw, flagNam
 
 ### 14.4 Expiry helper (`src/config/expiry.ts`)
 - `evaluateExpiry(isoDate, now=new Date())` → `{ level: "ok" | "soon" | "expired", daysUntil }` where `soon` covers a 14-day window.
-- `warnAboutExpiry(isoDate, verbose, write?, now?)` writes a single stderr line at `"soon"` and `"expired"` levels (always), and at `"ok"` only under `--verbose`. The tool does NOT block on expiry — the user owns renewal.
-- v1 wires this for `SONIOX_API_KEY_EXPIRES_AT` only. An analogous `AZURE_OPENAI_API_KEY_EXPIRES_AT` is documented for future use (see `Issues - Pending Items.md`).
+- `warnAboutExpiry({ envName, isoDate, renewUrl, verbose }, write?, now?)` writes a single stderr line at `"soon"` and `"expired"` levels (always), and at `"ok"` only under `--verbose`. The tool does NOT block on expiry — the user owns renewal.
+- v1 wires this for the active STT provider key: `SONIOX_API_KEY_EXPIRES_AT` for Soniox and `ELEVENLABS_API_KEY_EXPIRES_AT` for ElevenLabs. An analogous `AZURE_OPENAI_API_KEY_EXPIRES_AT` is documented for future use (see `Issues - Pending Items.md`).
 
 ### 14.5 Validators in `src/config.ts`
 - `validateLanguages([...])` — each item matches `^[a-z]{2,3}(-[A-Z]{2})?$` OR is the literal `auto`; if `auto` is in the list, no other code may be present.
 - `validateOutputMode(value)` — one of the three string literals.
 - `validateGuardPhrase(value)` — trimmed length > 0 AND `normalizeGuardPhrase(value).length > 0`.
+- `validateSttProvider(value)` — must be `soniox` or `elevenlabs`.
 - `validateLLMProvider(value)` — must be in the eight-name enum.
 - `resolveProviderConfig(provider, model, chain)` — for `azure-openai`, collects the four Azure env vars; if either of the two required ones is missing, throws `LLMConfigurationError` enumerating the missing names AND the four-tier search order so the user can fix whichever they prefer.
 
 ### 14.6 Where defaults live
-Defaults are declared as module-level constants near the top of `src/config.ts` (`DEFAULT_MODEL`, `DEFAULT_ENDPOINT`, `DEFAULT_LANGUAGES_CSV`, `DEFAULT_SAMPLE_RATE`, `DEFAULT_OUTPUT_MODE`, `DEFAULT_GUARD_PHRASE`, `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL`, `DEFAULT_LLM_REQUEST_TIMEOUT_MS`, `DEFAULT_AZURE_API_VERSION`, `DEFAULT_SYSTEM_PROMPT`). The resolver layer ONLY substitutes a default when (a) the CLI flag is absent AND (b) the env chain does not yield a value. There is no other fallback path — per NFR-5 / NFR-8 a missing *required* value raises, never substitutes silently.
+Defaults are declared as module-level constants near the top of `src/config.ts` (`DEFAULT_SONIOX_MODEL`, `DEFAULT_SONIOX_ENDPOINT`, `DEFAULT_SONIOX_LANGUAGES_CSV`, `DEFAULT_ELEVENLABS_MODEL`, `DEFAULT_ELEVENLABS_ENDPOINT`, `DEFAULT_ELEVENLABS_LANGUAGES_CSV`, `DEFAULT_SAMPLE_RATE`, `DEFAULT_OUTPUT_MODE`, `DEFAULT_GUARD_PHRASE`, `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL`, `DEFAULT_LLM_REQUEST_TIMEOUT_MS`, `DEFAULT_AZURE_API_VERSION`, `DEFAULT_SYSTEM_PROMPT`). The resolver layer ONLY substitutes a default when (a) the CLI flag is absent AND (b) the env chain does not yield a value. There is no other fallback path — per NFR-5 / NFR-8 a missing *required* value raises, never substitutes silently.
 
 ### 14.7 Verbose diagnostics
 When `--verbose` is set, the resolver emits (to stderr) one line per family:
-- `[mic-tool] api key loaded from: <flag|.env|user|env>`
-- `[mic-tool] guard phrase: <phrase>`
-- `[mic-tool] transcription: model=..., endpoint=..., languages=[...], sample_rate=..., endpoint_detection=...`
-- `[mic-tool] llm: enabled|disabled (provider=..., model=...)`
+- `[mic-tool-ts] <ACTIVE_API_KEY_ENV> loaded from: <flag|.env|user|env>`
+- `[mic-tool-ts] guard phrase: <phrase>`
+- `[mic-tool-ts] transcription: provider=..., model=..., endpoint=..., languages=[...], sample_rate=..., endpoint_detection=...`
+- `[mic-tool-ts] llm: enabled|disabled (provider=..., model=...)`
 
 The API key value itself is NEVER logged.
 
 ---
 
-## 15. Architectural Decisions Log — additions from plans 002, 003, 004
+## 15. ElevenLabs STT Provider (added by plan-006)
+
+### 15.1 Provider abstraction
+`src/transcription/types.ts` defines the provider-neutral `Transcriber` contract. `src/transcription/factory.ts` dispatches to `SonioxTranscriber` or `ElevenLabsTranscriber` from the resolved `sttProvider`. The orchestrator no longer directly constructs a Soniox client.
+
+### 15.2 Configuration behavior
+- `soniox` remains the default provider and continues using `SONIOX_API_KEY`.
+- `elevenlabs` is opt-in through `--stt-provider elevenlabs` / `MIC_TOOL_TS_STT_PROVIDER=elevenlabs`.
+- When ElevenLabs is selected, `ELEVENLABS_API_KEY` or `--elevenlabs-api-key` is required and `SONIOX_API_KEY` is not required.
+- Provider defaults are applied before validation: Soniox uses `stt-rt-v4`, the Soniox realtime endpoint, and `el,en`; ElevenLabs uses `scribe_v2_realtime`, `wss://api.elevenlabs.io/v1/speech-to-text/realtime`, and `auto`.
+- ElevenLabs accepts `auto` or one explicit language code because its realtime API exposes a single `language_code` option, not multiple language hints.
+
+### 15.3 ElevenLabs client behavior
+`src/elevenlabs/client.ts` uses the `ws` package to connect with the `xi-api-key` header. It builds WebSocket query parameters for `model_id`, `audio_format`, `sample_rate`, `commit_strategy`, optional `language_code`, and `include_timestamps=false`.
+
+The client sends each microphone chunk as an `input_audio_chunk` JSON message with base64 PCM and maps inbound events as follows:
+
+| ElevenLabs event | CLI callback |
+|------------------|--------------|
+| `partial_transcript` | `onPartial(text)` |
+| `committed_transcript` | `onFinal(text.trim())` |
+| `committed_transcript_with_timestamps` | `onFinal(text.trim())` |
+| `error` | typed ElevenLabs auth/protocol error |
+| unexpected close/error | typed ElevenLabs network/auth error |
+
+When endpoint detection is enabled, the client uses ElevenLabs VAD commit strategy. On shutdown it sends a best-effort final `input_audio_chunk` with `commit: true`, then closes the WebSocket within 1500 ms.
+
+## 16. Architectural Decisions Log — additions from plans 002, 003, 004, 005, 006
 
 ### Plan 002 (turn detection)
 - **Guard phrase remains visible in the rendered final.** Users want a clear audit trail of what triggered the turn end. The phrase is only stripped from the LLM input, not the user-visible transcript.
@@ -1259,14 +1336,101 @@ The API key value itself is NEVER logged.
 - **Four tiers, with `<cwd>/.env` beating `~/.tool-agents/.../.env` beating shell env.** Project-local config takes precedence so per-project overrides don't require touching shared user files; the per-user `~/.tool-agents/<tool>/.env` is the canonical secrets store, mandated by the project's tool conventions.
 - **Never mutate `process.env`.** Tests stay isolated and precedence is deterministic — the alternative (`process.loadEnvFile()`) would silently refuse to overwrite an existing shell var, inverting the desired priority.
 - **Whitespace-only env values are treated as missing.** A `.env` file with `SONIOX_API_KEY=   ` is far more likely to be a copy-paste mistake than a deliberate blank value.
-- **No auto-create of `~/.tool-agents/mic-tool/`.** The tool reads the folder if it exists; creating it (with the required 0700 mode + a 0600 `.env`) is a one-time user operation documented in the configuration guide, not a runtime side-effect.
+- **No auto-create of `~/.tool-agents/mic-tool-ts/`.** The tool reads the folder if it exists; creating it (with the required 0700 mode + a 0600 `.env`) is a one-time user operation documented in the configuration guide, not a runtime side-effect.
 - **Sample rate parameterized everywhere (sox argv + Soniox session).** A single config value drives both, so they can never drift; validated `[8000, 48000]` to match the realistic envelope of the Soniox real-time model.
 - **Operational expiry tracking, not enforcement.** The tool warns at 14 days and at zero, but always tries to run. Hard-failing on a stale ISO date would punish users for the failure mode "I forgot to update the reminder, not the key."
 - **Both flag and env-var name in every parser error message.** Reduces the back-and-forth of "where do I fix this" when an `.env` value is bad — the error names both knobs.
 
+### Plan 005 (project rename to `mic-tool-ts`)
+- **Package name, binary name, config folder, and log prefix all use `mic-tool-ts`.** The rename is user-facing, so installation, help examples, diagnostics, and per-user secret storage must agree on one name.
+- **Project-specific env vars use `MIC_TOOL_TS_*`.** This keeps the config namespace aligned with the renamed command. Provider-canonical and vendor env vars (`SONIOX_*`, `AZURE_OPENAI_*`) retain their existing names.
+- **Installed use is a direct OS command.** User-facing docs and local agent instructions treat `mic-tool-ts` as the supported invocation on `PATH`; `node`, `tsx`, and package-manager scripts remain development conveniences only.
+
+### Plan 006 (ElevenLabs transcription provider)
+- **Soniox remains default.** Existing users keep their current command and config behavior unless they explicitly select ElevenLabs.
+- **Direct WebSocket API over ElevenLabs SDK.** The tool already owns mic capture, chunking, lifecycle, rendering, and tests. A small WebSocket adapter avoids pulling a larger provider SDK for a single streaming path.
+- **VAD maps to endpoint detection.** The existing guard-phrase turn detector needs timely committed transcript segments; ElevenLabs VAD commit strategy is the closest match to Soniox endpoint detection.
+- **Provider-specific required secrets.** Missing `ELEVENLABS_API_KEY` is only fatal when ElevenLabs is selected; missing `SONIOX_API_KEY` is only fatal for the Soniox provider. There is no fallback from one provider's key to another.
+
 ---
 
-## 16. Open Items Carried Forward to Implementation
+## 17. Voice Agent Command Protocol
+
+### 17.1 Status
+Implemented 2026-05-16.
+
+### 17.2 Design intent
+`mic-tool-ts` supports oral communication with downstream agents without sacrificing its current dictation behavior. The implementation separates four concepts:
+
+- Dictation text: continuous plain transcript.
+- Text section: the paragraph or section accumulated until `command send`.
+- Operator state: persistent toggles such as `refine`, `translate`, and `clipboard`.
+- LLM operation: optional cleanup, translation, suggestion, criticism, or another transformation applied to a submitted section.
+
+The current guard-phrase detector is a good fit for simple turn closure, but it should not become the whole protocol. The proposed protocol moves section handling and operator state into a dedicated protocol layer.
+
+### 17.3 Protocol layer
+The protocol controller sits above finalized STT callbacks:
+
+| State | Meaning | Marker behavior |
+|-------|---------|-----------------|
+| `capturing_section` | Current default transcript mode; finalized non-command text accumulates in a section buffer. | `command refine|translate|clipboard` changes operator state; `command status` reports current protocol settings; `command send` submits the section; `command cancel` discards it. |
+| `processing_section` | A submitted section is being processed through active operators. | New speech continues into the next section; processing is asynchronous and fail-open. |
+
+Partial STT text is rendered or ignored according to the active mode, but it never triggers protocol state transitions.
+
+### 17.4 Output contract
+Agent protocol mode emits JSON Lines rather than plain transcript text:
+
+```json
+{"type":"state.changed","seq":1,"key":"refine","value":true}
+{"type":"state.changed","seq":2,"key":"translate","value":true,"target_policy":"opposite"}
+{"type":"status.reported","seq":3,"operators":{"refine":true,"translate":true,"clipboard":false},"translation_policy":"opposite","pending_section":true}
+{"type":"section.processed","seq":4,"section_id":"sec_000001","operators":["refine","translate"],"raw_text":"...","refined_text":"...","source_language":"el","target_language":"en","output_text":"..."}
+```
+
+Human transcript text and machine protocol events are not mixed in one stream by default:
+
+- `dictation`: human-facing transcript and processed-section output on stdout.
+- `agent-protocol`: JSONL state and section events on stdout, diagnostics on stderr.
+- `hybrid`: human-facing transcript on stdout; JSONL protocol events to an explicit `--protocol-output` file.
+
+### 17.5 Configuration sketch
+Configuration keys:
+
+| CLI flag | Env var | Default |
+|----------|---------|---------|
+| `--interaction-mode <dictation|agent-protocol|hybrid>` | `MIC_TOOL_TS_INTERACTION_MODE` | `dictation` |
+| `--command-phrase <phrase>` | `MIC_TOOL_TS_COMMAND_PHRASE` | `command` |
+| `--section-end-phrase <phrase>` | `MIC_TOOL_TS_SECTION_END_PHRASE` | `command send` |
+| `--section-cancel-phrase <phrase>` | `MIC_TOOL_TS_SECTION_CANCEL_PHRASE` | `command cancel` |
+| `--literal-next-phrase <phrase>` | `MIC_TOOL_TS_LITERAL_NEXT_PHRASE` | `literal phrase` |
+| `--refine-default <on|off>` | `MIC_TOOL_TS_REFINE_DEFAULT` | `off` |
+| `--translate-default <on|off>` | `MIC_TOOL_TS_TRANSLATE_DEFAULT` | `off` |
+| `--translation-policy <opposite|to-en|to-el>` | `MIC_TOOL_TS_TRANSLATION_POLICY` | `opposite` |
+| `--clipboard-default <on|off>` | `MIC_TOOL_TS_CLIPBOARD_DEFAULT` | `off` |
+| `--protocol-output <path>` | `MIC_TOOL_TS_PROTOCOL_OUTPUT` | required for `hybrid` |
+
+### 17.6 Proposed module layout
+- `src/protocol/types.ts` — event types, interaction modes, operator state, marker config.
+- `src/protocol/markerMatcher.ts` — normalized marker matching and marker stripping while preserving slash-marker intent.
+- `src/protocol/stateMachine.ts` — section capture, state command parsing, `command send` submit, `command cancel` discard, shutdown cancellation.
+- `src/protocol/jsonlWriter.ts` — JSONL protocol sink with monotonic `seq` values.
+- `src/protocol/controller.ts` — connects renderer, refiner/translator, clipboard sink, and protocol writer.
+
+The orchestrator constructs `VoiceAgentProtocolController` and routes all finalized STT text through it. In `agent-protocol` mode, partial text and human transcript output are suppressed on stdout; only JSONL protocol events are written there. In `dictation` and `hybrid`, cleaned visible transcript text is still rendered through `StdoutRenderer`.
+
+### 17.7 Status command
+
+`command status` is parsed through the same `command` marker as operator toggles, but it is not an operator and does not mutate state. The state machine emits `status.reported` with the current `refine`, `translate`, and `clipboard` booleans, the active `translation_policy`, and `pending_section` indicating whether the current section buffer contains unsent dictated text. The controller writes this event to the protocol writer in `agent-protocol` and `hybrid` modes. In human-facing modes, it renders a single status line such as:
+
+```text
+[mic-tool-ts] status: refine=on, translate=off, clipboard=off, translation_policy=opposite, pending_section=yes
+```
+
+---
+
+## 18. Open Items Carried Forward to Implementation
 
 These do not block the design but should be revisited during Phase 5:
 

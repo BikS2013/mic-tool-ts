@@ -9,8 +9,9 @@
  * Architectural notes (see docs/design/project-design.md §6):
  *   - The wrapper owns the SDK objects; callers never see them.
  *   - `<end>` and `<fin>` marker tokens are filtered before reaching callbacks.
- *   - Non-final tokens accumulate into `partialBuffer`; final tokens promote
- *     the buffer to `onFinal` and reset.
+ *   - Each result is interpreted defensively as either a provider delta or a
+ *     current utterance snapshot; repeated finalized prefixes are replaced,
+ *     not appended, so live partials cannot grow by duplicating old text.
  *   - `sendAudio()` is guarded by `session.state === "connected"`; any
  *     synchronous SDK error during a send is routed through `onError` rather
  *     than allowed to crash the process.
@@ -40,41 +41,7 @@ import {
   SonioxNetworkError,
   SonioxProtocolError,
 } from "../errors.js";
-
-export interface TranscriberOptions {
-  /** Soniox API key. */
-  apiKey: string;
-  /** Soniox model (e.g. "stt-rt-v4"). */
-  model: string;
-  /** Soniox WebSocket endpoint (wss://...). */
-  endpoint: string;
-  /** Language hints: array of ISO 639-1/2 codes, OR ["auto"] for auto-detect. */
-  languages: string[];
-  /** Audio sample rate in Hz (must match what the mic source emits). */
-  sampleRate: number;
-  /** Whether to enable server-side endpoint detection. */
-  enableEndpointDetection: boolean;
-  /** When true, the wrapper emits diagnostic events to stderr. */
-  verbose: boolean;
-}
-
-export interface Transcriber {
-  /** Open the WebSocket session. Throws {@link SonioxAuthError} or
-   *  {@link SonioxNetworkError} on failure. */
-  start(): Promise<void>;
-  /** Forward a chunk of PCM s16le audio to the live session. No-op if not
-   *  connected. */
-  pushAudio(chunk: Buffer): void;
-  /** Gracefully finalize and close the session (bounded by an internal
-   *  timeout). Idempotent. */
-  stop(): Promise<void>;
-  /** Register a partial-transcript callback. */
-  onPartial(cb: (text: string) => void): void;
-  /** Register a final-transcript callback. */
-  onFinal(cb: (text: string) => void): void;
-  /** Register a mid-stream error callback. */
-  onError(cb: (err: Error) => void): void;
-}
+import type { Transcriber, TranscriberOptions } from "../transcription/types.js";
 
 /** Bounded delay between `finalize()` and `finish()` (ms). Gives the server a
  *  brief window to flush pending non-final tokens as finals before we send
@@ -106,9 +73,9 @@ export class SonioxTranscriber implements Transcriber {
 
   /**
    * Text of tokens that have been finalized within the *current* utterance
-   * (since the last `onFinal` commit). Soniox does NOT re-send finalized
-   * tokens in subsequent results, so we must accumulate them ourselves to
-   * preserve the running transcript across results.
+   * (since the last `onFinal` commit). Some Soniox result streams behave like
+   * deltas and some live frames can repeat the current finalized prefix, so
+   * updates go through `mergeFinalText()` instead of unconditional append.
    */
   private committedFinals = "";
 
@@ -171,7 +138,7 @@ export class SonioxTranscriber implements Transcriber {
       this.preConnectError = this.mapSdkError(err);
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool] soniox pre-connect error: ${err.message}\n`,
+          `[mic-tool-ts] soniox pre-connect error: ${err.message}\n`,
         );
       }
     };
@@ -183,7 +150,7 @@ export class SonioxTranscriber implements Transcriber {
 
     if (this.opts.verbose) {
       process.stderr.write(
-        `[mic-tool] soniox: connecting (model=${this.opts.model}, languages=[${this.opts.languages.join(", ")}])\n`,
+        `[mic-tool-ts] soniox: connecting (model=${this.opts.model}, languages=[${this.opts.languages.join(", ")}])\n`,
       );
     }
 
@@ -205,14 +172,14 @@ export class SonioxTranscriber implements Transcriber {
     }
 
     if (this.opts.verbose) {
-      process.stderr.write("[mic-tool] soniox: connected\n");
+      process.stderr.write("[mic-tool-ts] soniox: connected\n");
     }
 
     // Install the persistent mid-stream 'error' listener.
     this.session.on("error", (err: Error) => {
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool] soniox mid-stream error: ${err.message}\n`,
+          `[mic-tool-ts] soniox mid-stream error: ${err.message}\n`,
         );
       }
       const mapped = this.mapSdkError(err);
@@ -225,7 +192,7 @@ export class SonioxTranscriber implements Transcriber {
     if (session === undefined || session.state !== "connected") {
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool] dropped ${chunk.length} audio bytes (session state=${
+          `[mic-tool-ts] dropped ${chunk.length} audio bytes (session state=${
             session?.state ?? "uninitialised"
           })\n`,
         );
@@ -242,7 +209,7 @@ export class SonioxTranscriber implements Transcriber {
       const mapped = this.mapSdkError(err);
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool] sendAudio threw synchronously: ${mapped.message}\n`,
+          `[mic-tool-ts] sendAudio threw synchronously: ${mapped.message}\n`,
         );
       }
       this.dispatchError(mapped);
@@ -279,7 +246,7 @@ export class SonioxTranscriber implements Transcriber {
 
     // Ask the server to flush pending non-final tokens as finals first.
     if (this.opts.verbose) {
-      process.stderr.write("[mic-tool] soniox: finalize()\n");
+      process.stderr.write("[mic-tool-ts] soniox: finalize()\n");
     }
     try {
       session.finalize();
@@ -291,7 +258,7 @@ export class SonioxTranscriber implements Transcriber {
     await delay(FINALIZE_DRAIN_MS);
 
     if (this.opts.verbose) {
-      process.stderr.write("[mic-tool] soniox: finish()\n");
+      process.stderr.write("[mic-tool-ts] soniox: finish()\n");
     }
     try {
       await Promise.race([
@@ -306,7 +273,7 @@ export class SonioxTranscriber implements Transcriber {
       if (this.opts.verbose) {
         const msg = err instanceof Error ? err.message : String(err);
         process.stderr.write(
-          `[mic-tool] soniox: finish() failed (${msg}); calling close()\n`,
+          `[mic-tool-ts] soniox: finish() failed (${msg}); calling close()\n`,
         );
       }
       try {
@@ -362,7 +329,7 @@ export class SonioxTranscriber implements Transcriber {
     // verbose for diagnostics.
     session.on("endpoint", () => {
       if (this.opts.verbose) {
-        process.stderr.write("[mic-tool] soniox: endpoint\n");
+        process.stderr.write("[mic-tool-ts] soniox: endpoint\n");
       }
       // Endpoint signals utterance completion. Commit any accumulated finals
       // as a single line and reset for the next utterance.
@@ -375,7 +342,7 @@ export class SonioxTranscriber implements Transcriber {
 
     session.on("finalized", () => {
       if (this.opts.verbose) {
-        process.stderr.write("[mic-tool] soniox: finalized\n");
+        process.stderr.write("[mic-tool-ts] soniox: finalized\n");
       }
       // Flush any committed finals that did not produce an endpoint.
       if (this.committedFinals.trim().length > 0) {
@@ -387,7 +354,7 @@ export class SonioxTranscriber implements Transcriber {
 
     session.on("finished", () => {
       if (this.opts.verbose) {
-        process.stderr.write("[mic-tool] soniox: finished\n");
+        process.stderr.write("[mic-tool-ts] soniox: finished\n");
       }
       this.settleFinish();
     });
@@ -395,7 +362,7 @@ export class SonioxTranscriber implements Transcriber {
     session.on("disconnected", (reason?: string) => {
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool] soniox: disconnected${reason !== undefined ? ` (${reason})` : ""}\n`,
+          `[mic-tool-ts] soniox: disconnected${reason !== undefined ? ` (${reason})` : ""}\n`,
         );
       }
       if (this.shuttingDown) {
@@ -413,14 +380,12 @@ export class SonioxTranscriber implements Transcriber {
   }
 
   private handleResult(result: RealtimeResult): void {
-    // Soniox delivers the FULL current snapshot of non-final tokens in each
-    // result (they are not cumulative across results) while final tokens
-    // appear once and are dropped from subsequent results. Therefore:
-    //   - Finals are appended to the running `committedFinals` buffer.
-    //   - Non-finals are rebuilt from scratch per result.
-    //   - The displayed partial is `committedFinals + currentNonFinals`.
-    //   - The endpoint event (or finalized event) commits `committedFinals`
-    //     as a final and clears the buffer.
+    // Soniox non-finals are a current hypothesis snapshot. Final tokens are
+    // documented as deltas, but live sessions can repeat the current finalized
+    // prefix across result frames. Merge defensively so both shapes work:
+    //   - delta finals extend committedFinals,
+    //   - snapshot finals replace committedFinals when they contain it,
+    //   - repeated snapshot finals leave committedFinals unchanged.
 
     let newFinals = "";
     let currentNonFinals = "";
@@ -435,7 +400,7 @@ export class SonioxTranscriber implements Transcriber {
     }
 
     if (newFinals.length > 0) {
-      this.committedFinals += newFinals;
+      this.committedFinals = mergeFinalText(this.committedFinals, newFinals);
     }
 
     const display = this.committedFinals + currentNonFinals;
@@ -487,7 +452,7 @@ export class SonioxTranscriber implements Transcriber {
         // emitter. Log under verbose and drop.
         if (this.opts.verbose) {
           const msg = cbErr instanceof Error ? cbErr.message : String(cbErr);
-          process.stderr.write(`[mic-tool] onError callback threw: ${msg}\n`);
+          process.stderr.write(`[mic-tool-ts] onError callback threw: ${msg}\n`);
         }
       }
     }
@@ -511,4 +476,30 @@ function delay(ms: number): Promise<void> {
 
 function rejectAfter(ms: number, err: Error): Promise<never> {
   return new Promise<never>((_, reject) => setTimeout(() => reject(err), ms));
+}
+
+function mergeFinalText(committed: string, incomingFinals: string): string {
+  if (committed.length === 0) return incomingFinals;
+  if (incomingFinals.length === 0) return committed;
+
+  // Snapshot semantics: the provider repeated all finalized text seen so far.
+  // Replace rather than append, preserving any newly finalized suffix.
+  if (incomingFinals.startsWith(committed)) return incomingFinals;
+
+  // Duplicate-delta semantics: the provider repeated only the most recent
+  // finalized token run. Do not append it again.
+  if (committed.endsWith(incomingFinals)) return committed;
+
+  // Overlap semantics: keep the longest suffix/prefix overlap so a frame like
+  // committed="hello wor" + incoming="world" becomes "hello world".
+  const overlap = longestSuffixPrefixOverlap(committed, incomingFinals);
+  return committed + incomingFinals.slice(overlap);
+}
+
+function longestSuffixPrefixOverlap(a: string, b: string): number {
+  const max = Math.min(a.length, b.length);
+  for (let len = max; len > 0; len -= 1) {
+    if (a.endsWith(b.slice(0, len))) return len;
+  }
+  return 0;
 }

@@ -80,8 +80,8 @@ Build a TypeScript command-line tool that captures audio from the user's microph
 Each criterion below must be demonstrable on a fresh checkout on a macOS machine with a Soniox API key.
 
 1. **AC-1 Builds clean**: `pnpm install` (or chosen package manager) + `pnpm build` completes with zero errors and zero HIGH-or-above audit advisories.
-2. **AC-2 Help works**: Running `mic-tool --help` prints a usage block listing every supported flag (`--api-key`, `--language`, `--output-mode`, `--verbose`, `--help`, `--version`) with one-line descriptions, plus at least one usage example, and exits with code `0`.
-3. **AC-3 Version works**: Running `mic-tool --version` prints the semver from `package.json` and exits with code `0`.
+2. **AC-2 Help works**: Running `mic-tool-ts --help` prints a usage block listing every supported flag (`--api-key`, `--language`, `--output-mode`, `--verbose`, `--help`, `--version`) with one-line descriptions, plus at least one usage example, and exits with code `0`.
+3. **AC-3 Version works**: Running `mic-tool-ts --version` prints the semver from `package.json` and exits with code `0`.
 4. **AC-4 Missing-key error**: Running the tool with no API key in env, no `.env` file, and no `--api-key` flag exits with a non-zero code and prints a clear, named error to `stderr` (e.g. `MissingConfigurationError: SONIOX_API_KEY is not set...`). No partial mic capture occurs.
 5. **AC-5 Live transcription**: With a valid API key supplied via env, the tester speaks a known sentence ("the quick brown fox jumps over the lazy dog") into the default mic, and within 2 seconds of finishing the sentence a finalized line matching that sentence (case-insensitive, allowing minor ASR variance) appears on `stdout`.
 6. **AC-6 Partials render live**: While the tester is still speaking a long sentence, partial transcript text is visibly updating on the current console line (via `\r` overwrite) — verifying that partials are being consumed and rendered.
@@ -90,7 +90,7 @@ Each criterion below must be demonstrable on a fresh checkout on a macOS machine
 9. **AC-9 Mic-permission error**: When mic permission is denied at the OS level, the tool exits with a non-zero code and prints a clear, actionable error message instructing the user how to grant mic access in System Settings.
 10. **AC-10 Network-failure error**: If the Soniox WebSocket cannot be reached (simulated via `/etc/hosts` block or by disabling networking after start), the tool surfaces a clear error to `stderr` and exits with a non-zero code; it does not hang indefinitely.
 11. **AC-11 Invalid-key error**: With a syntactically valid but rejected API key, Soniox's auth failure is surfaced as a clear, named error on `stderr` with a non-zero exit code.
-12. **AC-12 Pipe-friendly stdout**: Running `mic-tool > transcript.txt` produces a file containing only transcript text (no log noise, no ANSI carriage-return artifacts when `--output-mode append` or `--output-mode final-only` is selected).
+12. **AC-12 Pipe-friendly stdout**: Running `mic-tool-ts > transcript.txt` produces a file containing only transcript text (no log noise, no ANSI carriage-return artifacts when `--output-mode append` or `--output-mode final-only` is selected).
 13. **AC-13 Docs present**: `docs/design/project-design.md`, `docs/design/project-functions.md`, and a user-facing README (or `docs/design/configuration-guide.md` for the API-key precedence) all exist and are consistent with the implementation.
 14. **AC-14 Tests present**: At least one integration-style test script under `test_scripts/` exercises the CLI's help/version/missing-key paths without requiring network or microphone access (these can be mocked).
 
@@ -107,7 +107,7 @@ The following assumptions were made because the user could not be queried direct
 - **A-7 Package manager**: `pnpm` is the assumed package manager based on the dependency-vetting examples in `CLAUDE.md`. If the team prefers `npm` or `yarn`, the equivalent commands apply.
 - **A-8 Audio format hypothesis**: 16-bit signed PCM, 16 kHz, mono, little-endian is the starting assumption for what Soniox real-time expects. The investigation phase MUST confirm against current Soniox docs and adjust before implementation.
 - **A-9 Mic-capture library**: A concrete library choice (e.g. `node-record-lpcm16`, `mic`, or invoking `sox`/`ffmpeg` as a subprocess) is deferred to the investigation/planning phase. The dependency-vetting policy applies whichever route is chosen.
-- **A-10 Binary name**: `mic-tool` is assumed as the CLI binary name (matches the project directory). The team may rename it before publishing.
+- **A-10 Binary name**: `mic-tool-ts` is assumed as the CLI binary name (matches the project directory). The team may rename it before publishing.
 
 ## Open Questions
 

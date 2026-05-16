@@ -4,7 +4,7 @@
  * All external units are mocked:
  *   - src/config.ts        → vi.mock → controlled resolveConfig / HelpOrVersionShown
  *   - src/mic/index.ts     → vi.mock → fake MicSource
- *   - src/soniox/client.ts → vi.mock → fake SonioxTranscriber
+ *   - src/transcription/factory.ts → vi.mock → fake transcriber factory
  *   - src/render/renderer.ts → vi.mock → fake StdoutRenderer
  *
  * `main(argv)` is imported and called directly. It must never call
@@ -41,12 +41,13 @@ class FakeMicSource {
 }
 
 /**
- * A minimal fake SonioxTranscriber.
+ * A minimal fake provider transcriber.
  * Callback setters are stored so tests can invoke them.
  */
 class FakeTranscriber {
   start = vi.fn<() => Promise<void>>(async () => {});
   stop = vi.fn<() => Promise<void>>(async () => {});
+  pushAudio = vi.fn<(chunk: Buffer) => void>();
   _partialCb?: (text: string) => void;
   _finalCb?: (text: string) => void;
   _errorCb?: (err: Error) => void;
@@ -59,6 +60,8 @@ class FakeTranscriber {
 class FakeRenderer {
   partial = vi.fn<(text: string) => void>();
   final = vi.fn<(text: string) => void>();
+  turnBoundary = vi.fn<() => void>();
+  refined = vi.fn<(text: string) => void>();
   dispose = vi.fn<() => void>();
 }
 
@@ -88,19 +91,8 @@ vi.mock("../src/mic/index.js", () => ({
   createMicSource: () => fakeMic,
 }));
 
-vi.mock("../src/soniox/client.js", () => ({
-  SonioxTranscriber: class {
-    constructor(_opts: unknown) {
-      // Swap out the shared fakeTranscriber reference to this new instance.
-      Object.assign(this, fakeTranscriber);
-    }
-    // Proxy all methods through fakeTranscriber so tests can spy.
-    start(...args: unknown[]) { return (fakeTranscriber.start as (...a: unknown[]) => unknown)(...args); }
-    stop(...args: unknown[]) { return (fakeTranscriber.stop as (...a: unknown[]) => unknown)(...args); }
-    onPartial(cb: (text: string) => void) { fakeTranscriber.onPartial(cb); }
-    onFinal(cb: (text: string) => void) { fakeTranscriber.onFinal(cb); }
-    onError(cb: (err: Error) => void) { fakeTranscriber.onError(cb); }
-  },
+vi.mock("../src/transcription/factory.js", () => ({
+  createTranscriber: vi.fn(() => fakeTranscriber),
 }));
 
 vi.mock("../src/render/renderer.js", () => ({
@@ -110,6 +102,8 @@ vi.mock("../src/render/renderer.js", () => ({
     }
     partial(t: string) { fakeRenderer.partial(t); }
     final(t: string) { fakeRenderer.final(t); }
+    turnBoundary() { fakeRenderer.turnBoundary(); }
+    refined(t: string) { fakeRenderer.refined(t); }
     dispose() { fakeRenderer.dispose(); }
   },
 }));
@@ -133,7 +127,9 @@ import {
 // --------------------------------------------------------------------------
 
 const GOOD_CONFIG: ResolvedConfig = Object.freeze({
+  sttProvider: "soniox",
   apiKey: "test-api-key",
+  apiKeyEnvName: "SONIOX_API_KEY",
   languages: ["en"],
   model: "stt-rt-v4",
   endpoint: "wss://stt-rt.soniox.com/transcribe-websocket",
@@ -142,6 +138,22 @@ const GOOD_CONFIG: ResolvedConfig = Object.freeze({
   outputMode: "overwrite" as const,
   verbose: false,
   guardPhrase: "τέλος εντολής",
+  protocol: Object.freeze({
+    interactionMode: "dictation" as const,
+    markers: Object.freeze({
+      commandPhrase: "command",
+      sectionEndPhrase: "command send",
+      sectionEndAliases: Object.freeze(["τέλος εντολής"]),
+      sectionCancelPhrase: "command cancel",
+      literalNextPhrase: "literal phrase",
+    }),
+    initialOperators: Object.freeze({
+      refine: false,
+      translate: false,
+      clipboard: false,
+    }),
+    translationPolicy: "opposite" as const,
+  }),
   llm: Object.freeze({
     enabled: false,
     provider: "azure-openai" as const,
@@ -160,7 +172,7 @@ const GOOD_CONFIG: ResolvedConfig = Object.freeze({
 });
 
 /** Returns an argv array that the mocked resolveConfig will accept. */
-const GOOD_ARGV = ["node", "mic-tool", "--api-key", "test-api-key"];
+const GOOD_ARGV = ["node", "mic-tool-ts", "--api-key", "test-api-key"];
 
 function setupGoodConfig(): void {
   resolveConfigImpl = () => GOOD_CONFIG;
@@ -238,25 +250,36 @@ describe("main() — happy path", () => {
   });
 
   it("sends mic audio chunks to transcriber.pushAudio (via data event)", async () => {
-    const pushAudioSpy = vi.fn();
-    // Patch pushAudio after the transcriber is wired.
     fakeTranscriber.start = vi.fn(async () => {});
     fakeTranscriber.stop = vi.fn(async () => {});
 
     const mainPromise = main(GOOD_ARGV);
     await vi.runAllTimersAsync();
 
-    // Inject fake pushAudio method on the live transcriber instance.
-    // The wiring is: mic.audio.on("data", (chunk) => transcriber.pushAudio(chunk)).
-    // Since fakeTranscriber doesn't have pushAudio, we capture it via the data event
-    // by tracking what SonioxTranscriber would do — but here the mock doesn't proxy pushAudio.
-    // Instead verify that the data event handler was attached.
-    const dataListeners = fakeMic.audio.listeners("data");
-    expect(dataListeners).toHaveLength(1);
+    const chunk = Buffer.from([1, 2, 3]);
+    fakeMic.audio.write(chunk);
+    expect(fakeTranscriber.pushAudio).toHaveBeenCalledWith(chunk);
 
     fakeMic.audio.push(null);
     await vi.runAllTimersAsync();
     await mainPromise;
+  });
+
+  it("writes a ready-to-listen message to stderr after startup", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+    const mainPromise = main(GOOD_ARGV);
+    await vi.runAllTimersAsync();
+
+    const stderrText = stderr.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderrText).toContain(
+      "[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.",
+    );
+
+    fakeMic.audio.push(null);
+    await vi.runAllTimersAsync();
+    await mainPromise;
+    stderr.mockRestore();
   });
 });
 
@@ -268,7 +291,7 @@ describe("main() — config failures", () => {
   it("returns 0 on HelpOrVersionShown, never starts mic or transcriber", async () => {
     resolveConfigImpl = () => { throw new HelpOrVersionShown("help"); };
 
-    const code = await main(["node", "mic-tool", "--help"]);
+    const code = await main(["node", "mic-tool-ts", "--help"]);
 
     expect(code).toBe(0);
     expect(fakeTranscriber.start).not.toHaveBeenCalled();
@@ -280,7 +303,7 @@ describe("main() — config failures", () => {
       throw new MissingConfigurationError("SONIOX_API_KEY is not set");
     };
 
-    const code = await main(["node", "mic-tool"]);
+    const code = await main(["node", "mic-tool-ts"]);
 
     expect(code).toBe(2);
     expect(fakeTranscriber.start).not.toHaveBeenCalled();

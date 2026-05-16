@@ -2,7 +2,7 @@
 
 ## Goal
 Wire env-var fallbacks for every CLI flag through the existing four-tier
-resolution chain (CLI flag > local `.env` > `~/.tool-agents/mic-tool/.env` >
+resolution chain (CLI flag > local `.env` > `~/.tool-agents/mic-tool-ts/.env` >
 shell env). Add operational expiry tracking for the Soniox API key. Backfill
 all design / functional / configuration documentation that lagged behind
 plans 002 and 003.
@@ -15,17 +15,17 @@ plans 002 and 003.
 |-----------------------------------|----------------------------------------|------------------------------------------------------|
 | `--api-key <value>`               | `SONIOX_API_KEY`                       | _required_                                           |
 | `--api-key-expires-at <YYYY-MM-DD>` | `SONIOX_API_KEY_EXPIRES_AT`           | _unset_ (operational reminder)                       |
-| `--model <name>`                  | `MIC_TOOL_MODEL`                       | `stt-rt-v4`                                          |
-| `--endpoint <wss-url>`            | `MIC_TOOL_ENDPOINT`                    | `wss://stt-rt.soniox.com/transcribe-websocket`       |
-| `--language <code>` (repeatable)  | `MIC_TOOL_LANGUAGES` (CSV)             | `el,en`                                              |
-| `--sample-rate <hz>`              | `MIC_TOOL_SAMPLE_RATE`                 | `16000`                                              |
-| `--no-endpoint-detection`         | `MIC_TOOL_ENABLE_ENDPOINT_DETECTION`   | `true`                                               |
-| `--guard-phrase <phrase>`         | `MIC_TOOL_GUARD_PHRASE`                | `τέλος εντολής`                                      |
-| `--output-mode <mode>`            | `MIC_TOOL_OUTPUT_MODE`                 | `overwrite`                                          |
-| `--refine` / `--no-refine`        | `MIC_TOOL_REFINE` (bool)               | `true`                                               |
-| `--llm-provider <name>`           | `MIC_TOOL_LLM_PROVIDER`                | `azure-openai`                                       |
-| `--llm-model <name>`              | `MIC_TOOL_LLM_MODEL`                   | `gpt-5.4`                                            |
-| `-v, --verbose`                   | `MIC_TOOL_VERBOSE` (bool)              | `false`                                              |
+| `--model <name>`                  | `MIC_TOOL_TS_MODEL`                       | `stt-rt-v4`                                          |
+| `--endpoint <wss-url>`            | `MIC_TOOL_TS_ENDPOINT`                    | `wss://stt-rt.soniox.com/transcribe-websocket`       |
+| `--language <code>` (repeatable)  | `MIC_TOOL_TS_LANGUAGES` (CSV)             | `el,en`                                              |
+| `--sample-rate <hz>`              | `MIC_TOOL_TS_SAMPLE_RATE`                 | `16000`                                              |
+| `--no-endpoint-detection`         | `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION`   | `true`                                               |
+| `--guard-phrase <phrase>`         | `MIC_TOOL_TS_GUARD_PHRASE`                | `τέλος εντολής`                                      |
+| `--output-mode <mode>`            | `MIC_TOOL_TS_OUTPUT_MODE`                 | `overwrite`                                          |
+| `--refine` / `--no-refine`        | `MIC_TOOL_TS_REFINE` (bool)               | `true`                                               |
+| `--llm-provider <name>`           | `MIC_TOOL_TS_LLM_PROVIDER`                | `azure-openai`                                       |
+| `--llm-model <name>`              | `MIC_TOOL_TS_LLM_MODEL`                   | `gpt-5.4`                                            |
+| `-v, --verbose`                   | `MIC_TOOL_TS_VERBOSE` (bool)              | `false`                                              |
 
 Boolean env var parsing accepts `true|false|yes|no|on|off|1|0` (case-insensitive).
 
@@ -37,8 +37,8 @@ Boolean env var parsing accepts `true|false|yes|no|on|off|1|0` (case-insensitive
 ### Expiry behaviour
 If `SONIOX_API_KEY_EXPIRES_AT` is set:
 - Parse as `YYYY-MM-DD` (UTC midnight).
-- If now > expiry → write a warning to stderr: `[mic-tool] WARNING: SONIOX_API_KEY expired N days ago (YYYY-MM-DD). Renew at https://console.soniox.com.`
-- Else if now within 14 days of expiry → `[mic-tool] WARNING: SONIOX_API_KEY expires in N days (YYYY-MM-DD).`
+- If now > expiry → write a warning to stderr: `[mic-tool-ts] WARNING: SONIOX_API_KEY expired N days ago (YYYY-MM-DD). Renew at https://console.soniox.com.`
+- Else if now within 14 days of expiry → `[mic-tool-ts] WARNING: SONIOX_API_KEY expires in N days (YYYY-MM-DD).`
 - Else verbose only.
 The tool still attempts to run regardless — the user owns renewal.
 

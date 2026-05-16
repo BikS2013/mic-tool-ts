@@ -7,7 +7,7 @@ framework: vitest
 test_command_full: pnpm test
 test_command_scope: npx vitest run tests/mic.test.ts tests/soniox-client.test.ts tests/main.test.ts
 test_dir: tests/
-target_path: /Users/giorgosmarinos/aiwork/coding-platform/mic-tool
+target_path: /Users/giorgosmarinos/aiwork/coding-platform/mic-tool-ts
 test_files_owned:
   - tests/mic.test.ts
   - tests/soniox-client.test.ts

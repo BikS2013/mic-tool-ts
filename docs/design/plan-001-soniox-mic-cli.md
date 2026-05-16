@@ -1,7 +1,7 @@
-# plan-001 — Soniox Microphone Transcription CLI (`mic-tool`)
+# plan-001 — Soniox Microphone Transcription CLI (`mic-tool-ts`)
 
 ## Purpose
-Implementation plan for the `mic-tool` TypeScript CLI that captures macOS microphone audio, streams it to Soniox's real-time STT WebSocket via the `@soniox/node` v2 SDK, and renders partial + final transcripts to `stdout`.
+Implementation plan for the `mic-tool-ts` TypeScript CLI that captures macOS microphone audio, streams it to Soniox's real-time STT WebSocket via the `@soniox/node` v2 SDK, and renders partial + final transcripts to `stdout`.
 
 ## Inputs (source documents)
 - Refined request: `docs/design/refined-request-soniox-mic-transcriber.md` (10 FRs, 7 NFRs, 14 ACs).
@@ -14,7 +14,7 @@ Implementation plan for the `mic-tool` TypeScript CLI that captures macOS microp
 |---|---|
 | Stack | `@soniox/node@^2`, `commander@^14`, Node 20.12+ native `process.loadEnvFile()`, `sox` spawned via `node:child_process` |
 | Package manager | `pnpm` |
-| Binary name | `mic-tool` |
+| Binary name | `mic-tool-ts` |
 | Platform v1 | macOS only (Linux/Windows = `NotImplementedError` stubs) |
 | WS-drop reconnect | Fail-fast (no auto-reconnect) |
 | TypeScript | strict; ESM (`"type": "module"`) |
@@ -36,7 +36,7 @@ Phases 1–4 are sequential setup; Phase 5 is the parallelizable implementation 
 **Deliverable**: An empty but installable `pnpm` workspace with all chosen dependencies vetted and pinned.
 
 **Files to create**:
-- `package.json` — `"type": "module"`, `"engines.node": ">=20.12"`, `"bin": { "mic-tool": "dist/index.js" }`, scripts: `build`, `dev`, `start`, `test`, `lint`, `typecheck`.
+- `package.json` — `"type": "module"`, `"engines.node": ">=20.12"`, `"bin": { "mic-tool-ts": "dist/index.js" }`, scripts: `build`, `dev`, `start`, `test`, `lint`, `typecheck`.
 - `tsconfig.json` — `strict: true`, `target: ES2022`, `module: NodeNext`, `moduleResolution: NodeNext`, `outDir: dist`, `rootDir: src`.
 - `.gitignore` — `node_modules`, `dist`, `.env`, `*.log`.
 - `.env.example` — `SONIOX_API_KEY=` with comment.
@@ -279,8 +279,8 @@ This is the core build phase. **Units A, B, C, D can be implemented in parallel*
 **Help text MUST**: list every flag with a one-line description and include at least one usage example (satisfies AC-2).
 
 **Acceptance**:
-- `mic-tool --help` lists all flags + at least one example, exit 0 (AC-2).
-- `mic-tool --version` prints `package.json` version, exit 0 (AC-3).
+- `mic-tool-ts --help` lists all flags + at least one example, exit 0 (AC-2).
+- `mic-tool-ts --version` prints `package.json` version, exit 0 (AC-3).
 - Missing-key path throws `MissingConfigurationError`, the orchestrator exits non-zero with the message on stderr (AC-4).
 - Precedence test: with shell `SONIOX_API_KEY=A`, `.env` `SONIOX_API_KEY=B`, and `--api-key C`, the resolved key is `C`. Without `--api-key`, resolved is `B` (AC-7).
 
@@ -390,7 +390,7 @@ try {
 **Error mapper** (`mapSonioxError`):
 - `AuthError` → `AuthenticationError`.
 - `ConnectionError` (pre-connect) → `ConnectionError`.
-- `NetworkError` / `ConnectionError` (post-connect, mid-stream) → `StreamDisconnectedError("Soniox session dropped: <message>. v1 does not auto-reconnect; re-run mic-tool to start a new session.")`.
+- `NetworkError` / `ConnectionError` (post-connect, mid-stream) → `StreamDisconnectedError("Soniox session dropped: <message>. v1 does not auto-reconnect; re-run mic-tool-ts to start a new session.")`.
 - `BadRequestError`, `QuotaError`, `StateError`, anything else → re-wrap in a generic `MicToolError`.
 
 **Acceptance**:
@@ -433,7 +433,7 @@ const isMarker = (t: { text: string }) => t.text === "<end>" || t.text === "<fin
 
 **Acceptance**:
 - AC-6: in `overwrite` mode, partials visibly update the current line.
-- AC-12: in `append` and `final-only` modes, `mic-tool > transcript.txt` produces a file with no `\r` characters and no ANSI noise.
+- AC-12: in `append` and `final-only` modes, `mic-tool-ts > transcript.txt` produces a file with no `\r` characters and no ANSI noise.
 - `<end>` and `<fin>` never appear in output in any mode.
 
 **Verification commands**:
@@ -641,7 +641,7 @@ Phase 2 (Skeleton & Interfaces) ────────────────
 ## File Structure (Prescribed)
 
 ```
-mic-tool/
+mic-tool-ts/
 ├── package.json
 ├── pnpm-lock.yaml
 ├── tsconfig.json

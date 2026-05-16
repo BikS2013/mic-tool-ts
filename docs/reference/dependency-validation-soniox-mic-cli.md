@@ -8,16 +8,16 @@ deprecations_initial: 0
 deprecations_final: 0
 vulnerabilities_initial: 0
 vulnerabilities_final: 0
-target_path: /Users/giorgosmarinos/aiwork/coding-platform/mic-tool
+target_path: /Users/giorgosmarinos/aiwork/coding-platform/mic-tool-ts
 validated_at: 2026-05-16T00:00:00Z
 last_validated_commit: null
 ---
 
-# Dependency Validation — mic-tool (Soniox Mic CLI)
+# Dependency Validation — mic-tool-ts (Soniox Mic CLI)
 
 ## 1. Summary
 
-The mic-tool project uses pnpm@10.33.2 as its package manager with a lockfile at format version 9.0. After running `pnpm install`, `pnpm outdated`, and `pnpm audit` across all 290 resolved packages (109 production, 181 dev/optional), zero deprecation warnings were emitted by the install step, zero deprecated packages were found in the registry for any direct dependency, and zero security advisories were found at any severity level. The project's dependency tree is clean. No replacements were applied and no iterations beyond the initial scan were required.
+The mic-tool-ts project uses pnpm@10.33.2 as its package manager with a lockfile at format version 9.0. After running `pnpm install`, `pnpm outdated`, and `pnpm audit` across all 290 resolved packages (109 production, 181 dev/optional), zero deprecation warnings were emitted by the install step, zero deprecated packages were found in the registry for any direct dependency, and zero security advisories were found at any severity level. The project's dependency tree is clean. No replacements were applied and no iterations beyond the initial scan were required.
 
 ## 2. Initial State
 

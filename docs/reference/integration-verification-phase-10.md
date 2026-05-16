@@ -3,7 +3,7 @@ phase: 10
 role: Integration Verifier
 status: READY (with minor follow-up)
 verified_at: 2026-05-16T00:32:00Z
-target_path: /Users/giorgosmarinos/aiwork/coding-platform/mic-tool
+target_path: /Users/giorgosmarinos/aiwork/coding-platform/mic-tool-ts
 package_manager: pnpm@10.33.2
 node_engines: ">=20.12"
 project_version: 0.1.0
@@ -11,7 +11,7 @@ project_version: 0.1.0
 
 # Phase 10 — Integration Verification Report
 
-This report verifies the mic-tool CLI as a cohesive whole. It covers the full
+This report verifies the mic-tool-ts CLI as a cohesive whole. It covers the full
 build/test pipeline, smoke tests against the compiled `dist/`, an audit pass,
 and a mapping of results against the 14 acceptance criteria.
 
@@ -97,7 +97,7 @@ bytes are emitted to stdout** during pre-flight errors — consistent with the
 
 ## 4. Issues — Pending Items review
 
-Reviewed `/Users/giorgosmarinos/aiwork/coding-platform/mic-tool/Issues - Pending Items.md` as part of this phase.
+Reviewed `/Users/giorgosmarinos/aiwork/coding-platform/mic-tool-ts/Issues - Pending Items.md` as part of this phase.
 
 ### 4.1 Outstanding pending items (not resolved by Phase 10)
 

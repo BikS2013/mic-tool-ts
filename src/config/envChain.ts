@@ -5,7 +5,7 @@
  * Priority from highest to lowest:
  *   1. CLI flags                       (handled by the caller; not in scope here)
  *   2. <CWD>/.env                      (project-local)
- *   3. ~/.tool-agents/mic-tool/.env    (per-user)
+ *   3. ~/.tool-agents/mic-tool-ts/.env    (per-user)
  *   4. process.env                     (shell)
  *
  * This module exposes a single function `loadEnvChain()` that returns a

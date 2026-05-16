@@ -359,6 +359,42 @@ describe("SonioxTranscriber — result event handling", () => {
     expect(finals[0]).toBe("hi");
   });
 
+  it("does not duplicate finalized prefixes when Soniox repeats snapshot finals", async () => {
+    const t = makeTranscriber();
+    const finals: string[] = [];
+    const partials: string[] = [];
+    t.onFinal((text) => finals.push(text));
+    t.onPartial((text) => partials.push(text));
+    await t.start();
+
+    getSession().emitResult([
+      { text: "Εσύ ", is_final: true },
+      { text: "ρε", is_final: false },
+    ]);
+    getSession().emitResult([
+      { text: "Εσύ ", is_final: true },
+      { text: "ρε", is_final: false },
+    ]);
+    getSession().emitResult([
+      { text: "Εσύ ", is_final: true },
+      { text: "ρε παιδί μου", is_final: false },
+    ]);
+
+    expect(partials).toEqual([
+      "Εσύ ρε",
+      "Εσύ ρε",
+      "Εσύ ρε παιδί μου",
+    ]);
+    expect(partials.join("\n")).not.toContain("Εσύ Εσύ");
+
+    getSession().emitResult([
+      { text: "Εσύ ρε παιδί μου", is_final: true },
+    ]);
+    getSession().emit("endpoint");
+
+    expect(finals).toEqual(["Εσύ ρε παιδί μου"]);
+  });
+
   it("trims leading/trailing whitespace from committed finals on endpoint", async () => {
     const t = makeTranscriber();
     const finals: string[] = [];

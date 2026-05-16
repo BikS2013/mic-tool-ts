@@ -1,5 +1,5 @@
 /**
- * Shared error taxonomy for mic-tool.
+ * Shared error taxonomy for mic-tool-ts.
  *
  * Every error class derived from {@link MicToolError} carries a stable string
  * `code` slug (for log/grep diagnostics) and a process `exitCode` that the
@@ -8,9 +8,9 @@
  * Exit-code map (from project-design.md §3.5):
  *   2 = configuration error (missing / invalid)
  *   3 = mic capture environment problem (unavailable, permission, platform)
- *   4 = Soniox authentication
- *   5 = Soniox network / connection
- *   6 = Soniox protocol / unexpected response shape
+ *   4 = STT provider authentication
+ *   5 = STT provider network / connection
+ *   6 = STT provider protocol / unexpected response shape
  */
 
 export interface MicToolErrorOptions {
@@ -79,6 +79,24 @@ export class SonioxNetworkError extends MicToolError {
 export class SonioxProtocolError extends MicToolError {
   constructor(message: string, options?: MicToolErrorOptions) {
     super(message, "soniox_protocol", 6, options);
+  }
+}
+
+export class ElevenLabsAuthError extends MicToolError {
+  constructor(message: string, options?: MicToolErrorOptions) {
+    super(message, "elevenlabs_auth", 4, options);
+  }
+}
+
+export class ElevenLabsNetworkError extends MicToolError {
+  constructor(message: string, options?: MicToolErrorOptions) {
+    super(message, "elevenlabs_network", 5, options);
+  }
+}
+
+export class ElevenLabsProtocolError extends MicToolError {
+  constructor(message: string, options?: MicToolErrorOptions) {
+    super(message, "elevenlabs_protocol", 6, options);
   }
 }
 

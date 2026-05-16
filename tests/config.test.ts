@@ -40,24 +40,24 @@ import {
 // Test-wide helpers
 // ---------------------------------------------------------------------------
 
-/** Build an argv array as commander expects: ["node", "mic-tool", ...flags].
+/** Build an argv array as commander expects: ["node", "mic-tool-ts", ...flags].
  *  Defaults to `--no-refine` so existing tests that don't care about the LLM
  *  feature aren't forced to set Azure OpenAI env vars. Tests that exercise
  *  refinement behavior use `argvRefine()` instead. */
 function argv(...flags: string[]): string[] {
-  return ["node", "mic-tool", "--no-refine", ...flags];
+  return ["node", "mic-tool-ts", "--no-refine", ...flags];
 }
 
 /** argv for tests that need refinement enabled. Caller is responsible for
  *  setting the Azure OpenAI env vars (or expecting the LLMConfigurationError). */
 function argvRefine(...flags: string[]): string[] {
-  return ["node", "mic-tool", ...flags];
+  return ["node", "mic-tool-ts", ...flags];
 }
 
 /** Create a temp directory, optionally writing a .env file into it, and
  *  return the directory path. The caller is responsible for cleanup. */
 function makeTmpdir(dotenvContents?: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "mic-tool-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "mic-tool-ts-test-"));
   if (dotenvContents !== undefined) {
     writeFileSync(join(dir, ".env"), dotenvContents, "utf8");
   }
@@ -70,10 +70,22 @@ function makeTmpdir(dotenvContents?: string): string {
 
 const TRACKED_ENV_KEYS = [
   "SONIOX_API_KEY",
+  "ELEVENLABS_API_KEY",
+  "ELEVENLABS_API_KEY_EXPIRES_AT",
   "AZURE_OPENAI_API_KEY",
   "AZURE_OPENAI_ENDPOINT",
   "AZURE_OPENAI_DEPLOYMENT",
   "AZURE_OPENAI_API_VERSION",
+  "MIC_TOOL_TS_INTERACTION_MODE",
+  "MIC_TOOL_TS_COMMAND_PHRASE",
+  "MIC_TOOL_TS_SECTION_END_PHRASE",
+  "MIC_TOOL_TS_SECTION_CANCEL_PHRASE",
+  "MIC_TOOL_TS_LITERAL_NEXT_PHRASE",
+  "MIC_TOOL_TS_REFINE_DEFAULT",
+  "MIC_TOOL_TS_TRANSLATE_DEFAULT",
+  "MIC_TOOL_TS_TRANSLATION_POLICY",
+  "MIC_TOOL_TS_CLIPBOARD_DEFAULT",
+  "MIC_TOOL_TS_PROTOCOL_OUTPUT",
   "HOME",
 ] as const;
 const originalEnv: Record<string, string | undefined> = {};
@@ -91,7 +103,7 @@ beforeEach(() => {
   }
 
   // Point HOME at a clean tmpdir so loadEnvChain's user tier sees no file.
-  tmpHome = mkdtempSync(join(tmpdir(), "mic-tool-home-"));
+  tmpHome = mkdtempSync(join(tmpdir(), "mic-tool-ts-home-"));
   process.env["HOME"] = tmpHome;
 
   // Capture stderr writes (for verbose tests)
@@ -158,7 +170,22 @@ describe("resolveConfig — default values", () => {
     expect(cfg.outputMode).toBe("overwrite");
     expect(cfg.verbose).toBe(false);
     expect(cfg.apiKey).toBe("sk_test");
+    expect(cfg.sttProvider).toBe("soniox");
+    expect(cfg.apiKeyEnvName).toBe("SONIOX_API_KEY");
     expect(cfg.guardPhrase).toBe("τέλος εντολής");
+    expect(cfg.protocol.interactionMode).toBe("dictation");
+    expect(cfg.protocol.markers.commandPhrase).toBe("command");
+    expect(cfg.protocol.markers.sectionEndPhrase).toBe("command send");
+    expect(cfg.protocol.markers.sectionEndAliases).toEqual(["τέλος εντολής"]);
+    expect(cfg.protocol.markers.sectionCancelPhrase).toBe("command cancel");
+    expect(cfg.protocol.markers.literalNextPhrase).toBe("literal phrase");
+    expect(cfg.protocol.initialOperators).toEqual({
+      refine: false,
+      translate: false,
+      clipboard: false,
+    });
+    expect(cfg.protocol.translationPolicy).toBe("opposite");
+    expect(cfg.protocol.protocolOutput).toBeUndefined();
     expect(cfg.model).toBe("stt-rt-v4");
     expect(cfg.endpoint).toBe(
       "wss://stt-rt.soniox.com/transcribe-websocket",
@@ -218,6 +245,111 @@ describe("resolveConfig — API-key precedence chain (FR-5 / AC-7)", () => {
     setShellKey("  sk_shell_trim  ");
     const cfg = resolveConfig(argv());
     expect(cfg.apiKey).toBe("sk_shell_trim");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2b. STT provider selection
+// ---------------------------------------------------------------------------
+
+describe("resolveConfig — STT provider selection", () => {
+  it("defaults to Soniox and keeps Soniox defaults", () => {
+    setCwd();
+    setShellKey("sk_soniox");
+    const cfg = resolveConfig(argv());
+    expect(cfg.sttProvider).toBe("soniox");
+    expect(cfg.apiKeyEnvName).toBe("SONIOX_API_KEY");
+    expect(cfg.apiKey).toBe("sk_soniox");
+    expect(cfg.model).toBe("stt-rt-v4");
+    expect(cfg.endpoint).toBe("wss://stt-rt.soniox.com/transcribe-websocket");
+    expect(cfg.languages).toEqual(["el", "en"]);
+  });
+
+  it("uses ElevenLabs when --stt-provider elevenlabs is selected", () => {
+    setCwd();
+    const cfg = resolveConfig(
+      argv(
+        "--stt-provider",
+        "elevenlabs",
+        "--elevenlabs-api-key",
+        "xi_test",
+      ),
+    );
+    expect(cfg.sttProvider).toBe("elevenlabs");
+    expect(cfg.apiKeyEnvName).toBe("ELEVENLABS_API_KEY");
+    expect(cfg.apiKey).toBe("xi_test");
+    expect(cfg.model).toBe("scribe_v2_realtime");
+    expect(cfg.endpoint).toBe(
+      "wss://api.elevenlabs.io/v1/speech-to-text/realtime",
+    );
+    expect(cfg.languages).toEqual(["auto"]);
+  });
+
+  it("does not require SONIOX_API_KEY when ElevenLabs is selected", () => {
+    setCwd("ELEVENLABS_API_KEY=xi_from_dotenv\n");
+    const cfg = resolveConfig(argv("--stt-provider", "elevenlabs"));
+    expect(cfg.apiKey).toBe("xi_from_dotenv");
+  });
+
+  it("throws MissingConfigurationError when ElevenLabs is selected without ELEVENLABS_API_KEY", () => {
+    setCwd();
+    expect(() =>
+      resolveConfig(argv("--stt-provider", "elevenlabs")),
+    ).toThrowError(MissingConfigurationError);
+  });
+
+  it("rejects an unknown --stt-provider", () => {
+    setCwd();
+    setShellKey("sk");
+    expect(() =>
+      resolveConfig(argv("--stt-provider", "other")),
+    ).toThrowError(InvalidConfigurationError);
+  });
+
+  it("rejects multiple language hints for ElevenLabs", () => {
+    setCwd("ELEVENLABS_API_KEY=xi\n");
+    expect(() =>
+      resolveConfig(
+        argv(
+          "--stt-provider",
+          "elevenlabs",
+          "--language",
+          "el",
+          "--language",
+          "en",
+        ),
+      ),
+    ).toThrowError(InvalidConfigurationError);
+  });
+
+  it("accepts a single explicit language hint for ElevenLabs", () => {
+    setCwd("ELEVENLABS_API_KEY=xi\n");
+    const cfg = resolveConfig(
+      argv("--stt-provider", "elevenlabs", "--language", "en"),
+    );
+    expect(cfg.languages).toEqual(["en"]);
+  });
+
+  it("rejects unsupported ElevenLabs sample rates", () => {
+    setCwd("ELEVENLABS_API_KEY=xi\n");
+    expect(() =>
+      resolveConfig(
+        argv(
+          "--stt-provider",
+          "elevenlabs",
+          "--sample-rate",
+          "11025",
+        ),
+      ),
+    ).toThrowError(InvalidConfigurationError);
+  });
+
+  it("round-trips ELEVENLABS_API_KEY_EXPIRES_AT into the active config", () => {
+    setCwd(
+      "ELEVENLABS_API_KEY=xi\nELEVENLABS_API_KEY_EXPIRES_AT=2027-02-01\n",
+    );
+    const cfg = resolveConfig(argv("--stt-provider", "elevenlabs"));
+    expect(cfg.apiKeyExpiresAt).toBe("2027-02-01");
   });
 });
 
@@ -309,8 +441,8 @@ describe("resolveConfig — --language validation", () => {
     ).toThrowError(InvalidConfigurationError);
   });
 
-  it("loads languages from MIC_TOOL_LANGUAGES csv env var when no --language flag", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_LANGUAGES=fr,de,it\n");
+  it("loads languages from MIC_TOOL_TS_LANGUAGES csv env var when no --language flag", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_LANGUAGES=fr,de,it\n");
     const cfg = resolveConfig(argv());
     expect(cfg.languages).toEqual(["fr", "de", "it"]);
   });
@@ -535,19 +667,25 @@ describe("resolveConfig — LLM refinement defaults", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5d. New env-var aliases (MIC_TOOL_*)
+// 5d. New env-var aliases (MIC_TOOL_TS_*)
 // ---------------------------------------------------------------------------
 
 describe("resolveConfig — env-var aliases for every flag", () => {
-  it("MIC_TOOL_MODEL overrides the default model", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_MODEL=stt-async-v3\n");
+  it("MIC_TOOL_TS_STT_PROVIDER selects ElevenLabs", () => {
+    setCwd("MIC_TOOL_TS_STT_PROVIDER=elevenlabs\nELEVENLABS_API_KEY=xi\n");
+    const cfg = resolveConfig(argv());
+    expect(cfg.sttProvider).toBe("elevenlabs");
+  });
+
+  it("MIC_TOOL_TS_MODEL overrides the default model", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_MODEL=stt-async-v3\n");
     const cfg = resolveConfig(argv());
     expect(cfg.model).toBe("stt-async-v3");
   });
 
-  it("MIC_TOOL_ENDPOINT overrides the default endpoint", () => {
+  it("MIC_TOOL_TS_ENDPOINT overrides the default endpoint", () => {
     setCwd(
-      "SONIOX_API_KEY=k\nMIC_TOOL_ENDPOINT=wss://stt-rt.eu.soniox.com/transcribe-websocket\n",
+      "SONIOX_API_KEY=k\nMIC_TOOL_TS_ENDPOINT=wss://stt-rt.eu.soniox.com/transcribe-websocket\n",
     );
     const cfg = resolveConfig(argv());
     expect(cfg.endpoint).toBe(
@@ -556,72 +694,133 @@ describe("resolveConfig — env-var aliases for every flag", () => {
   });
 
   it("rejects a non-wss endpoint", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_ENDPOINT=http://example.com\n");
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_ENDPOINT=http://example.com\n");
     expect(() => resolveConfig(argv())).toThrowError(InvalidConfigurationError);
   });
 
-  it("MIC_TOOL_SAMPLE_RATE overrides default", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_SAMPLE_RATE=24000\n");
+  it("MIC_TOOL_TS_SAMPLE_RATE overrides default", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_SAMPLE_RATE=24000\n");
     const cfg = resolveConfig(argv());
     expect(cfg.sampleRate).toBe(24000);
   });
 
   it("rejects sample rate below 8000", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_SAMPLE_RATE=4000\n");
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_SAMPLE_RATE=4000\n");
     expect(() => resolveConfig(argv())).toThrowError(InvalidConfigurationError);
   });
 
   it("rejects sample rate above 48000", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_SAMPLE_RATE=96000\n");
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_SAMPLE_RATE=96000\n");
     expect(() => resolveConfig(argv())).toThrowError(InvalidConfigurationError);
   });
 
-  it("MIC_TOOL_ENABLE_ENDPOINT_DETECTION=false disables endpoint detection", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_ENABLE_ENDPOINT_DETECTION=false\n");
+  it("MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION=false disables endpoint detection", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION=false\n");
     const cfg = resolveConfig(argv());
     expect(cfg.enableEndpointDetection).toBe(false);
   });
 
   it("--no-endpoint-detection wins over env var", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_ENABLE_ENDPOINT_DETECTION=true\n");
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION=true\n");
     const cfg = resolveConfig(argv("--no-endpoint-detection"));
     expect(cfg.enableEndpointDetection).toBe(false);
   });
 
-  it("MIC_TOOL_GUARD_PHRASE overrides the default", () => {
-    setCwd('SONIOX_API_KEY=k\nMIC_TOOL_GUARD_PHRASE="end command"\n');
+  it("MIC_TOOL_TS_GUARD_PHRASE overrides the default", () => {
+    setCwd('SONIOX_API_KEY=k\nMIC_TOOL_TS_GUARD_PHRASE="end command"\n');
     const cfg = resolveConfig(argv());
     expect(cfg.guardPhrase).toBe("end command");
   });
 
-  it("MIC_TOOL_OUTPUT_MODE overrides the default", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_OUTPUT_MODE=append\n");
+  it("MIC_TOOL_TS_OUTPUT_MODE overrides the default", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_OUTPUT_MODE=append\n");
     const cfg = resolveConfig(argv());
     expect(cfg.outputMode).toBe("append");
   });
 
-  it("MIC_TOOL_VERBOSE=true enables verbose", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_VERBOSE=true\n");
+  it("MIC_TOOL_TS_VERBOSE=true enables verbose", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_VERBOSE=true\n");
     const cfg = resolveConfig(argv());
     expect(cfg.verbose).toBe(true);
   });
 
-  it("MIC_TOOL_REFINE=false disables LLM refinement", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_REFINE=false\n");
+  it("MIC_TOOL_TS_REFINE=false disables LLM refinement", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_REFINE=false\n");
     const cfg = resolveConfig(argvRefine());
     expect(cfg.llm.enabled).toBe(false);
   });
 
-  it("MIC_TOOL_LLM_PROVIDER overrides the default provider", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_REFINE=false\nMIC_TOOL_LLM_PROVIDER=openai\n");
+  it("MIC_TOOL_TS_LLM_PROVIDER overrides the default provider", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_REFINE=false\nMIC_TOOL_TS_LLM_PROVIDER=openai\n");
     const cfg = resolveConfig(argvRefine());
     expect(cfg.llm.provider).toBe("openai");
   });
 
-  it("MIC_TOOL_LLM_MODEL overrides the default model", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_REFINE=false\nMIC_TOOL_LLM_MODEL=my-deploy\n");
+  it("MIC_TOOL_TS_LLM_MODEL overrides the default model", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_REFINE=false\nMIC_TOOL_TS_LLM_MODEL=my-deploy\n");
     const cfg = resolveConfig(argvRefine());
     expect(cfg.llm.model).toBe("my-deploy");
+  });
+
+  it("MIC_TOOL_TS_INTERACTION_MODE enables agent protocol mode", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_INTERACTION_MODE=agent-protocol\n");
+    const cfg = resolveConfig(argv());
+    expect(cfg.protocol.interactionMode).toBe("agent-protocol");
+  });
+
+  it("resolves protocol phrases and operator defaults from env vars", () => {
+    setCwd(
+      [
+        "SONIOX_API_KEY=k",
+        "MIC_TOOL_TS_COMMAND_PHRASE=εντολή",
+        "MIC_TOOL_TS_SECTION_END_PHRASE=τέλος",
+        "MIC_TOOL_TS_SECTION_CANCEL_PHRASE=άκυρο",
+        "MIC_TOOL_TS_LITERAL_NEXT_PHRASE=κυριολεκτικά",
+        "MIC_TOOL_TS_REFINE_DEFAULT=on",
+        "MIC_TOOL_TS_TRANSLATE_DEFAULT=yes",
+        "MIC_TOOL_TS_CLIPBOARD_DEFAULT=1",
+        "MIC_TOOL_TS_TRANSLATION_POLICY=to-en",
+      ].join("\n"),
+    );
+    const cfg = resolveConfig(argv());
+    expect(cfg.protocol.markers.commandPhrase).toBe("εντολή");
+    expect(cfg.protocol.markers.sectionEndPhrase).toBe("τέλος");
+    expect(cfg.protocol.markers.sectionCancelPhrase).toBe("άκυρο");
+    expect(cfg.protocol.markers.literalNextPhrase).toBe("κυριολεκτικά");
+    expect(cfg.protocol.initialOperators).toEqual({
+      refine: true,
+      translate: true,
+      clipboard: true,
+    });
+    expect(cfg.protocol.translationPolicy).toBe("to-en");
+  });
+
+  it("requires --protocol-output when hybrid mode is selected", () => {
+    setCwd("SONIOX_API_KEY=k\n");
+    expect(() =>
+      resolveConfig(argv("--interaction-mode", "hybrid")),
+    ).toThrowError(InvalidConfigurationError);
+  });
+
+  it("accepts --protocol-output in hybrid mode", () => {
+    setCwd("SONIOX_API_KEY=k\n");
+    const cfg = resolveConfig(
+      argv(
+        "--interaction-mode",
+        "hybrid",
+        "--protocol-output",
+        "/tmp/mic-tool-ts-protocol.jsonl",
+      ),
+    );
+    expect(cfg.protocol.interactionMode).toBe("hybrid");
+    expect(cfg.protocol.protocolOutput).toBe("/tmp/mic-tool-ts-protocol.jsonl");
+  });
+
+  it("rejects an unknown interaction mode", () => {
+    setCwd("SONIOX_API_KEY=k\n");
+    expect(() =>
+      resolveConfig(argv("--interaction-mode", "speechy")),
+    ).toThrowError(InvalidConfigurationError);
   });
 
   it("SONIOX_API_KEY_EXPIRES_AT round-trips into the resolved config", () => {
@@ -660,7 +859,7 @@ describe("resolveConfig — --verbose flag (FR-9)", () => {
     setShellKey("sk_v");
     resolveConfig(argv("--verbose"));
     const combined = stderrChunks.join("");
-    expect(combined).toContain("[mic-tool]");
+    expect(combined).toContain("[mic-tool-ts]");
   });
 
   it("when verbose=true, the stderr message does NOT contain the key value", () => {
@@ -676,15 +875,14 @@ describe("resolveConfig — --verbose flag (FR-9)", () => {
     setShellKey("sk_v");
     resolveConfig(argv("--verbose"));
     const combined = stderrChunks.join("");
-    // source should be one of: flag, .env, env
-    expect(combined).toMatch(/api key loaded from: env/i);
+    expect(combined).toMatch(/SONIOX_API_KEY loaded from: env/i);
   });
 
   it("when verbose=true with --api-key flag, stderr mentions 'flag' as source", () => {
     setCwd();
     resolveConfig(argv("--verbose", "--api-key", "sk_flag"));
     const combined = stderrChunks.join("");
-    expect(combined).toMatch(/api key loaded from: flag/i);
+    expect(combined).toMatch(/SONIOX_API_KEY loaded from: flag/i);
   });
 
   it("when verbose=false (default), nothing is written to stderr by resolveConfig", () => {

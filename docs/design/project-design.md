@@ -1033,7 +1033,240 @@ t=T+0.4  index.ts: process.exit(0)
 
 ---
 
-## 12. Open Items Carried Forward to Implementation
+## 12. Turn Detection (added by plan-002)
+
+### 12.1 Goal
+Replace the always-continuous stream model with a *turn*-based model. A turn ends when a configurable guard phrase appears in the recent finalized transcript. On detection, the renderer emits a single blank line on stdout and the detector starts a new turn.
+
+### 12.2 Module layout
+- `src/turn/detector.ts` — `GuardPhraseTurnDetector` and the `TurnAwareRenderer` interface (`partial` / `final` / `dispose`).
+- `src/render/renderer.ts` — adds `turnBoundary()` (and `refined()`, see §13) to the `Renderer` interface.
+
+### 12.3 Normalization algorithm
+Both the rolling buffer and the configured guard phrase are passed through `normalizeForMatch`:
+
+```
+input  → NFD                    (decompose accents into base + combining marks)
+       → strip /\p{M}+/gu        (remove combining marks: τέλος → τελος)
+       → toLowerCase
+       → replace /[^\p{L}\p{N}]+/gu → single space  (punctuation/whitespace collapsed)
+       → trim
+```
+
+Examples:
+- `"Τέλος εντολής!"` → `"τελος εντολης"`
+- `"  the END.  "`   → `"the end"`
+
+The same routine is mirrored in `src/config.ts` (`normalizeGuardPhrase`) so the config layer can reject phrases that normalize to an empty string (e.g. `"!!!"`).
+
+### 12.4 Rolling buffer
+- Each `final(text)` appends to `buffer` (space-separated).
+- When `buffer.length > 2000` characters, the head is trimmed; only recent context matters for the match.
+- On a successful match: `renderer.turnBoundary()` is called, `buffer` is reset to `""`, and the captured pre-reset text is forwarded to LLM refinement (see §13).
+- `partial(text)` is passed through unchanged — never inspected for the phrase.
+
+### 12.5 Renderer contract: `turnBoundary()`
+In all three output modes (`overwrite`, `append`, `final-only`) the preceding `final()` already terminated its line with `\n`, so `turnBoundary()` writes exactly one additional `\n` — yielding a single blank line. No-op after `dispose()`.
+
+### 12.6 Orchestrator wiring
+`src/main.ts` constructs the inner `StdoutRenderer`, wraps it in `GuardPhraseTurnDetector`, then passes the wrapper to the Soniox transcriber's `onPartial` / `onFinal` callbacks. Shutdown disposes the wrapper, which in turn disposes the inner renderer and the LLM refiner.
+
+---
+
+## 13. LLM Refinement (added by plan-003)
+
+### 13.1 Goal
+After each turn closes (guard-phrase fire), send the turn's verbatim text to a configured LLM and render the cleaned version on its own line followed by an additional blank line. Refinement is asynchronous and fail-open: transcription never blocks on it; failures are logged and skipped.
+
+### 13.2 Rendering contract
+
+```
+<finals containing τέλος εντολής>\n
+                                   ← blank line from turnBoundary()
+<refined text>\n
+                                   ← additional blank line under the refinement
+```
+
+If refinement is disabled, fails, or the renderer is disposed before resolution, only the turn-boundary blank line appears — the verbatim transcript is the user's fallback.
+
+### 13.3 `LLMRefiner` interface
+Defined in `src/llm/types.ts`:
+
+```ts
+export interface LLMRefiner {
+  refine(text: string): Promise<string>;
+  dispose(): void;
+}
+```
+
+Implementations MUST honour `requestTimeoutMs` via `AbortController`, return whitespace-trimmed text on success, and abort any in-flight request when `dispose()` is called.
+
+### 13.4 Eight standard providers
+The `LLMProvider` union enumerates the eight standard provider names required by the project's tool conventions (vendor-canonical):
+
+| Provider name         | v1 status              | Required env vars when implemented                              |
+|-----------------------|------------------------|-----------------------------------------------------------------|
+| `azure-openai`        | Fully implemented      | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, (`AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` optional) |
+| `openai`              | Stubbed (throws at construction) | `OPENAI_API_KEY`                                               |
+| `anthropic`           | Stubbed                | `ANTHROPIC_API_KEY`                                             |
+| `google`              | Stubbed                | `GOOGLE_API_KEY`                                                |
+| `azure-ai-inference`  | Stubbed                | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY`     |
+| `ollama`              | Stubbed                | `OLLAMA_HOST`                                                   |
+| `litellm`             | Stubbed                | `LITELLM_BASE_URL`, `LITELLM_API_KEY`                           |
+| `openai-compat`       | Stubbed                | `OPENAI_COMPAT_BASE_URL`, `OPENAI_COMPAT_API_KEY`               |
+
+### 13.5 Factory dispatch (`src/llm/factory.ts`)
+```
+createRefiner(cfg: LLMConfig): LLMRefiner | null
+```
+- Returns `null` when `cfg.enabled === false`.
+- Dispatches to `AzureOpenAIRefiner` for `azure-openai`.
+- For any other provider, throws `LLMConfigurationError` with a "not implemented in v1" message that names the env vars to set when the provider lands. This is a startup-fatal error (exit 2).
+
+### 13.6 Azure OpenAI refiner (`src/llm/azureOpenAI.ts`)
+- Endpoint: `POST {endpoint}/openai/deployments/{deployment}/chat/completions?api-version={apiVersion}`
+- Headers: `api-key: {key}`, `Content-Type: application/json`
+- Body: `{ messages: [{role: "system", content: systemPrompt}, {role: "user", content: text}], temperature: 0.2 }`
+- Transport: native Node 20 `fetch`. Two `AbortController`s — one per request (with a `setTimeout` driving the `requestTimeoutMs`) and a class-level `lifetimeAbort` that `dispose()` triggers to drop every in-flight request at shutdown.
+- Default system prompt (cleanup):
+  > You are a transcript-cleanup assistant. The input is a verbatim transcript of someone speaking and may contain disfluencies, filler words, false starts, and grammatical noise. Rewrite the text so it is grammatically correct and easy to read, preserving the speaker's meaning AND the original language. Respond with ONLY the cleaned text — no preamble, no quotes, no markdown, no explanation.
+
+### 13.7 Error mapping (HTTP / network → `LLMRefinementError.kind`)
+- `401`, `403`                       → `"auth"`
+- `408`, `429`, `5xx`                 → `"server"`
+- Timeout (AbortError or "timed out") → `"timeout"`
+- Any other fetch rejection          → `"network"`
+- Missing `choices[0].message.content`, JSON-parse failure → `"shape"`
+
+All five sub-codes are runtime-only (non-fatal). The orchestrator logs them under `--verbose` tagged `llm-<kind>` and otherwise swallows them. See NFR-10.
+
+### 13.8 Asynchronous fire-and-forget
+`GuardPhraseTurnDetector.maybeRefine(turnText)`:
+
+1. Captures `buffer` BEFORE the reset (this is the turn text).
+2. Strips the guard phrase from the captured text using a tolerant matcher (case-insensitive literal first; falls back to normalized-match with trailing-fragment removal).
+3. If stripped text is empty, returns early.
+4. Calls `refiner.refine(stripped)` inside `void (async () => { ... })()`. Never awaited from `final()`.
+5. On resolve: `if (!disposed) renderer.refined(text)`.
+6. On reject: log under verbose; otherwise silent.
+
+### 13.9 Renderer contract: `refined(text)`
+- `overwrite` mode: if `prevLen > 0` (an in-progress partial of the *next* turn is already on screen), write a `\n` first to commit it and reset `prevLen = 0`. Then write `text + "\n\n"`.
+- `append` / `final-only`: write `text + "\n\n"`.
+- No-op after `dispose()` or for empty text.
+- Defensive in-progress-partial handling matters because refinement is async — a new partial may have rendered while the LLM call was in flight.
+
+---
+
+## 14. Configuration & Four-Tier Env-Var Chain (added by plan-004)
+
+### 14.1 Resolution priority
+```
++----------------------+   highest priority
+| 1. CLI flag          |
++----------------------+
+| 2. <cwd>/.env        |
++----------------------+
+| 3. ~/.tool-agents/   |
+|    mic-tool/.env     |   (mode 0700 / 0600 — secrets)
++----------------------+
+| 4. process.env       |
++----------------------+   lowest priority
+```
+
+Implementation: `src/config/envChain.ts` exports `loadEnvChain({ toolName })` which returns an `EnvChain` view with `get(key)` (value + source tag) and `value(key)` (just the value). The chain never mutates `process.env`.
+
+### 14.2 Authoritative config schema
+
+| CLI flag                            | Env var                                | Default                                              | Parser / validator |
+|-------------------------------------|----------------------------------------|------------------------------------------------------|--------------------|
+| `--api-key <value>`                 | `SONIOX_API_KEY`                       | _required_ (no fallback; throws `MissingConfigurationError`, exit 2) | trim, non-empty |
+| `--api-key-expires-at <YYYY-MM-DD>` | `SONIOX_API_KEY_EXPIRES_AT`            | _unset_                                              | `parseIsoDate` (round-trips via `Date.UTC`) |
+| `--model <name>`                    | `MIC_TOOL_MODEL`                       | `stt-rt-v4`                                          | trim, non-empty |
+| `--endpoint <wss-url>`              | `MIC_TOOL_ENDPOINT`                    | `wss://stt-rt.soniox.com/transcribe-websocket`       | `parseWsUrl` (must be `wss://` or `ws://`) |
+| `--language <code>` (repeatable)    | `MIC_TOOL_LANGUAGES` (CSV)             | `el,en`                                              | `validateLanguages` (ISO 639-1/2 OR sole `auto`) |
+| `--sample-rate <hz>`                | `MIC_TOOL_SAMPLE_RATE`                 | `16000`                                              | `parsePositiveInt`, range `[8000, 48000]` |
+| `--no-endpoint-detection`           | `MIC_TOOL_ENABLE_ENDPOINT_DETECTION`   | `true`                                               | `parseBoolean` |
+| `--output-mode <mode>`              | `MIC_TOOL_OUTPUT_MODE`                 | `overwrite`                                          | one of `overwrite`/`append`/`final-only`; auto-downgrades to `append` when stdout is piped |
+| `--guard-phrase <phrase>`           | `MIC_TOOL_GUARD_PHRASE`                | `τέλος εντολής`                                      | trim, non-empty after `normalizeGuardPhrase` |
+| `--refine` / `--no-refine`          | `MIC_TOOL_REFINE`                      | `true`                                               | `parseBoolean` |
+| `--llm-provider <name>`             | `MIC_TOOL_LLM_PROVIDER`                | `azure-openai`                                       | one of the eight `LLM_PROVIDERS`; non-Azure stubbed |
+| `--llm-model <name>`                | `MIC_TOOL_LLM_MODEL`                   | `gpt-5.4`                                            | trim, non-empty |
+| `-v, --verbose`                     | `MIC_TOOL_VERBOSE`                     | `false`                                              | `parseBoolean` |
+
+Provider-specific env vars consulted only when `--refine` is on and the provider is `azure-openai`:
+
+| Env var                       | Required? | Default                |
+|-------------------------------|-----------|------------------------|
+| `AZURE_OPENAI_API_KEY`        | yes       | —                      |
+| `AZURE_OPENAI_ENDPOINT`       | yes       | —                      |
+| `AZURE_OPENAI_DEPLOYMENT`     | no        | falls back to `--llm-model` value |
+| `AZURE_OPENAI_API_VERSION`    | no        | `2024-10-21`           |
+
+### 14.3 Parsers module (`src/config/parsers.ts`)
+Single helper surface for every typed coercion. Each helper takes `(raw, flagName, envName)` so the thrown `InvalidConfigurationError` message can name both — the user never has to guess which knob to turn.
+
+- `parseBoolean` — accepts `true|false|yes|no|on|off|1|0` (case-insensitive).
+- `parsePositiveInt` — `^[0-9]+$`; optional `[min, max]`.
+- `parseCsvNonEmpty` — splits on `,`, trims, drops empties; throws if zero items remain.
+- `parseIsoDate` — `^\d{4}-\d{2}-\d{2}$`; round-trips through `Date.UTC` so `2026-02-30` is rejected.
+- `parseWsUrl` — `^wss?://[^\s]+$`.
+
+### 14.4 Expiry helper (`src/config/expiry.ts`)
+- `evaluateExpiry(isoDate, now=new Date())` → `{ level: "ok" | "soon" | "expired", daysUntil }` where `soon` covers a 14-day window.
+- `warnAboutExpiry(isoDate, verbose, write?, now?)` writes a single stderr line at `"soon"` and `"expired"` levels (always), and at `"ok"` only under `--verbose`. The tool does NOT block on expiry — the user owns renewal.
+- v1 wires this for `SONIOX_API_KEY_EXPIRES_AT` only. An analogous `AZURE_OPENAI_API_KEY_EXPIRES_AT` is documented for future use (see `Issues - Pending Items.md`).
+
+### 14.5 Validators in `src/config.ts`
+- `validateLanguages([...])` — each item matches `^[a-z]{2,3}(-[A-Z]{2})?$` OR is the literal `auto`; if `auto` is in the list, no other code may be present.
+- `validateOutputMode(value)` — one of the three string literals.
+- `validateGuardPhrase(value)` — trimmed length > 0 AND `normalizeGuardPhrase(value).length > 0`.
+- `validateLLMProvider(value)` — must be in the eight-name enum.
+- `resolveProviderConfig(provider, model, chain)` — for `azure-openai`, collects the four Azure env vars; if either of the two required ones is missing, throws `LLMConfigurationError` enumerating the missing names AND the four-tier search order so the user can fix whichever they prefer.
+
+### 14.6 Where defaults live
+Defaults are declared as module-level constants near the top of `src/config.ts` (`DEFAULT_MODEL`, `DEFAULT_ENDPOINT`, `DEFAULT_LANGUAGES_CSV`, `DEFAULT_SAMPLE_RATE`, `DEFAULT_OUTPUT_MODE`, `DEFAULT_GUARD_PHRASE`, `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL`, `DEFAULT_LLM_REQUEST_TIMEOUT_MS`, `DEFAULT_AZURE_API_VERSION`, `DEFAULT_SYSTEM_PROMPT`). The resolver layer ONLY substitutes a default when (a) the CLI flag is absent AND (b) the env chain does not yield a value. There is no other fallback path — per NFR-5 / NFR-8 a missing *required* value raises, never substitutes silently.
+
+### 14.7 Verbose diagnostics
+When `--verbose` is set, the resolver emits (to stderr) one line per family:
+- `[mic-tool] api key loaded from: <flag|.env|user|env>`
+- `[mic-tool] guard phrase: <phrase>`
+- `[mic-tool] transcription: model=..., endpoint=..., languages=[...], sample_rate=..., endpoint_detection=...`
+- `[mic-tool] llm: enabled|disabled (provider=..., model=...)`
+
+The API key value itself is NEVER logged.
+
+---
+
+## 15. Architectural Decisions Log — additions from plans 002, 003, 004
+
+### Plan 002 (turn detection)
+- **Guard phrase remains visible in the rendered final.** Users want a clear audit trail of what triggered the turn end. The phrase is only stripped from the LLM input, not the user-visible transcript.
+- **Rolling buffer (max 2000 chars), not just the latest final.** A natural pause can split the phrase across two final tokens (`"τέλος"` followed seconds later by `"εντολής"`); the rolling buffer keeps recent context so cross-final matches succeed.
+- **Tolerant normalization (NFD + strip combining + lowercase + collapse punctuation).** Greek finals from Soniox vary in accents and trailing punctuation depending on lexicon; tolerating all of it avoids "obviously matching" matches being missed.
+- **No-streaming, no-rollback turn detector.** A turn boundary is a single committed event; we do not retract finals from before the boundary even if a later final invalidates the match window.
+
+### Plan 003 (LLM refinement)
+- **Eight standard provider names enumerated in the type.** Even when most are stubs, listing them in the union keeps the contract honest with the project-wide tool conventions; future implementations slot in without a type churn.
+- **Only `azure-openai` fully implemented in v1.** Reduces surface area for the first release; the seven stubs throw a useful "set X env vars and add a refiner" message at construction so users know exactly what is missing.
+- **Refinement is fail-open at runtime, fail-closed at startup.** A flaky LLM call must not break dictation (NFR-10); a missing required Azure env var when refine is on is unambiguous misconfiguration and is fatal (NFR-8).
+- **Per-request `AbortController` + class-level `lifetimeAbort`.** Two controllers cleanly express "drop this one request after T ms" and "drop every in-flight request at shutdown" without conflating them.
+- **No SDK dependency for Azure OpenAI.** Native `fetch` (Node 20+) covers the Chat Completions REST surface in ~40 lines; the official SDK would add a transitive dependency tree larger than the rest of the tool combined.
+- **Async fire-and-forget via `void (async () => ...)()`.** Refinement runs on the microtask queue; the next utterance can be transcribed immediately. The renderer's `refined()` guards against the next-turn-partial-already-rendered race in overwrite mode.
+- **Default system prompt enforces language preservation.** The prompt asks the model to keep the speaker's original language; this matters for Greek where a default-tuned cleanup model might English-ify.
+
+### Plan 004 (full env-var fallbacks + key expiry)
+- **Four tiers, with `<cwd>/.env` beating `~/.tool-agents/.../.env` beating shell env.** Project-local config takes precedence so per-project overrides don't require touching shared user files; the per-user `~/.tool-agents/<tool>/.env` is the canonical secrets store, mandated by the project's tool conventions.
+- **Never mutate `process.env`.** Tests stay isolated and precedence is deterministic — the alternative (`process.loadEnvFile()`) would silently refuse to overwrite an existing shell var, inverting the desired priority.
+- **Whitespace-only env values are treated as missing.** A `.env` file with `SONIOX_API_KEY=   ` is far more likely to be a copy-paste mistake than a deliberate blank value.
+- **No auto-create of `~/.tool-agents/mic-tool/`.** The tool reads the folder if it exists; creating it (with the required 0700 mode + a 0600 `.env`) is a one-time user operation documented in the configuration guide, not a runtime side-effect.
+- **Sample rate parameterized everywhere (sox argv + Soniox session).** A single config value drives both, so they can never drift; validated `[8000, 48000]` to match the realistic envelope of the Soniox real-time model.
+- **Operational expiry tracking, not enforcement.** The tool warns at 14 days and at zero, but always tries to run. Hard-failing on a stale ISO date would punish users for the failure mode "I forgot to update the reminder, not the key."
+- **Both flag and env-var name in every parser error message.** Reduces the back-and-forth of "where do I fix this" when an `.env` value is bad — the error names both knobs.
+
+---
+
+## 16. Open Items Carried Forward to Implementation
 
 These do not block the design but should be revisited during Phase 5:
 

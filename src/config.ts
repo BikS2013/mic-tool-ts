@@ -3,29 +3,21 @@
  *
  * Responsibilities:
  *   1. Parse argv via commander (binary name: `mic-tool`).
- *   2. Resolve the Soniox API key through the precedence chain
- *      `--api-key` (CLI flag) > `.env` file in CWD > shell environment variable.
+ *   2. For every configurable value, resolve through the four-tier env-var
+ *      chain (highest priority first):
+ *        a. CLI flag
+ *        b. `<CWD>/.env`
+ *        c. `~/.tool-agents/mic-tool/.env`
+ *        d. shell environment
+ *      The chain lives in `./config/envChain.ts`. This module never mutates
+ *      `process.env`.
  *   3. Validate the resolved values and return a frozen {@link ResolvedConfig}.
  *
- * Approach notes:
- *   - The plan suggests `process.loadEnvFile()` (Node 20.12+). That builtin
- *     does NOT overwrite values already present in `process.env`, which means
- *     the natural precedence would be `shell-env > .env`. The FR-5 contract
- *     in `docs/design/refined-request-soniox-mic-transcriber.md` requires the
- *     opposite (`.env > shell-env`).
- *
- *     To obtain deterministic precedence without mutating `process.env` in
- *     surprising ways we parse the `.env` file ourselves (~15 lines of code).
- *     This also avoids the "did node load it or not?" ambiguity in tests.
- *
- *   - No fallback values for missing config: a missing API key raises
- *     {@link MissingConfigurationError}; bad flag values raise
- *     {@link InvalidConfigurationError}.
- *
- *   - `--help` / `--version` are handled by commander but we route them
- *     through `.exitOverride()` so that the orchestrator (Unit E), not
- *     commander, owns the call to `process.exit`. They surface here as
- *     {@link HelpOrVersionShown}, which `main.ts` should treat as exit 0.
+ * No fallback values for missing required config (no API key etc.) — we throw
+ * {@link MissingConfigurationError}. Invalid flag values throw
+ * {@link InvalidConfigurationError}. LLM-specific startup misconfiguration
+ * throws {@link LLMConfigurationError}. `--help` / `--version` surface as
+ * {@link HelpOrVersionShown} sentinels so the orchestrator owns `process.exit`.
  */
 
 import { createRequire } from "node:module";
@@ -37,6 +29,13 @@ import {
   MissingConfigurationError,
 } from "./errors.js";
 import { loadEnvChain, type EnvChain } from "./config/envChain.js";
+import {
+  parseBoolean,
+  parseCsvNonEmpty,
+  parseIsoDate,
+  parsePositiveInt,
+  parseWsUrl,
+} from "./config/parsers.js";
 import {
   LLM_PROVIDERS,
   type LLMConfig,
@@ -51,20 +50,30 @@ import {
 export type OutputMode = "overwrite" | "append" | "final-only";
 
 export interface ResolvedConfig {
+  // ---- Soniox transcription ----
   /** Soniox API key. Guaranteed non-empty after trim. */
   readonly apiKey: string;
-  /** ISO 639-1/2 code (e.g. "en", "pt-BR") or the literal "auto". */
-  readonly language: string;
+  /** Optional YYYY-MM-DD reminder for SONIOX_API_KEY renewal. */
+  readonly apiKeyExpiresAt?: string;
+  /** Soniox real-time model name. Default: "stt-rt-v4". */
+  readonly model: string;
+  /** Soniox WebSocket endpoint (wss://...). Default: SDK production endpoint. */
+  readonly endpoint: string;
+  /** Language hints (ISO 639-1/2 codes) OR the single literal "auto". */
+  readonly languages: string[];
+  /** PCM sample rate fed to sox and to Soniox (Hz). Default: 16000. */
+  readonly sampleRate: number;
+  /** Whether to enable Soniox server-side endpoint detection. Default: true. */
+  readonly enableEndpointDetection: boolean;
+  // ---- Rendering & turn detection ----
   /** Stdout rendering mode. */
   readonly outputMode: OutputMode;
-  /** When true, the CLI emits diagnostic messages to stderr. */
-  readonly verbose: boolean;
-  /** Guard phrase that closes the current turn when detected in recent
-   *  finalized transcript. Non-empty after normalization. */
+  /** Guard phrase that closes the current turn. Non-empty after normalization. */
   readonly guardPhrase: string;
-  /** LLM refinement configuration. When `enabled` is false the orchestrator
-   *  skips refiner construction entirely. */
+  // ---- LLM refinement ----
   readonly llm: LLMConfig;
+  // ---- Diagnostics ----
+  readonly verbose: boolean;
 }
 
 /**
@@ -83,8 +92,10 @@ export class HelpOrVersionShown extends Error {
 }
 
 // ----------------------------------------------------------------------------
-// Internal constants
+// Defaults and constants
 // ----------------------------------------------------------------------------
+
+const TOOL_NAME = "mic-tool";
 
 const OUTPUT_MODE_VALUES: readonly OutputMode[] = [
   "overwrite",
@@ -92,15 +103,19 @@ const OUTPUT_MODE_VALUES: readonly OutputMode[] = [
   "final-only",
 ] as const;
 
-// ISO 639-1 (2 letters) or 639-2 (3 letters), optionally region-suffixed
-// (e.g. "en", "pt-BR"), or the literal "auto" handled separately.
 const LANGUAGE_REGEX = /^[a-z]{2,3}(-[A-Z]{2})?$/;
 
-const ENV_KEY = "SONIOX_API_KEY";
+const SONIOX_ENV_KEY = "SONIOX_API_KEY";
+const SONIOX_EXPIRES_ENV = "SONIOX_API_KEY_EXPIRES_AT";
 
+const DEFAULT_MODEL = "stt-rt-v4";
+const DEFAULT_ENDPOINT = "wss://stt-rt.soniox.com/transcribe-websocket";
+const DEFAULT_LANGUAGES_CSV = "el,en";
+const DEFAULT_SAMPLE_RATE = 16000;
+const SAMPLE_RATE_MIN = 8000;
+const SAMPLE_RATE_MAX = 48000;
+const DEFAULT_OUTPUT_MODE: OutputMode = "overwrite";
 const DEFAULT_GUARD_PHRASE = "τέλος εντολής";
-
-const TOOL_NAME = "mic-tool";
 
 const DEFAULT_LLM_PROVIDER: LLMProvider = "azure-openai";
 const DEFAULT_LLM_MODEL = "gpt-5.4";
@@ -110,14 +125,15 @@ const DEFAULT_AZURE_API_VERSION = "2024-10-21";
 const DEFAULT_SYSTEM_PROMPT =
   "You are a transcript-cleanup assistant. The input is a verbatim transcript of someone speaking and may contain disfluencies, filler words, false starts, and grammatical noise. Rewrite the text so it is grammatically correct and easy to read, preserving the speaker's meaning AND the original language. Respond with ONLY the cleaned text — no preamble, no quotes, no markdown, no explanation.";
 
+// Note: .env file parsing and the four-tier env-var resolution chain live in
+// `./config/envChain.ts`. This module imports `loadEnvChain` and consults the
+// resulting `EnvChain` whenever it needs a non-flag value.
+
 // ----------------------------------------------------------------------------
 // Version lookup (from package.json)
 // ----------------------------------------------------------------------------
 
 function readPackageVersion(): string {
-  // `import ... with { type: "json" }` is fine under NodeNext, but
-  // `createRequire` keeps the call ergonomic and works regardless of the
-  // host's import-attributes support level.
   const requireFromHere = createRequire(import.meta.url);
   const pkg = requireFromHere("../package.json") as { version?: unknown };
   if (typeof pkg.version !== "string" || pkg.version.length === 0) {
@@ -126,29 +142,32 @@ function readPackageVersion(): string {
   return pkg.version;
 }
 
-// Note: .env file parsing and the four-tier env-var resolution chain live in
-// `./config/envChain.ts`. This module imports `loadEnvChain` and consults the
-// resulting `EnvChain` whenever it needs a non-flag value.
-
 // ----------------------------------------------------------------------------
 // CLI parser
 // ----------------------------------------------------------------------------
 
 interface ParsedCliOptions {
+  // Optional fields are `undefined` when the user did not supply the flag — in
+  // that case the env-chain is consulted; otherwise the flag value wins.
   apiKey?: string;
-  language: string;
-  outputMode: string;
-  verbose: boolean;
-  guardPhrase: string;
-  refine: boolean;
-  llmProvider: string;
-  llmModel: string;
+  apiKeyExpiresAt?: string;
+  model?: string;
+  endpoint?: string;
+  language?: string[]; // commander variadic; undefined when not passed
+  sampleRate?: string;
+  endpointDetection?: boolean; // false when --no-endpoint-detection was passed
+  outputMode?: string;
+  guardPhrase?: string;
+  verbose?: boolean;
+  refine?: boolean;
+  llmProvider?: string;
+  llmModel?: string;
 }
 
 function parseCli(argv: string[], version: string): ParsedCliOptions {
   const program = new Command();
   program
-    .name("mic-tool")
+    .name(TOOL_NAME)
     .description(
       "Stream microphone audio to the Soniox real-time STT API and print transcripts to stdout.",
     )
@@ -158,54 +177,72 @@ function parseCli(argv: string[], version: string): ParsedCliOptions {
       "after",
       [
         "",
+        "Configuration sources (highest priority first):",
+        "  1. CLI flag",
+        "  2. <cwd>/.env",
+        "  3. ~/.tool-agents/mic-tool/.env",
+        "  4. shell environment",
+        "",
         "Examples:",
-        "  $ mic-tool --api-key sk_... --language en",
+        "  $ mic-tool --api-key sk_... --language el --language en",
         "  $ SONIOX_API_KEY=sk_... mic-tool --output-mode append",
+        "  $ mic-tool --no-refine                       # disable LLM refinement",
+        "  $ mic-tool --language auto                   # let Soniox auto-detect",
         "",
       ].join("\n"),
     )
-    .option("--api-key <value>", "Soniox API key (overrides .env and shell env).")
+    // Soniox transcription
+    .option("--api-key <value>", "Soniox API key. Env: SONIOX_API_KEY.")
     .option(
-      "--language <code>",
-      "ISO 639-1 code (e.g. 'en', 'es', 'pt-BR') or 'auto'.",
-      "en",
+      "--api-key-expires-at <YYYY-MM-DD>",
+      "Reminder date for SONIOX_API_KEY renewal. Env: SONIOX_API_KEY_EXPIRES_AT.",
     )
     .option(
+      "--model <name>",
+      "Soniox real-time model. Env: MIC_TOOL_MODEL.",
+    )
+    .option(
+      "--endpoint <wss-url>",
+      "Soniox WebSocket endpoint. Env: MIC_TOOL_ENDPOINT.",
+    )
+    .option(
+      "--language <code>",
+      "Language hint (ISO 639-1/2) or 'auto'. Repeat for multiple. Env: MIC_TOOL_LANGUAGES (comma-separated).",
+      collectLanguage,
+    )
+    .option(
+      "--sample-rate <hz>",
+      "PCM sample rate (8000-48000). Env: MIC_TOOL_SAMPLE_RATE.",
+    )
+    .option(
+      "--no-endpoint-detection",
+      "Disable Soniox server-side endpoint detection. Env: MIC_TOOL_ENABLE_ENDPOINT_DETECTION.",
+    )
+    // Rendering / turn detection
+    .option(
       "--output-mode <mode>",
-      `Stdout rendering mode. One of: ${OUTPUT_MODE_VALUES.join(", ")}.`,
-      "overwrite",
+      `Stdout rendering mode. One of: ${OUTPUT_MODE_VALUES.join(", ")}. Env: MIC_TOOL_OUTPUT_MODE.`,
     )
     .option(
       "--guard-phrase <phrase>",
-      "Phrase that closes the current turn when heard. A blank line is emitted on detection.",
-      DEFAULT_GUARD_PHRASE,
+      "Phrase that closes the current turn. Env: MIC_TOOL_GUARD_PHRASE.",
     )
-    .option(
-      "--refine",
-      "Send each closed turn to an LLM for grammar/clarity refinement (default: on).",
-    )
-    .option(
-      "--no-refine",
-      "Disable LLM refinement of closed turns.",
-    )
+    // LLM refinement
+    .option("--refine", "Enable LLM refinement (default: on). Env: MIC_TOOL_REFINE.")
+    .option("--no-refine", "Disable LLM refinement.")
     .option(
       "--llm-provider <name>",
-      `LLM provider for refinement. One of: ${LLM_PROVIDERS.join(", ")}.`,
-      DEFAULT_LLM_PROVIDER,
+      `LLM provider. One of: ${LLM_PROVIDERS.join(", ")}. Env: MIC_TOOL_LLM_PROVIDER.`,
     )
     .option(
       "--llm-model <name>",
-      "Model / deployment name to use (provider-specific).",
-      DEFAULT_LLM_MODEL,
+      "LLM model / deployment name (provider-specific). Env: MIC_TOOL_LLM_MODEL.",
     )
-    .option("-v, --verbose", "Emit diagnostic logs to stderr.", false);
+    // Diagnostics
+    .option("-v, --verbose", "Emit diagnostic logs to stderr. Env: MIC_TOOL_VERBOSE.");
 
-  // Take ownership of help/version/error exits so the orchestrator owns
-  // process.exit().
   program.exitOverride();
   program.configureOutput({
-    // Send commander's own error text to stderr; help/version still go to
-    // stdout via commander's default writer.
     writeErr: (str) => process.stderr.write(str),
   });
 
@@ -213,63 +250,50 @@ function parseCli(argv: string[], version: string): ParsedCliOptions {
     program.parse(argv);
   } catch (err) {
     if (err instanceof CommanderError) {
-      // commander's exit codes:
-      //   - "commander.helpDisplayed" / "commander.help" / "commander.version" → exit 0 informational
-      //   - "commander.invalidArgument" / "commander.unknownOption" / etc. → user error
-      if (
-        err.code === "commander.helpDisplayed" ||
-        err.code === "commander.help"
-      ) {
+      if (err.code === "commander.helpDisplayed" || err.code === "commander.help") {
         throw new HelpOrVersionShown("help");
       }
       if (err.code === "commander.version") {
         throw new HelpOrVersionShown("version");
       }
-      // Any other commander error (bad choice, unknown option, missing
-      // argument value) is a configuration problem from the user.
       throw new InvalidConfigurationError(err.message, { cause: err });
     }
     throw err;
   }
 
-  const opts = program.opts<{
-    apiKey?: string;
-    language: string;
-    outputMode: string;
-    verbose: boolean;
-    guardPhrase: string;
-    refine?: boolean;
-    llmProvider: string;
-    llmModel: string;
-  }>();
+  const opts = program.opts<ParsedCliOptions & { endpointDetection?: boolean }>();
+  return opts;
+}
 
-  // Commander gives `refine: undefined` when neither --refine nor --no-refine
-  // was passed, `false` for --no-refine, `true` for --refine. Default to on.
-  const refine = opts.refine === false ? false : true;
-
-  return {
-    apiKey: opts.apiKey,
-    language: opts.language,
-    outputMode: opts.outputMode,
-    verbose: Boolean(opts.verbose),
-    guardPhrase: opts.guardPhrase,
-    refine,
-    llmProvider: opts.llmProvider,
-    llmModel: opts.llmModel,
-  };
+function collectLanguage(value: string, prev?: string[]): string[] {
+  return prev !== undefined ? [...prev, value] : [value];
 }
 
 // ----------------------------------------------------------------------------
-// Validation
+// Validators
 // ----------------------------------------------------------------------------
 
-function validateLanguage(value: string): string {
-  const v = value.trim();
-  if (v === "auto") return "auto";
-  if (LANGUAGE_REGEX.test(v)) return v;
-  throw new InvalidConfigurationError(
-    `--language must be 'auto' or an ISO 639-1/2 code (e.g. 'en', 'es', 'pt-BR'). Got: '${value}'.`,
-  );
+function validateLanguages(values: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of values) {
+    const v = raw.trim();
+    if (v === "auto") {
+      out.push("auto");
+      continue;
+    }
+    if (!LANGUAGE_REGEX.test(v)) {
+      throw new InvalidConfigurationError(
+        `--language must be 'auto' or an ISO 639-1/2 code (e.g. 'en', 'es', 'pt-BR'). Got: '${raw}'.`,
+      );
+    }
+    out.push(v);
+  }
+  if (out.includes("auto") && out.length > 1) {
+    throw new InvalidConfigurationError(
+      "--language 'auto' cannot be combined with other language hints.",
+    );
+  }
+  return out;
 }
 
 function validateOutputMode(value: string): OutputMode {
@@ -281,15 +305,6 @@ function validateOutputMode(value: string): OutputMode {
   );
 }
 
-/**
- * Normalize a phrase for guard-phrase matching:
- *   - NFD-decompose, strip combining marks (so 'τέλος' matches 'τελος')
- *   - lowercase
- *   - collapse any non-letter/non-digit run to a single space
- *   - trim
- *
- * Kept in sync with the same function in `src/turn/detector.ts`.
- */
 export function normalizeGuardPhrase(s: string): string {
   return s
     .normalize("NFD")
@@ -302,9 +317,7 @@ export function normalizeGuardPhrase(s: string): string {
 function validateGuardPhrase(value: string): string {
   const v = value.trim();
   if (v.length === 0) {
-    throw new InvalidConfigurationError(
-      "--guard-phrase must not be empty.",
-    );
+    throw new InvalidConfigurationError("--guard-phrase must not be empty.");
   }
   if (normalizeGuardPhrase(v).length === 0) {
     throw new InvalidConfigurationError(
@@ -323,11 +336,6 @@ function validateLLMProvider(value: string): LLMProvider {
   );
 }
 
-/**
- * Resolve provider-specific env vars per the four-tier chain and assemble a
- * `ProviderConfig` for the chosen provider. Throws {@link LLMConfigurationError}
- * when the provider is enabled but its required env vars are missing.
- */
 function resolveProviderConfig(
   provider: LLMProvider,
   model: string,
@@ -356,11 +364,6 @@ function resolveProviderConfig(
       apiVersion,
     };
   }
-
-  // The other seven providers are recognised by the validator but not yet
-  // implemented. The factory will throw a more pointed error at refiner
-  // construction; we surface the same intent here so misconfiguration is
-  // visible at startup.
   return { provider };
 }
 
@@ -368,63 +371,167 @@ function resolveProviderConfig(
 // Public entry point
 // ----------------------------------------------------------------------------
 
-type ApiKeySource = "flag" | ".env" | "user" | "env";
-
 /**
- * Resolve CLI args + .env + shell env into a frozen {@link ResolvedConfig}.
- *
- * @throws {HelpOrVersionShown}        on `--help` or `--version`.
- * @throws {MissingConfigurationError} when no API key is found in any source.
- * @throws {InvalidConfigurationError} on invalid flag values or unreadable `.env`.
+ * Resolve CLI args + the four-tier env-var chain into a frozen
+ * {@link ResolvedConfig}. See module header for full precedence rules.
  */
 export function resolveConfig(argv: string[]): ResolvedConfig {
   const version = readPackageVersion();
   const parsed = parseCli(argv, version);
-
-  // Four-tier env-var chain (highest priority first): CLI flag, ./.env,
-  // ~/.tool-agents/mic-tool/.env, shell env.
   const chain = loadEnvChain({ toolName: TOOL_NAME });
 
-  // ---- Soniox API key -----------------------------------------------------
-  const flagKey = parsed.apiKey;
-  let apiKey: string | undefined;
-  let source: ApiKeySource | undefined;
-
-  if (typeof flagKey === "string" && flagKey.trim().length > 0) {
-    apiKey = flagKey.trim();
-    source = "flag";
+  // ---- Soniox API key (required) -----------------------------------------
+  let apiKey: string;
+  let apiKeySource: "flag" | ".env" | "user" | "env";
+  if (typeof parsed.apiKey === "string" && parsed.apiKey.trim().length > 0) {
+    apiKey = parsed.apiKey.trim();
+    apiKeySource = "flag";
   } else {
-    const found = chain.get(ENV_KEY);
-    if (found !== null) {
-      apiKey = found.value;
-      source = found.source;
+    const found = chain.get(SONIOX_ENV_KEY);
+    if (found === null) {
+      throw new MissingConfigurationError(
+        "SONIOX_API_KEY is not set. Provide via --api-key flag, .env file (SONIOX_API_KEY=...), ~/.tool-agents/mic-tool/.env, or shell environment variable.",
+      );
     }
+    apiKey = found.value;
+    apiKeySource = found.source;
   }
 
-  if (apiKey === undefined || source === undefined) {
-    throw new MissingConfigurationError(
-      "SONIOX_API_KEY is not set. Provide via --api-key flag, .env file (SONIOX_API_KEY=...), ~/.tool-agents/mic-tool/.env, or shell environment variable.",
-    );
+  // ---- Optional expiry reminder ------------------------------------------
+  const apiKeyExpiresAtRaw =
+    parsed.apiKeyExpiresAt ?? chain.value(SONIOX_EXPIRES_ENV);
+  const apiKeyExpiresAt =
+    apiKeyExpiresAtRaw === undefined
+      ? undefined
+      : parseIsoDate(
+          apiKeyExpiresAtRaw,
+          "--api-key-expires-at",
+          SONIOX_EXPIRES_ENV,
+        );
+
+  // ---- Transcription parameters ------------------------------------------
+  const model = resolveString(
+    parsed.model,
+    chain,
+    "MIC_TOOL_MODEL",
+    DEFAULT_MODEL,
+  );
+  const endpoint = parseWsUrl(
+    resolveString(
+      parsed.endpoint,
+      chain,
+      "MIC_TOOL_ENDPOINT",
+      DEFAULT_ENDPOINT,
+    ),
+    "--endpoint",
+    "MIC_TOOL_ENDPOINT",
+  );
+
+  // languages: array via flag (variadic), CSV via env var
+  let languages: string[];
+  if (parsed.language !== undefined && parsed.language.length > 0) {
+    languages = parsed.language;
+  } else {
+    const fromEnv = chain.value("MIC_TOOL_LANGUAGES");
+    languages = fromEnv !== undefined
+      ? parseCsvNonEmpty(fromEnv, "--language", "MIC_TOOL_LANGUAGES")
+      : parseCsvNonEmpty(
+          DEFAULT_LANGUAGES_CSV,
+          "--language",
+          "MIC_TOOL_LANGUAGES",
+        );
+  }
+  languages = validateLanguages(languages);
+
+  const sampleRate = parsePositiveInt(
+    resolveString(
+      parsed.sampleRate,
+      chain,
+      "MIC_TOOL_SAMPLE_RATE",
+      String(DEFAULT_SAMPLE_RATE),
+    ),
+    "--sample-rate",
+    "MIC_TOOL_SAMPLE_RATE",
+    SAMPLE_RATE_MIN,
+    SAMPLE_RATE_MAX,
+  );
+
+  let enableEndpointDetection: boolean;
+  if (parsed.endpointDetection === false) {
+    // commander sets `endpointDetection: false` when --no-endpoint-detection
+    // was passed; absent when neither was passed.
+    enableEndpointDetection = false;
+  } else {
+    const envVal = chain.value("MIC_TOOL_ENABLE_ENDPOINT_DETECTION");
+    enableEndpointDetection =
+      envVal === undefined
+        ? true
+        : parseBoolean(
+            envVal,
+            "--no-endpoint-detection",
+            "MIC_TOOL_ENABLE_ENDPOINT_DETECTION",
+          );
   }
 
-  const language = validateLanguage(parsed.language);
-  const outputMode = validateOutputMode(parsed.outputMode);
-  const guardPhrase = validateGuardPhrase(parsed.guardPhrase);
-  const verbose = parsed.verbose;
+  // ---- Rendering / turn detection ----------------------------------------
+  const outputMode = validateOutputMode(
+    resolveString(
+      parsed.outputMode,
+      chain,
+      "MIC_TOOL_OUTPUT_MODE",
+      DEFAULT_OUTPUT_MODE,
+    ),
+  );
+  const guardPhrase = validateGuardPhrase(
+    resolveString(
+      parsed.guardPhrase,
+      chain,
+      "MIC_TOOL_GUARD_PHRASE",
+      DEFAULT_GUARD_PHRASE,
+    ),
+  );
 
-  // ---- LLM refinement config ---------------------------------------------
-  const llmProvider = validateLLMProvider(parsed.llmProvider);
-  const llmModel = parsed.llmModel.trim();
+  // ---- Verbose -----------------------------------------------------------
+  let verbose: boolean;
+  if (parsed.verbose === true) {
+    verbose = true;
+  } else {
+    const v = chain.value("MIC_TOOL_VERBOSE");
+    verbose = v === undefined ? false : parseBoolean(v, "--verbose", "MIC_TOOL_VERBOSE");
+  }
+
+  // ---- LLM refinement ----------------------------------------------------
+  let llmEnabled: boolean;
+  if (parsed.refine === true) {
+    llmEnabled = true;
+  } else if (parsed.refine === false) {
+    llmEnabled = false;
+  } else {
+    const v = chain.value("MIC_TOOL_REFINE");
+    llmEnabled = v === undefined ? true : parseBoolean(v, "--refine", "MIC_TOOL_REFINE");
+  }
+  const llmProvider = validateLLMProvider(
+    resolveString(
+      parsed.llmProvider,
+      chain,
+      "MIC_TOOL_LLM_PROVIDER",
+      DEFAULT_LLM_PROVIDER,
+    ),
+  );
+  const llmModel = resolveString(
+    parsed.llmModel,
+    chain,
+    "MIC_TOOL_LLM_MODEL",
+    DEFAULT_LLM_MODEL,
+  ).trim();
   if (llmModel.length === 0) {
     throw new InvalidConfigurationError("--llm-model must not be empty.");
   }
-  const llmEnabled = parsed.refine;
+
   let providerConfig: ProviderConfig;
   if (llmEnabled) {
     providerConfig = resolveProviderConfig(llmProvider, llmModel, chain);
   } else {
-    // When disabled we still record the requested provider so verbose logs
-    // show what would have been used, but we do not validate env vars.
     providerConfig =
       llmProvider === "azure-openai"
         ? {
@@ -448,8 +555,11 @@ export function resolveConfig(argv: string[]): ResolvedConfig {
   });
 
   if (verbose) {
-    process.stderr.write(`[mic-tool] api key loaded from: ${source}\n`);
+    process.stderr.write(`[mic-tool] api key loaded from: ${apiKeySource}\n`);
     process.stderr.write(`[mic-tool] guard phrase: ${guardPhrase}\n`);
+    process.stderr.write(
+      `[mic-tool] transcription: model=${model}, endpoint=${endpoint}, languages=[${languages.join(", ")}], sample_rate=${sampleRate}, endpoint_detection=${enableEndpointDetection}\n`,
+    );
     process.stderr.write(
       `[mic-tool] llm: ${llmEnabled ? "enabled" : "disabled"} (provider=${llmProvider}, model=${llmModel})\n`,
     );
@@ -457,10 +567,36 @@ export function resolveConfig(argv: string[]): ResolvedConfig {
 
   return Object.freeze<ResolvedConfig>({
     apiKey,
-    language,
+    apiKeyExpiresAt,
+    model,
+    endpoint,
+    languages,
+    sampleRate,
+    enableEndpointDetection,
     outputMode,
-    verbose,
     guardPhrase,
     llm,
+    verbose,
   });
 }
+
+// ----------------------------------------------------------------------------
+// Resolution helpers
+// ----------------------------------------------------------------------------
+
+function resolveString(
+  flagValue: string | undefined,
+  chain: EnvChain,
+  envKey: string,
+  defaultValue: string,
+): string {
+  // Explicit flag (even empty) wins so downstream validators can reject it
+  // — `mic-tool --guard-phrase ""` is a user error, not a silent fallback.
+  if (flagValue !== undefined) {
+    return flagValue;
+  }
+  const fromChain = chain.value(envKey);
+  if (fromChain !== undefined) return fromChain;
+  return defaultValue;
+}
+

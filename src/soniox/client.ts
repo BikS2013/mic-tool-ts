@@ -44,8 +44,16 @@ import {
 export interface TranscriberOptions {
   /** Soniox API key. */
   apiKey: string;
-  /** ISO 639-1 language code or "auto". */
-  language: string;
+  /** Soniox model (e.g. "stt-rt-v4"). */
+  model: string;
+  /** Soniox WebSocket endpoint (wss://...). */
+  endpoint: string;
+  /** Language hints: array of ISO 639-1/2 codes, OR ["auto"] for auto-detect. */
+  languages: string[];
+  /** Audio sample rate in Hz (must match what the mic source emits). */
+  sampleRate: number;
+  /** Whether to enable server-side endpoint detection. */
+  enableEndpointDetection: boolean;
   /** When true, the wrapper emits diagnostic events to stderr. */
   verbose: boolean;
 }
@@ -132,17 +140,22 @@ export class SonioxTranscriber implements Transcriber {
       );
     }
 
-    this.client = new SonioxNodeClient({ api_key: this.opts.apiKey });
+    this.client = new SonioxNodeClient({
+      api_key: this.opts.apiKey,
+      realtime: { ws_base_url: this.opts.endpoint },
+    });
 
+    const isAuto =
+      this.opts.languages.length === 1 && this.opts.languages[0] === "auto";
     const sessionConfig: SttSessionConfig = {
-      model: "stt-rt-v4",
+      model: this.opts.model,
       audio_format: "pcm_s16le",
-      sample_rate: 16000,
+      sample_rate: this.opts.sampleRate,
       num_channels: 1,
-      enable_endpoint_detection: true,
-      ...(this.opts.language === "auto"
+      enable_endpoint_detection: this.opts.enableEndpointDetection,
+      ...(isAuto
         ? { enable_language_identification: true }
-        : { language_hints: [this.opts.language] }),
+        : { language_hints: this.opts.languages }),
     };
 
     const sessionOptions: SttSessionOptions = {
@@ -170,7 +183,7 @@ export class SonioxTranscriber implements Transcriber {
 
     if (this.opts.verbose) {
       process.stderr.write(
-        `[mic-tool] soniox: connecting (model=stt-rt-v4, language=${this.opts.language})\n`,
+        `[mic-tool] soniox: connecting (model=${this.opts.model}, languages=[${this.opts.languages.join(", ")}])\n`,
       );
     }
 

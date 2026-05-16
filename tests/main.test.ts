@@ -134,7 +134,11 @@ import {
 
 const GOOD_CONFIG: ResolvedConfig = Object.freeze({
   apiKey: "test-api-key",
-  language: "en",
+  languages: ["en"],
+  model: "stt-rt-v4",
+  endpoint: "wss://stt-rt.soniox.com/transcribe-websocket",
+  sampleRate: 16000,
+  enableEndpointDetection: true,
   outputMode: "overwrite" as const,
   verbose: false,
   guardPhrase: "τέλος εντολής",

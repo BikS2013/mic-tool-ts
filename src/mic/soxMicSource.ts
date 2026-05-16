@@ -27,23 +27,25 @@ import {
 } from "../errors.js";
 import type { MicSource } from "./types.js";
 
-/** Locked spawn argv (see project-design.md §5.1). */
-const SOX_ARGS = [
-  "-q",
-  "-d",
-  "-t",
-  "raw",
-  "-r",
-  "16000",
-  "-c",
-  "1",
-  "-b",
-  "16",
-  "-e",
-  "signed-integer",
-  "-L",
-  "-",
-] as const;
+/** Build the sox spawn argv for a given sample rate. */
+function buildSoxArgs(sampleRate: number): string[] {
+  return [
+    "-q",
+    "-d",
+    "-t",
+    "raw",
+    "-r",
+    String(sampleRate),
+    "-c",
+    "1",
+    "-b",
+    "16",
+    "-e",
+    "signed-integer",
+    "-L",
+    "-",
+  ];
+}
 
 /** Rolling stderr tail size — 4 KB is plenty for sox error messages. */
 const STDERR_TAIL_BYTES = 4096;
@@ -60,6 +62,8 @@ type SoxChild = ChildProcessByStdio<null, Readable, Readable>;
 export interface SoxMicSourceOptions {
   /** When true, emit diagnostic lines to `process.stderr`. */
   readonly verbose?: boolean;
+  /** PCM sample rate (Hz). Default: 16000. */
+  readonly sampleRate?: number;
 }
 
 type State = "idle" | "starting" | "running" | "stopping" | "stopped";
@@ -78,9 +82,11 @@ export class SoxMicSource implements MicSource {
   private intentionalStop = false;
   /** Resolved by stop() when the child has exited. */
   private exitWaiters: Array<() => void> = [];
+  private readonly sampleRate: number;
 
   constructor(options: SoxMicSourceOptions = {}) {
     this.verbose = options.verbose === true;
+    this.sampleRate = options.sampleRate ?? 16000;
     this.passthrough = new PassThrough();
     // Public field is the PassThrough — consumers attach 'data' / 'end' / 'error'
     // listeners here, and we control when it ends.
@@ -109,7 +115,7 @@ export class SoxMicSource implements MicSource {
 
       let child: SoxChild;
       try {
-        child = spawn("sox", [...SOX_ARGS], {
+        child = spawn("sox", buildSoxArgs(this.sampleRate), {
           stdio: ["ignore", "pipe", "pipe"],
         });
       } catch (err) {

@@ -153,11 +153,19 @@ describe("resolveConfig — default values", () => {
   it("returns correct defaults for language, outputMode, verbose, guardPhrase when only --api-key is supplied", () => {
     setCwd(); // no .env file
     const cfg: ResolvedConfig = resolveConfig(argv("--api-key", "sk_test"));
-    expect(cfg.language).toBe("en");
+    // Default languages now el,en (matches per-user .env doc).
+    expect(cfg.languages).toEqual(["el", "en"]);
     expect(cfg.outputMode).toBe("overwrite");
     expect(cfg.verbose).toBe(false);
     expect(cfg.apiKey).toBe("sk_test");
     expect(cfg.guardPhrase).toBe("τέλος εντολής");
+    expect(cfg.model).toBe("stt-rt-v4");
+    expect(cfg.endpoint).toBe(
+      "wss://stt-rt.soniox.com/transcribe-websocket",
+    );
+    expect(cfg.sampleRate).toBe(16000);
+    expect(cfg.enableEndpointDetection).toBe(true);
+    expect(cfg.apiKeyExpiresAt).toBeUndefined();
   });
 
   it("returned config object is frozen (immutable)", () => {
@@ -262,28 +270,49 @@ describe("resolveConfig — --language validation", () => {
     setCwd();
     setShellKey("sk");
     const cfg = resolveConfig(argv("--language", "auto"));
-    expect(cfg.language).toBe("auto");
+    expect(cfg.languages).toEqual(["auto"]);
   });
 
   it("accepts a 2-letter ISO 639-1 code (e.g. 'en')", () => {
     setCwd();
     setShellKey("sk");
     const cfg = resolveConfig(argv("--language", "en"));
-    expect(cfg.language).toBe("en");
+    expect(cfg.languages).toEqual(["en"]);
   });
 
   it("accepts a 3-letter ISO 639-2 code (e.g. 'spa')", () => {
     setCwd();
     setShellKey("sk");
     const cfg = resolveConfig(argv("--language", "spa"));
-    expect(cfg.language).toBe("spa");
+    expect(cfg.languages).toEqual(["spa"]);
   });
 
   it("accepts a region-suffixed code (e.g. 'pt-BR')", () => {
     setCwd();
     setShellKey("sk");
     const cfg = resolveConfig(argv("--language", "pt-BR"));
-    expect(cfg.language).toBe("pt-BR");
+    expect(cfg.languages).toEqual(["pt-BR"]);
+  });
+
+  it("accepts multiple --language flags and preserves order", () => {
+    setCwd();
+    setShellKey("sk");
+    const cfg = resolveConfig(argv("--language", "el", "--language", "en"));
+    expect(cfg.languages).toEqual(["el", "en"]);
+  });
+
+  it("rejects 'auto' combined with another language", () => {
+    setCwd();
+    setShellKey("sk");
+    expect(() =>
+      resolveConfig(argv("--language", "auto", "--language", "en")),
+    ).toThrowError(InvalidConfigurationError);
+  });
+
+  it("loads languages from MIC_TOOL_LANGUAGES csv env var when no --language flag", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_LANGUAGES=fr,de,it\n");
+    const cfg = resolveConfig(argv());
+    expect(cfg.languages).toEqual(["fr", "de", "it"]);
   });
 
   it("rejects a plain English word ('english')", () => {
@@ -502,6 +531,108 @@ describe("resolveConfig — LLM refinement defaults", () => {
     expect(() =>
       resolveConfig(argv("--api-key", "sk_test", "--llm-model", "  ")),
     ).toThrowError(InvalidConfigurationError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5d. New env-var aliases (MIC_TOOL_*)
+// ---------------------------------------------------------------------------
+
+describe("resolveConfig — env-var aliases for every flag", () => {
+  it("MIC_TOOL_MODEL overrides the default model", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_MODEL=stt-async-v3\n");
+    const cfg = resolveConfig(argv());
+    expect(cfg.model).toBe("stt-async-v3");
+  });
+
+  it("MIC_TOOL_ENDPOINT overrides the default endpoint", () => {
+    setCwd(
+      "SONIOX_API_KEY=k\nMIC_TOOL_ENDPOINT=wss://stt-rt.eu.soniox.com/transcribe-websocket\n",
+    );
+    const cfg = resolveConfig(argv());
+    expect(cfg.endpoint).toBe(
+      "wss://stt-rt.eu.soniox.com/transcribe-websocket",
+    );
+  });
+
+  it("rejects a non-wss endpoint", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_ENDPOINT=http://example.com\n");
+    expect(() => resolveConfig(argv())).toThrowError(InvalidConfigurationError);
+  });
+
+  it("MIC_TOOL_SAMPLE_RATE overrides default", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_SAMPLE_RATE=24000\n");
+    const cfg = resolveConfig(argv());
+    expect(cfg.sampleRate).toBe(24000);
+  });
+
+  it("rejects sample rate below 8000", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_SAMPLE_RATE=4000\n");
+    expect(() => resolveConfig(argv())).toThrowError(InvalidConfigurationError);
+  });
+
+  it("rejects sample rate above 48000", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_SAMPLE_RATE=96000\n");
+    expect(() => resolveConfig(argv())).toThrowError(InvalidConfigurationError);
+  });
+
+  it("MIC_TOOL_ENABLE_ENDPOINT_DETECTION=false disables endpoint detection", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_ENABLE_ENDPOINT_DETECTION=false\n");
+    const cfg = resolveConfig(argv());
+    expect(cfg.enableEndpointDetection).toBe(false);
+  });
+
+  it("--no-endpoint-detection wins over env var", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_ENABLE_ENDPOINT_DETECTION=true\n");
+    const cfg = resolveConfig(argv("--no-endpoint-detection"));
+    expect(cfg.enableEndpointDetection).toBe(false);
+  });
+
+  it("MIC_TOOL_GUARD_PHRASE overrides the default", () => {
+    setCwd('SONIOX_API_KEY=k\nMIC_TOOL_GUARD_PHRASE="end command"\n');
+    const cfg = resolveConfig(argv());
+    expect(cfg.guardPhrase).toBe("end command");
+  });
+
+  it("MIC_TOOL_OUTPUT_MODE overrides the default", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_OUTPUT_MODE=append\n");
+    const cfg = resolveConfig(argv());
+    expect(cfg.outputMode).toBe("append");
+  });
+
+  it("MIC_TOOL_VERBOSE=true enables verbose", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_VERBOSE=true\n");
+    const cfg = resolveConfig(argv());
+    expect(cfg.verbose).toBe(true);
+  });
+
+  it("MIC_TOOL_REFINE=false disables LLM refinement", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_REFINE=false\n");
+    const cfg = resolveConfig(argvRefine());
+    expect(cfg.llm.enabled).toBe(false);
+  });
+
+  it("MIC_TOOL_LLM_PROVIDER overrides the default provider", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_REFINE=false\nMIC_TOOL_LLM_PROVIDER=openai\n");
+    const cfg = resolveConfig(argvRefine());
+    expect(cfg.llm.provider).toBe("openai");
+  });
+
+  it("MIC_TOOL_LLM_MODEL overrides the default model", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_REFINE=false\nMIC_TOOL_LLM_MODEL=my-deploy\n");
+    const cfg = resolveConfig(argvRefine());
+    expect(cfg.llm.model).toBe("my-deploy");
+  });
+
+  it("SONIOX_API_KEY_EXPIRES_AT round-trips into the resolved config", () => {
+    setCwd("SONIOX_API_KEY=k\nSONIOX_API_KEY_EXPIRES_AT=2027-01-15\n");
+    const cfg = resolveConfig(argv());
+    expect(cfg.apiKeyExpiresAt).toBe("2027-01-15");
+  });
+
+  it("rejects a malformed SONIOX_API_KEY_EXPIRES_AT", () => {
+    setCwd("SONIOX_API_KEY=k\nSONIOX_API_KEY_EXPIRES_AT=tomorrow\n");
+    expect(() => resolveConfig(argv())).toThrowError(InvalidConfigurationError);
   });
 });
 

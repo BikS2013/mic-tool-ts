@@ -47,6 +47,7 @@ import {
   type TurnAwareRenderer,
 } from "./turn/detector.js";
 import { createRefiner } from "./llm/factory.js";
+import { warnAboutExpiry } from "./config/expiry.js";
 import { MicToolError } from "./errors.js";
 
 /**
@@ -65,9 +66,13 @@ export async function main(argv: string[]): Promise<number> {
     return handleTopLevelError(err);
   }
 
+  // Operational expiry warning for the Soniox API key (per CLAUDE.md
+  // <configuration-guide> guidance). Non-fatal; user owns renewal.
+  warnAboutExpiry(config.apiKeyExpiresAt, config.verbose);
+
   if (config.verbose) {
     process.stderr.write(
-      `[mic-tool] config: outputMode=${config.outputMode}, language=${config.language}, verbose=true\n`,
+      `[mic-tool] config: outputMode=${config.outputMode}, languages=[${config.languages.join(", ")}], verbose=true\n`,
     );
     process.stderr.write(
       `[mic-tool] platform=${process.platform}, node=${process.version}\n`,
@@ -183,7 +188,11 @@ export async function main(argv: string[]): Promise<number> {
   // ----- Step 3: build the transcriber and wire its callbacks -------------
   const transcriber = new SonioxTranscriber({
     apiKey: config.apiKey,
-    language: config.language,
+    model: config.model,
+    endpoint: config.endpoint,
+    languages: config.languages,
+    sampleRate: config.sampleRate,
+    enableEndpointDetection: config.enableEndpointDetection,
     verbose: config.verbose,
   });
   transcriber.onPartial((text) => renderer.partial(text));
@@ -213,7 +222,10 @@ export async function main(argv: string[]): Promise<number> {
   // ----- Step 5: spawn the mic. ANY failure here MUST also stop the
   //              already-running transcriber so the WS doesn't dangle. ----
   try {
-    mic = createMicSource();
+    mic = createMicSource({
+      sampleRate: config.sampleRate,
+      verbose: config.verbose,
+    });
   } catch (err) {
     // Factory failure (UnsupportedPlatformError on non-macOS).
     try {

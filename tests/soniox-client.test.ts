@@ -172,10 +172,21 @@ import {
 // Helper
 // --------------------------------------------------------------------------
 
-function makeTranscriber(opts?: { language?: string; verbose?: boolean }) {
+function makeTranscriber(opts?: {
+  languages?: string[];
+  verbose?: boolean;
+  model?: string;
+  endpoint?: string;
+  sampleRate?: number;
+  enableEndpointDetection?: boolean;
+}) {
   return new SonioxTranscriber({
     apiKey: "test-key",
-    language: opts?.language ?? "en",
+    model: opts?.model ?? "stt-rt-v4",
+    endpoint: opts?.endpoint ?? "wss://stt-rt.soniox.com/transcribe-websocket",
+    languages: opts?.languages ?? ["en"],
+    sampleRate: opts?.sampleRate ?? 16000,
+    enableEndpointDetection: opts?.enableEndpointDetection ?? true,
     verbose: opts?.verbose ?? false,
   });
 }

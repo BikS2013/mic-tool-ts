@@ -80,6 +80,8 @@ chmod 0600 ~/.tool-agents/mic-tool-ts/.env
 
 For non-secret project overrides (e.g. a per-project language pair) use a project-local `<cwd>/.env`.
 
+Live voice-agent operator settings are remembered separately from secrets. On graceful shutdown, `mic-tool-ts` writes `~/.tool-agents/mic-tool-ts/state.json` with only non-secret protocol settings: `refine`, `translate`, `clipboard`, and `translation_policy`. On the next startup, those saved values become the initial settings unless you explicitly set the matching CLI flag or env var such as `--refine-default off` or `MIC_TOOL_TS_TRANSLATE_DEFAULT=on`.
+
 ---
 
 ## Usage
@@ -154,6 +156,16 @@ command send.
 ```
 
 In `agent-protocol` mode, stdout contains JSON Lines such as `state.changed`, `status.reported`, `section.submitted`, `section.processed`, `section.cancelled`, `clipboard.copied`, and `session.ended`. Human diagnostics, including the ready message, stay on stderr.
+
+Remembered settings:
+
+- On graceful shutdown, the current `refine`, `translate`, `clipboard`, and `translation_policy` values are saved to `~/.tool-agents/mic-tool-ts/state.json`.
+- The next run starts with those saved values unless you explicitly set a matching default through CLI or env, such as `--refine-default off` or `MIC_TOOL_TS_TRANSLATION_POLICY=to-en`.
+- `command status` reports the effective settings after restoration. Example human output:
+
+```text
+[mic-tool-ts] status: refine=on, translate=off, clipboard=off, translation_policy=opposite, pending_section=no
+```
 
 ---
 

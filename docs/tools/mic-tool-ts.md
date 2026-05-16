@@ -41,6 +41,7 @@ Full configuration reference: `docs/design/configuration-guide.md`.
 - Supported operators: `refine`, `translate`, and `clipboard`.
 - `--interaction-mode agent-protocol` emits one JSON object per line on stdout for downstream agents.
 - `--interaction-mode hybrid --protocol-output <path>` keeps human text on stdout and writes JSONL events to the selected file.
+- Runtime protocol settings are remembered in `~/.tool-agents/mic-tool-ts/state.json`: `refine`, `translate`, `clipboard`, and `translation_policy`. Explicit CLI/env defaults override saved state.
 
 ## User Documentation
 

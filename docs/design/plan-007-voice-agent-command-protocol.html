@@ -1,821 +1,759 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Plan 007: Voice Agent Command Protocol</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --bg: #f7f8fa;
-        --surface: #ffffff;
-        --surface-soft: #eef3f6;
-        --ink: #172026;
-        --muted: #5c6670;
-        --line: #d7dde3;
-        --accent: #176b87;
-        --accent-strong: #0f4d64;
-        --accent-soft: #e1f1f5;
-        --success: #2f6f4e;
-        --warning: #8a5a00;
-        --code-bg: #16202a;
-        --code-ink: #edf6fb;
-        --shadow: 0 16px 48px rgba(23, 32, 38, 0.10);
-        font-family:
-          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-          "Segoe UI", sans-serif;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html {
-        scroll-behavior: smooth;
-      }
-
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>plan-007-voice-agent-command-protocol</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
       body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--ink);
-        line-height: 1.55;
+        font-size: 0.9em;
+        padding: 12px;
       }
-
-      a {
-        color: var(--accent-strong);
-        text-decoration-thickness: 1px;
-        text-underline-offset: 3px;
-      }
-
-      code,
-      pre {
-        font-family:
-          "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-      }
-
-      .shell {
-        min-height: 100vh;
-      }
-
-      .hero {
-        background:
-          linear-gradient(135deg, rgba(23, 107, 135, 0.16), rgba(47, 111, 78, 0.10)),
-          var(--surface);
-        border-bottom: 1px solid var(--line);
-      }
-
-      .hero-inner {
-        max-width: 1180px;
-        margin: 0 auto;
-        padding: 48px 24px 36px;
-      }
-
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin: 0 0 14px;
-        color: var(--accent-strong);
-        font-size: 0.84rem;
-        font-weight: 700;
-        letter-spacing: 0;
-        text-transform: uppercase;
-      }
-
-      .status-dot {
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
-        background: var(--warning);
-      }
-
       h1 {
-        max-width: 920px;
-        margin: 0;
-        font-size: clamp(2.25rem, 5vw, 4.45rem);
-        line-height: 0.98;
-        letter-spacing: 0;
+        font-size: 1.8em;
       }
-
-      .lede {
-        max-width: 850px;
-        margin: 20px 0 0;
-        color: var(--muted);
-        font-size: 1.1rem;
+    }
+    @media print {
+      html {
+        background-color: white;
       }
-
-      .hero-meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 28px;
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
       }
-
-      .pill {
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.72);
-        color: var(--ink);
-        padding: 7px 12px;
-        font-size: 0.9rem;
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
       }
-
-      .layout {
-        display: grid;
-        grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
-        gap: 28px;
-        max-width: 1180px;
-        margin: 0 auto;
-        padding: 28px 24px 60px;
+      h2, h3, h4 {
+        page-break-after: avoid;
       }
-
-      .toc {
-        position: sticky;
-        top: 18px;
-        align-self: start;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--surface);
-        box-shadow: var(--shadow);
-        padding: 14px;
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      white-space: pre-wrap;
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
       }
-
-      .toc h2 {
-        margin: 0 0 10px;
-        font-size: 0.9rem;
-      }
-
-      .toc a {
-        display: block;
-        border-radius: 6px;
-        padding: 7px 8px;
-        color: var(--muted);
-        font-size: 0.9rem;
-        text-decoration: none;
-      }
-
-      .toc a:hover,
-      .toc a:focus {
-        background: var(--accent-soft);
-        color: var(--accent-strong);
-      }
-
-      main {
-        min-width: 0;
-      }
-
-      section {
-        margin-bottom: 22px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--surface);
-        box-shadow: var(--shadow);
-        padding: 26px;
-      }
-
-      h2 {
-        margin: 0 0 14px;
-        font-size: 1.35rem;
-        letter-spacing: 0;
-      }
-
-      h3 {
-        margin: 22px 0 10px;
-        font-size: 1.06rem;
-        letter-spacing: 0;
-      }
-
-      p {
-        margin: 0 0 14px;
-      }
-
-      ul,
-      ol {
-        margin: 0 0 14px 1.35rem;
-        padding: 0;
-      }
-
-      li + li {
-        margin-top: 6px;
-      }
-
-      .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 18px;
-      }
-
-      .summary-item {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--surface-soft);
-        padding: 14px;
-      }
-
-      .summary-item strong {
-        display: block;
-        margin-bottom: 5px;
-        color: var(--accent-strong);
-      }
-
-      .state-flow {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        gap: 14px;
-        align-items: center;
-        margin: 18px 0 8px;
-      }
-
-      .state-box {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--accent-soft);
-        padding: 16px;
-      }
-
-      .state-box strong {
-        display: block;
-        margin-bottom: 6px;
-        font-size: 1rem;
-      }
-
-      .arrow {
-        color: var(--accent-strong);
-        font-weight: 800;
-      }
-
-      .table-wrap {
-        overflow-x: auto;
-        margin: 14px 0;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-      }
-
-      table {
-        width: 100%;
-        min-width: 680px;
-        border-collapse: collapse;
-        background: var(--surface);
-      }
-
-      th,
-      td {
-        border-bottom: 1px solid var(--line);
-        padding: 11px 12px;
-        text-align: left;
-        vertical-align: top;
-      }
-
-      th {
-        background: var(--surface-soft);
-        color: var(--ink);
-        font-size: 0.86rem;
-      }
-
-      tr:last-child td {
-        border-bottom: 0;
-      }
-
-      .callout {
-        border-left: 4px solid var(--accent);
-        border-radius: 6px;
-        background: var(--accent-soft);
-        padding: 14px 16px;
-        margin: 16px 0;
-      }
-
-      .callout.warning {
-        border-left-color: var(--warning);
-        background: #fff5df;
-      }
-
-      .callout.success {
-        border-left-color: var(--success);
-        background: #e7f3ec;
-      }
-
-      pre {
-        overflow-x: auto;
-        border-radius: 8px;
-        background: var(--code-bg);
-        color: var(--code-ink);
-        padding: 16px;
-        font-size: 0.88rem;
-        line-height: 1.5;
-      }
-
-      code {
-        border-radius: 5px;
-        background: #edf1f4;
-        padding: 0.12em 0.32em;
-        color: #20303c;
-        font-size: 0.93em;
-      }
-
-      pre code {
-        background: transparent;
-        color: inherit;
-        padding: 0;
-      }
-
-      .footer {
-        max-width: 1180px;
-        margin: 0 auto;
-        padding: 0 24px 42px;
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
-
-      @media (max-width: 880px) {
-        .layout {
-          grid-template-columns: 1fr;
-        }
-
-        .toc {
-          position: static;
-          box-shadow: none;
-        }
-
-        .toc nav {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 4px;
-        }
-
-        .summary-grid,
-        .state-flow {
-          grid-template-columns: 1fr;
-        }
-
-        .arrow {
-          transform: rotate(90deg);
-          justify-self: start;
-        }
-      }
-
-      @media (max-width: 560px) {
-        .hero-inner,
-        .layout,
-        .footer {
-          padding-left: 16px;
-          padding-right: 16px;
-        }
-
-        section {
-          padding: 18px;
-        }
-
-        .toc nav {
-          grid-template-columns: 1fr;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="shell">
-      <header class="hero">
-        <div class="hero-inner">
-          <p class="eyebrow"><span class="status-dot"></span>Proposal only, not implemented</p>
-          <h1>Plan 007: Voice Agent Command Protocol</h1>
-          <p class="lede">
-            A proposed speech-control layer for using <code>mic-tool-ts</code> as an oral input channel
-            for agents while preserving normal dictation and using <code>/end</code> as the explicit
-            paragraph or text-section submit marker.
-          </p>
-          <div class="hero-meta" aria-label="Document metadata">
-            <span class="pill">Mode: design proposal</span>
-            <span class="pill">Default behavior: dictation unchanged</span>
-            <span class="pill">Protocol: JSON Lines</span>
-            <span class="pill">No new runtime dependency required</span>
-          </div>
-        </div>
-      </header>
-
-      <div class="layout">
-        <aside class="toc" aria-label="Table of contents">
-          <h2>Contents</h2>
-          <nav>
-            <a href="#goal">Goal</a>
-            <a href="#approach">Approach</a>
-            <a href="#markers">Markers</a>
-            <a href="#operators">Operators</a>
-            <a href="#protocol">Output Protocol</a>
-            <a href="#modes">Modes</a>
-            <a href="#configuration">Configuration</a>
-            <a href="#implementation">Implementation</a>
-            <a href="#matching">Matching</a>
-            <a href="#failures">Failures</a>
-            <a href="#testing">Testing</a>
-            <a href="#workflow">Workflow</a>
-          </nav>
-        </aside>
-
-        <main>
-          <section id="goal">
-            <h2>Goal</h2>
-            <p>
-              Add a speech-control protocol that lets <code>mic-tool-ts</code> be used as an oral
-              input layer for agents while preserving normal dictation.
-            </p>
-            <div class="summary-grid">
-              <div class="summary-item">
-                <strong>Dictation text</strong>
-                Continuous transcript intended for a human or plain text sink.
-              </div>
-              <div class="summary-item">
-                <strong>Text section</strong>
-                The paragraph or section accumulated until the user says <code>/end</code>.
-              </div>
-              <div class="summary-item">
-                <strong>Operator state</strong>
-                Persistent toggles such as <code>refine</code>, <code>translate</code>, and
-                <code>clipboard</code>.
-              </div>
-              <div class="summary-item">
-                <strong>LLM operation</strong>
-                Optional cleanup, translation, suggestion, criticism, or another transformation
-                applied to a submitted section.
-              </div>
-            </div>
-          </section>
-
-          <section id="approach">
-            <h2>Recommended Approach</h2>
-            <p>
-              Implement a small state machine above finalized STT text and below output rendering.
-              The state machine recognizes explicit spoken markers, maintains operator state, and
-              submits the current text section when <code>/end</code> is spoken.
-            </p>
-            <div class="state-flow" aria-label="State transition diagram">
-              <div class="state-box">
-                <strong><code>capturing_section</code></strong>
-                Normal transcription. Finalized non-command text is appended to the current section
-                buffer.
-              </div>
-              <div class="arrow" aria-hidden="true">-></div>
-              <div class="state-box">
-                <strong><code>processing_section</code></strong>
-                The submitted section is processed through active operators while new speech starts
-                the next section.
-              </div>
-            </div>
-            <div class="callout warning">
-              Do not infer control intent from natural language in v1. Explicit slash-style markers
-              are easier to test and reduce accidental processing.
-            </div>
-          </section>
-
-          <section id="markers">
-            <h2>Proposed Spoken Markers</h2>
-            <p>
-              Defaults should be configurable and selected for low collision with ordinary dictation.
-            </p>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Marker</th>
-                    <th>Default phrase</th>
-                    <th>Purpose</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><code>state_command</code></td>
-                    <td><code>/command &lt;operator&gt; &lt;on|off&gt;</code></td>
-                    <td>Change persistent processing state.</td>
-                  </tr>
-                  <tr>
-                    <td><code>section_end</code></td>
-                    <td><code>/end</code></td>
-                    <td>Submit the current paragraph or text section for processing by active operators.</td>
-                  </tr>
-                  <tr>
-                    <td><code>section_cancel</code></td>
-                    <td><code>/cancel</code></td>
-                    <td>Drop the current paragraph or text section without processing it.</td>
-                  </tr>
-                  <tr>
-                    <td><code>literal_next</code></td>
-                    <td><code>literal phrase</code></td>
-                    <td>Treat the next recognized marker phrase as ordinary dictated text.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p>Greek equivalents can be added as aliases:</p>
-            <ul>
-              <li><code>εντολή</code> as an alias for <code>/command</code>.</li>
-              <li><code>τέλος</code> or <code>τέλος ενότητας</code> as aliases for <code>/end</code>.</li>
-              <li><code>άκυρο</code> as an alias for <code>/cancel</code>.</li>
-            </ul>
-            <div class="callout">
-              The existing default guard phrase, <code>τέλος εντολής</code>, should become one alias
-              for <code>section_end</code> in protocol mode rather than staying hard-wired as a
-              refinement-only trigger.
-            </div>
-          </section>
-
-          <section id="operators">
-            <h2>Stateful Operators</h2>
-            <p>
-              <code>/command</code> changes persistent session state. It does not by itself submit
-              text for processing. The current section is submitted when the user says <code>/end</code>.
-            </p>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Spoken command</th>
-                    <th>State change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><code>/command refine on</code></td>
-                    <td>Enable refinement for future submitted sections.</td>
-                  </tr>
-                  <tr>
-                    <td><code>/command refine off</code></td>
-                    <td>Disable refinement.</td>
-                  </tr>
-                  <tr>
-                    <td><code>/command translate on</code></td>
-                    <td>Enable translation for future submitted sections.</td>
-                  </tr>
-                  <tr>
-                    <td><code>/command translate off</code></td>
-                    <td>Disable translation.</td>
-                  </tr>
-                  <tr>
-                    <td><code>/command clipboard on</code></td>
-                    <td>Copy the final processed result of future sections to the clipboard.</td>
-                  </tr>
-                  <tr>
-                    <td><code>/command clipboard off</code></td>
-                    <td>Disable clipboard copy.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <h3>Active pipeline at <code>/end</code></h3>
-            <pre><code>raw section
-  -> refine, if refine is on
-  -> translate, if translate is on
-  -> render / emit final output
-  -> copy final output to clipboard, if clipboard is on</code></pre>
-            <ul>
-              <li>Translation runs on the complete submitted section, not partial words.</li>
-              <li>Greek source text translates to English under the default <code>opposite</code> policy.</li>
-              <li>English source text translates to Greek under the default <code>opposite</code> policy.</li>
-              <li>Language detection runs on the complete section after refinement when refinement is enabled, otherwise on the raw section.</li>
-            </ul>
-          </section>
-
-          <section id="protocol">
-            <h2>Output Protocol</h2>
-            <p>
-              Agent protocol mode should emit JSON Lines. Each line is one complete UTF-8 JSON
-              object.
-            </p>
-            <pre><code>{"type":"session.started","protocol":"mic-tool-ts.voice-agent.v1","seq":1}
-{"type":"state.changed","seq":2,"key":"refine","value":true}
-{"type":"state.changed","seq":3,"key":"translate","value":true,"target_policy":"opposite"}
-{"type":"section.submitted","seq":4,"section_id":"sec_000001","raw_text":"..."}
-{"type":"section.processed","seq":5,"section_id":"sec_000001","operators":["refine","translate"],"raw_text":"...","refined_text":"...","source_language":"el","target_language":"en","output_text":"..."}
-{"type":"clipboard.copied","seq":6,"section_id":"sec_000001"}
-{"type":"section.cancelled","seq":7,"section_id":"sec_000002","reason":"spoken_cancel"}
-{"type":"session.ended","seq":8,"reason":"SIGINT"}</code></pre>
-            <ul>
-              <li><code>seq</code> is monotonically increasing per process.</li>
-              <li><code>section_id</code> is assigned when a section starts accumulating text or when it is submitted.</li>
-              <li>Consumers can rely on <code>section.processed</code> as the event that contains the final user-facing result.</li>
-              <li>State changes are emitted as <code>state.changed</code> events.</li>
-              <li>Marker phrases are removed from <code>raw_text</code>.</li>
-              <li><code>stdout</code> should contain either human transcript text or JSONL protocol events, not both by default.</li>
-            </ul>
-          </section>
-
-          <section id="modes">
-            <h2>User-Facing Modes</h2>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Mode</th>
-                    <th>Behavior</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><code>dictation</code></td>
-                    <td>Human-facing transcript and processed-section output on stdout.</td>
-                  </tr>
-                  <tr>
-                    <td><code>agent-protocol</code></td>
-                    <td>JSONL state and section events on stdout. Human status and logging stay on stderr.</td>
-                  </tr>
-                  <tr>
-                    <td><code>hybrid</code></td>
-                    <td>Plain dictation remains on stdout and protocol events go to an explicit file or pipe target.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="callout success">
-              Recommended initial implementation: ship <code>dictation</code> and <code>agent-protocol</code>
-              first. Add <code>hybrid</code> only when a concrete workflow needs simultaneous human text
-              and machine events.
-            </div>
-          </section>
-
-          <section id="configuration">
-            <h2>Proposed Configuration</h2>
-            <p>All values follow the existing four-tier resolution chain.</p>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>CLI flag</th>
-                    <th>Env var</th>
-                    <th>Default</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><code>--interaction-mode &lt;dictation|agent-protocol|hybrid&gt;</code></td>
-                    <td><code>MIC_TOOL_TS_INTERACTION_MODE</code></td>
-                    <td><code>dictation</code></td>
-                    <td>Keeps current behavior as default.</td>
-                  </tr>
-                  <tr>
-                    <td><code>--command-phrase &lt;phrase&gt;</code></td>
-                    <td><code>MIC_TOOL_TS_COMMAND_PHRASE</code></td>
-                    <td><code>/command</code></td>
-                    <td>Introduces state commands such as <code>/command refine on</code>.</td>
-                  </tr>
-                  <tr>
-                    <td><code>--section-end-phrase &lt;phrase&gt;</code></td>
-                    <td><code>MIC_TOOL_TS_SECTION_END_PHRASE</code></td>
-                    <td><code>/end</code></td>
-                    <td>Submits the current section for processing.</td>
-                  </tr>
-                  <tr>
-                    <td><code>--section-cancel-phrase &lt;phrase&gt;</code></td>
-                    <td><code>MIC_TOOL_TS_SECTION_CANCEL_PHRASE</code></td>
-                    <td><code>/cancel</code></td>
-                    <td>Discards the current section.</td>
-                  </tr>
-                  <tr>
-                    <td><code>--literal-next-phrase &lt;phrase&gt;</code></td>
-                    <td><code>MIC_TOOL_TS_LITERAL_NEXT_PHRASE</code></td>
-                    <td><code>literal phrase</code></td>
-                    <td>Optional escape hatch.</td>
-                  </tr>
-                  <tr>
-                    <td><code>--refine-default &lt;on|off&gt;</code></td>
-                    <td><code>MIC_TOOL_TS_REFINE_DEFAULT</code></td>
-                    <td><code>off</code></td>
-                    <td>Initial <code>refine</code> operator state.</td>
-                  </tr>
-                  <tr>
-                    <td><code>--translate-default &lt;on|off&gt;</code></td>
-                    <td><code>MIC_TOOL_TS_TRANSLATE_DEFAULT</code></td>
-                    <td><code>off</code></td>
-                    <td>Initial <code>translate</code> operator state.</td>
-                  </tr>
-                  <tr>
-                    <td><code>--translation-policy &lt;opposite|to-en|to-el&gt;</code></td>
-                    <td><code>MIC_TOOL_TS_TRANSLATION_POLICY</code></td>
-                    <td><code>opposite</code></td>
-                    <td><code>opposite</code>: Greek to English, English to Greek.</td>
-                  </tr>
-                  <tr>
-                    <td><code>--clipboard-default &lt;on|off&gt;</code></td>
-                    <td><code>MIC_TOOL_TS_CLIPBOARD_DEFAULT</code></td>
-                    <td><code>off</code></td>
-                    <td>Initial clipboard-copy state.</td>
-                  </tr>
-                  <tr>
-                    <td><code>--protocol-output &lt;path&gt;</code></td>
-                    <td><code>MIC_TOOL_TS_PROTOCOL_OUTPUT</code></td>
-                    <td>Required for <code>hybrid</code></td>
-                    <td>Avoids mixed stdout streams.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section id="implementation">
-            <h2>Implementation Sketch</h2>
-            <p>
-              Add a new protocol layer rather than expanding <code>GuardPhraseTurnDetector</code>
-              until it becomes responsible for unrelated concepts.
-            </p>
-            <h3>Recommended modules</h3>
-            <ul>
-              <li><code>src/protocol/types.ts</code>: event types, interaction modes, operator state, marker config.</li>
-              <li><code>src/protocol/markerMatcher.ts</code>: normalized marker matching and marker stripping.</li>
-              <li><code>src/protocol/stateMachine.ts</code>: section capture, state command parsing, <code>/end</code> submit, <code>/cancel</code> discard.</li>
-              <li><code>src/protocol/jsonlWriter.ts</code>: line-oriented protocol sink.</li>
-              <li><code>src/protocol/controller.ts</code>: connects renderer, refiner/translator, clipboard sink, and protocol writer.</li>
-            </ul>
-            <h3>Orchestrator wiring</h3>
-            <ol>
-              <li>Resolve config.</li>
-              <li>Build the base renderer.</li>
-              <li>Build optional LLM refiner.</li>
-              <li>Route finalized STT text through the protocol controller.</li>
-              <li>If a finalized segment contains a state command, update operator state and exclude the marker from section text.</li>
-              <li>If a finalized segment contains <code>/end</code>, submit the accumulated section through the active operator pipeline.</li>
-              <li>If <code>interactionMode === "agent-protocol"</code>, write JSONL events to stdout.</li>
-              <li>Continue sending all diagnostics to stderr.</li>
-            </ol>
-          </section>
-
-          <section id="matching">
-            <h2>Matching Semantics</h2>
-            <p>
-              Use finalized STT text only. Partial text is too unstable and will cause false state
-              transitions.
-            </p>
-            <ul>
-              <li>Use NFD normalization, strip combining marks, lowercase, and collapse punctuation and whitespace for ordinary phrase aliases.</li>
-              <li>Preserve slash-marker intent. <code>/command</code>, <code>/end</code>, and <code>/cancel</code> must not degrade to bare <code>command</code>, <code>end</code>, or <code>cancel</code> matches after punctuation normalization.</li>
-              <li>Match across consecutive final segments with a bounded rolling window.</li>
-              <li>Remove marker phrases and state commands from section payloads.</li>
-              <li>Prefer boundary-like matches: <code>/command</code> at the start of a final segment should be accepted; <code>commandment</code> or <code>cancellation</code> should not match.</li>
-              <li>Emit verbose diagnostics for state transitions without logging secrets.</li>
-            </ul>
-          </section>
-
-          <section id="failures">
-            <h2>Failure Behavior</h2>
-            <ul>
-              <li>If <code>/command</code> has an unknown operator or value, emit a warning and do not change state.</li>
-              <li>If <code>/end</code> is spoken when the current section is empty, emit a no-op diagnostic under verbose mode and do not call the LLM.</li>
-              <li>If refinement or translation fails after <code>/end</code>, emit or render the best available prior value and do not fail the process.</li>
-              <li>If clipboard copy fails, log under verbose and keep the processed output.</li>
-              <li>If shutdown occurs with a non-empty unsubmitted section, emit <code>section.cancelled</code> with reason <code>shutdown</code> before <code>session.ended</code>.</li>
-            </ul>
-          </section>
-
-          <section id="testing">
-            <h2>Testing Plan</h2>
-            <p>Add focused unit tests, not live microphone tests, for the protocol logic.</p>
-            <ul>
-              <li>Marker normalization matches case, accents, punctuation, and cross-final phrases while preserving slash-marker intent.</li>
-              <li><code>/command refine on|off</code>, <code>/command translate on|off</code>, and <code>/command clipboard on|off</code> update operator state.</li>
-              <li><code>/end</code> submits the current section and strips markers from payload.</li>
-              <li><code>/cancel</code> drops the current section and emits <code>section.cancelled</code>.</li>
-              <li>Dictation mode remains compatible with current renderer behavior.</li>
-              <li>Agent protocol mode emits valid JSONL and no carriage-return overwrite artifacts.</li>
-              <li>Refinement success includes <code>refined_text</code>.</li>
-              <li>Translation success includes <code>source_language</code>, <code>target_language</code>, and <code>output_text</code>.</li>
-              <li>Operator failure emits the best available text only and does not exit non-zero.</li>
-              <li>Shutdown with an unsubmitted section emits cancellation.</li>
-            </ul>
-          </section>
-
-          <section id="workflow">
-            <h2>Example Workflow</h2>
-            <h3>Plain dictation remains unchanged</h3>
-            <pre><code>mic-tool-ts</code></pre>
-            <h3>Agent protocol mode</h3>
-            <pre><code>mic-tool-ts --interaction-mode agent-protocol</code></pre>
-            <h3>Example speech</h3>
-            <pre><code>These are notes for later.
-/command refine on.
-/command translate on.
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<h1 id="plan-007-voice-agent-command-protocol">Plan 007: Voice Agent
+Command Protocol</h1>
+<h2 id="status">Status</h2>
+<p>Implemented 2026-05-16. Follow-up additions are also implemented:</p>
+<ul>
+<li><code>command status</code> reports current protocol settings
+without changing state.</li>
+<li>Runtime protocol settings are remembered across graceful restarts in
+<code>~/.tool-agents/mic-tool-ts/state.json</code>.</li>
+</ul>
+<p>HTML preview:
+<code>docs/design/plan-007-voice-agent-command-protocol.html</code>.</p>
+<h2 id="goal">Goal</h2>
+<p>Add a speech-control protocol that lets <code>mic-tool-ts</code> be
+used as an oral input layer for agents while preserving normal
+dictation. The protocol must distinguish four concepts that are
+currently partially coupled:</p>
+<ul>
+<li><strong>Dictation text</strong>: continuous transcript intended for
+a human or plain text sink.</li>
+<li><strong>Text section</strong>: the paragraph or section accumulated
+until the user says <code>command send</code>.</li>
+<li><strong>Operator state</strong>: persistent toggles such as
+<code>refine</code>, <code>translate</code>, and
+<code>clipboard</code>.</li>
+<li><strong>LLM operation</strong>: optional cleanup, translation,
+suggestion, criticism, or another transformation applied to a submitted
+section.</li>
+<li><strong>Remembered protocol settings</strong>: non-secret operator
+state and translation policy restored on the next run unless explicit
+startup config overrides them.</li>
+</ul>
+<h2 id="recommended-approach">Recommended Approach</h2>
+<p>Implement a small state machine above finalized STT text and below
+output rendering. The state machine recognizes explicit spoken markers,
+maintains operator state, reports current settings on
+<code>command status</code>, and submits the current text section when
+<code>command send</code> is spoken.</p>
+<p>The recommended initial state model is:</p>
+<table>
+<colgroup>
+<col style="width: 17%" />
+<col style="width: 21%" />
+<col style="width: 60%" />
+</colgroup>
+<thead>
+<tr>
+<th>State</th>
+<th>Meaning</th>
+<th>Accepted marker actions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>capturing_section</code></td>
+<td>Normal transcription. Finalized non-command text is appended to the
+current section buffer.</td>
+<td><code>command refine|translate|clipboard</code> changes operator
+state; <code>command status</code> reports current settings;
+<code>command send</code> submits the section;
+<code>command cancel</code> discards the section.</td>
+</tr>
+<tr>
+<td><code>processing_section</code></td>
+<td>The submitted section is being processed through active
+operators.</td>
+<td>New speech continues into the next section; processing is
+asynchronous and fail-open.</td>
+</tr>
+</tbody>
+</table>
+<p>Do not infer control intent from natural language. Explicit
+command-prefixed markers are safer, easier to test, and less likely to
+accidentally trigger processing.</p>
+<h2 id="proposed-spoken-markers">Proposed Spoken Markers</h2>
+<p>Defaults should be configurable and should be selected for low
+collision with ordinary dictation.</p>
+<table>
+<colgroup>
+<col style="width: 24%" />
+<col style="width: 48%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Marker</th>
+<th>Default phrase</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>state_command</code></td>
+<td><code>command &lt;operator&gt; [on|off]</code></td>
+<td>Change persistent processing state. Missing <code>on|off</code>
+means <code>on</code>.</td>
+</tr>
+<tr>
+<td><code>status_command</code></td>
+<td><code>command status</code></td>
+<td>Report current operator state, translation policy, and whether an
+unsent section is pending.</td>
+</tr>
+<tr>
+<td><code>section_end</code></td>
+<td><code>command send</code></td>
+<td>Submit the current paragraph or text section for processing by
+active operators.</td>
+</tr>
+<tr>
+<td><code>section_cancel</code></td>
+<td><code>command cancel</code></td>
+<td>Drop the current paragraph or text section without processing
+it.</td>
+</tr>
+<tr>
+<td><code>literal_next</code></td>
+<td><code>literal phrase</code></td>
+<td>Treat the next recognized marker phrase as ordinary dictated
+text.</td>
+</tr>
+</tbody>
+</table>
+<p>Greek equivalents can be added as aliases, for example:</p>
+<ul>
+<li><code>εντολή</code> as an alias for <code>command</code>.</li>
+<li><code>τέλος</code> or <code>τέλος ενότητας</code> as aliases for
+<code>command send</code>.</li>
+<li><code>άκυρο</code> as an alias for <code>command cancel</code>.</li>
+</ul>
+<p>The existing default guard phrase, <code>τέλος εντολής</code>, should
+not remain hard-wired as “end paragraph for refinement” in agent
+protocol mode. It can become one alias for <code>section_end</code>.</p>
+<h2 id="stateful-operators">Stateful Operators</h2>
+<p><code>command &lt;operator&gt;</code> changes a persistent session
+state. It does not by itself submit text for processing.</p>
+<p>Recommended first operators:</p>
+<table>
+<colgroup>
+<col style="width: 53%" />
+<col style="width: 46%" />
+</colgroup>
+<thead>
+<tr>
+<th>Spoken command</th>
+<th>State change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>command refine</code></td>
+<td>Enable refinement for future submitted sections.</td>
+</tr>
+<tr>
+<td><code>command refine off</code></td>
+<td>Disable refinement.</td>
+</tr>
+<tr>
+<td><code>command translate</code></td>
+<td>Enable translation for future submitted sections.</td>
+</tr>
+<tr>
+<td><code>command translate off</code></td>
+<td>Disable translation.</td>
+</tr>
+<tr>
+<td><code>command clipboard</code></td>
+<td>Copy the final processed result of future submitted sections to the
+clipboard.</td>
+</tr>
+<tr>
+<td><code>command clipboard off</code></td>
+<td>Disable clipboard copy.</td>
+</tr>
+<tr>
+<td><code>command status</code></td>
+<td>Report current settings. Does not change state or submit text.</td>
+</tr>
+</tbody>
+</table>
+<p>The active pipeline at <code>command send</code> is:</p>
+<pre class="text"><code>raw section
+  -&gt; refine, if refine is on
+  -&gt; translate, if translate is on
+  -&gt; render / emit final output
+  -&gt; copy final output to clipboard, if clipboard is on</code></pre>
+<p>Translation must run on the complete submitted section, not partial
+words. With the default <code>opposite</code> translation policy:</p>
+<ul>
+<li>Greek source text translates to English.</li>
+<li>English source text translates to Greek.</li>
+<li>Language detection runs on the complete section after refinement
+when refinement is enabled, otherwise on the raw section.</li>
+</ul>
+<h2 id="output-protocol">Output Protocol</h2>
+<p>Introduce an agent protocol output mode that emits JSON Lines. Each
+line is one complete UTF-8 JSON object.</p>
+<p>Recommended event names:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;session.started&quot;</span><span class="fu">,</span><span class="dt">&quot;protocol&quot;</span><span class="fu">:</span><span class="st">&quot;mic-tool-ts.voice-agent.v1&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">1</span><span class="fu">}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;state.changed&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">2</span><span class="fu">,</span><span class="dt">&quot;key&quot;</span><span class="fu">:</span><span class="st">&quot;refine&quot;</span><span class="fu">,</span><span class="dt">&quot;value&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">}</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;state.changed&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">3</span><span class="fu">,</span><span class="dt">&quot;key&quot;</span><span class="fu">:</span><span class="st">&quot;translate&quot;</span><span class="fu">,</span><span class="dt">&quot;value&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">,</span><span class="dt">&quot;target_policy&quot;</span><span class="fu">:</span><span class="st">&quot;opposite&quot;</span><span class="fu">}</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;status.reported&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">4</span><span class="fu">,</span><span class="dt">&quot;operators&quot;</span><span class="fu">:{</span><span class="dt">&quot;refine&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">,</span><span class="dt">&quot;translate&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">,</span><span class="dt">&quot;clipboard&quot;</span><span class="fu">:</span><span class="kw">false</span><span class="fu">},</span><span class="dt">&quot;translation_policy&quot;</span><span class="fu">:</span><span class="st">&quot;opposite&quot;</span><span class="fu">,</span><span class="dt">&quot;pending_section&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">}</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;section.submitted&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">5</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000001&quot;</span><span class="fu">,</span><span class="dt">&quot;raw_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">}</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;section.processed&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">6</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000001&quot;</span><span class="fu">,</span><span class="dt">&quot;operators&quot;</span><span class="fu">:</span><span class="ot">[</span><span class="st">&quot;refine&quot;</span><span class="ot">,</span><span class="st">&quot;translate&quot;</span><span class="ot">]</span><span class="fu">,</span><span class="dt">&quot;raw_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">,</span><span class="dt">&quot;refined_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">,</span><span class="dt">&quot;source_language&quot;</span><span class="fu">:</span><span class="st">&quot;el&quot;</span><span class="fu">,</span><span class="dt">&quot;target_language&quot;</span><span class="fu">:</span><span class="st">&quot;en&quot;</span><span class="fu">,</span><span class="dt">&quot;output_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">}</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;clipboard.copied&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">7</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000001&quot;</span><span class="fu">}</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;section.cancelled&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">8</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000002&quot;</span><span class="fu">,</span><span class="dt">&quot;reason&quot;</span><span class="fu">:</span><span class="st">&quot;spoken_cancel&quot;</span><span class="fu">}</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;session.ended&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">9</span><span class="fu">,</span><span class="dt">&quot;reason&quot;</span><span class="fu">:</span><span class="st">&quot;SIGINT&quot;</span><span class="fu">}</span></span></code></pre></div>
+<p>Rules:</p>
+<ul>
+<li><code>seq</code> is monotonically increasing per process.</li>
+<li><code>section_id</code> is assigned when a section starts
+accumulating text or when it is submitted.</li>
+<li>Consumers can rely on <code>section.processed</code> as the event
+that contains the final user-facing result.</li>
+<li>Marker phrases are removed from <code>raw_text</code>.</li>
+<li>State changes are emitted as <code>state.changed</code> events.</li>
+<li>Status reports are emitted as <code>status.reported</code> events
+and never include secrets.</li>
+<li>Events never contain unescaped newlines outside JSON strings.</li>
+<li><code>stdout</code> should contain either human transcript text or
+JSONL protocol events, not both by default.</li>
+</ul>
+<h2 id="user-facing-modes">User-Facing Modes</h2>
+<p>Add a top-level interaction mode:</p>
+<table>
+<colgroup>
+<col style="width: 37%" />
+<col style="width: 62%" />
+</colgroup>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dictation</code></td>
+<td>Plain transcript/output on stdout.
+<code>command &lt;operator&gt;</code> changes operator state and
+<code>command send</code> submits the current section for human-facing
+processing.</td>
+</tr>
+<tr>
+<td><code>agent-protocol</code></td>
+<td>JSONL state, status, and section events on stdout. Human
+status/logging stays on stderr.</td>
+</tr>
+<tr>
+<td><code>hybrid</code></td>
+<td>Plain dictation remains on stdout and protocol events go to an
+explicit file or pipe target. This mode should require
+<code>--protocol-output</code>; it must not silently mix streams.</td>
+</tr>
+</tbody>
+</table>
+<p>The implemented tool supports all three modes. <code>hybrid</code>
+requires <code>--protocol-output</code> so human transcript text and
+machine JSONL events are not silently mixed.</p>
+<h2 id="proposed-configuration">Proposed Configuration</h2>
+<p>All values follow the existing four-tier resolution chain.</p>
+<table>
+<colgroup>
+<col style="width: 28%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>CLI flag</th>
+<th>Env var</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--interaction-mode &lt;dictation|agent-protocol|hybrid&gt;</code></td>
+<td><code>MIC_TOOL_TS_INTERACTION_MODE</code></td>
+<td><code>dictation</code></td>
+<td>Keeps current behavior as default.</td>
+</tr>
+<tr>
+<td><code>--command-phrase &lt;phrase&gt;</code></td>
+<td><code>MIC_TOOL_TS_COMMAND_PHRASE</code></td>
+<td><code>command</code></td>
+<td>Introduces state commands such as <code>command refine</code>.</td>
+</tr>
+<tr>
+<td><code>--section-end-phrase &lt;phrase&gt;</code></td>
+<td><code>MIC_TOOL_TS_SECTION_END_PHRASE</code></td>
+<td><code>command send</code></td>
+<td>Submits the current section for processing.</td>
+</tr>
+<tr>
+<td><code>--section-cancel-phrase &lt;phrase&gt;</code></td>
+<td><code>MIC_TOOL_TS_SECTION_CANCEL_PHRASE</code></td>
+<td><code>command cancel</code></td>
+<td>Discards the current section.</td>
+</tr>
+<tr>
+<td><code>--literal-next-phrase &lt;phrase&gt;</code></td>
+<td><code>MIC_TOOL_TS_LITERAL_NEXT_PHRASE</code></td>
+<td><code>literal phrase</code></td>
+<td>Optional escape hatch.</td>
+</tr>
+<tr>
+<td><code>--refine-default &lt;on|off&gt;</code></td>
+<td><code>MIC_TOOL_TS_REFINE_DEFAULT</code></td>
+<td><code>off</code></td>
+<td>Initial <code>refine</code> operator state.</td>
+</tr>
+<tr>
+<td><code>--translate-default &lt;on|off&gt;</code></td>
+<td><code>MIC_TOOL_TS_TRANSLATE_DEFAULT</code></td>
+<td><code>off</code></td>
+<td>Initial <code>translate</code> operator state.</td>
+</tr>
+<tr>
+<td><code>--translation-policy &lt;opposite|to-en|to-el&gt;</code></td>
+<td><code>MIC_TOOL_TS_TRANSLATION_POLICY</code></td>
+<td><code>opposite</code></td>
+<td><code>opposite</code>: Greek to English, English to Greek.</td>
+</tr>
+<tr>
+<td><code>--clipboard-default &lt;on|off&gt;</code></td>
+<td><code>MIC_TOOL_TS_CLIPBOARD_DEFAULT</code></td>
+<td><code>off</code></td>
+<td>Initial clipboard-copy state.</td>
+</tr>
+<tr>
+<td><code>--protocol-output &lt;path&gt;</code></td>
+<td><code>MIC_TOOL_TS_PROTOCOL_OUTPUT</code></td>
+<td>required for <code>hybrid</code></td>
+<td>Avoids mixed stdout streams.</td>
+</tr>
+</tbody>
+</table>
+<p>The existing <code>--guard-phrase</code> can be retained for backward
+compatibility, but the new section marker names should become the
+preferred protocol surface.</p>
+<p>Runtime protocol settings are remembered outside the four-tier env
+chain. On graceful shutdown, the tool writes
+<code>~/.tool-agents/mic-tool-ts/state.json</code> with non-secret state
+only:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;version&quot;</span><span class="fu">:</span> <span class="dv">1</span><span class="fu">,</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;saved_at&quot;</span><span class="fu">:</span> <span class="st">&quot;2026-05-16T19:30:00.000Z&quot;</span><span class="fu">,</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;protocol&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;operators&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;refine&quot;</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;translate&quot;</span><span class="fu">:</span> <span class="kw">false</span><span class="fu">,</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;clipboard&quot;</span><span class="fu">:</span> <span class="kw">false</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">},</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;translation_policy&quot;</span><span class="fu">:</span> <span class="st">&quot;opposite&quot;</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p>On startup, saved values apply only when the matching CLI/env setting
+is absent. Explicit <code>--refine-default</code>,
+<code>--translate-default</code>, <code>--clipboard-default</code>, and
+<code>--translation-policy</code> values override saved state.</p>
+<h2 id="implementation-sketch">Implementation Sketch</h2>
+<p>Add a new protocol layer rather than expanding
+<code>GuardPhraseTurnDetector</code> until it becomes responsible for
+unrelated concepts.</p>
+<p>Recommended modules:</p>
+<ul>
+<li><code>src/protocol/types.ts</code>: event types, interaction modes,
+operator state, marker config.</li>
+<li><code>src/protocol/markerMatcher.ts</code>: normalized marker
+matching and marker stripping.</li>
+<li><code>src/protocol/stateMachine.ts</code>: section capture, state
+command parsing, <code>command status</code> reporting,
+<code>command send</code> submit, <code>command cancel</code> discard,
+and settings snapshots.</li>
+<li><code>src/protocol/jsonlWriter.ts</code>: line-oriented protocol
+sink.</li>
+<li><code>src/protocol/controller.ts</code>: connects renderer,
+refiner/translator, clipboard sink, and protocol writer.</li>
+<li><code>src/protocol/settingsStore.ts</code>: loads/saves remembered
+non-secret runtime protocol settings.</li>
+</ul>
+<p>Orchestrator wiring:</p>
+<ol type="1">
+<li>Resolve config.</li>
+<li>Build the base renderer.</li>
+<li>Build optional LLM refiner.</li>
+<li>Route finalized STT text through the protocol controller.</li>
+<li>If a finalized segment contains a state command, update operator
+state and exclude the marker from section text.</li>
+<li>If a finalized segment contains <code>command status</code>, report
+effective settings.</li>
+<li>If a finalized segment contains <code>command send</code>, submit
+the accumulated section through the active operator pipeline.</li>
+<li>If <code>interactionMode === "agent-protocol"</code>, write JSONL
+events to stdout.</li>
+<li>On graceful shutdown, persist remembered protocol settings.</li>
+<li>Continue sending all diagnostics to stderr.</li>
+</ol>
+<h2 id="matching-semantics">Matching Semantics</h2>
+<p>Use finalized STT text only. Partial text is too unstable and will
+cause false state transitions.</p>
+<p>Marker matching should:</p>
+<ul>
+<li>Use the existing normalization style for ordinary phrase aliases:
+NFD, strip combining marks, lowercase, collapse punctuation and
+whitespace.</li>
+<li>Preserve slash-marker intent for explicitly configured slash
+markers. Slash forms MUST NOT degrade to bare words after punctuation
+normalization.</li>
+<li>Match across consecutive final segments, with a bounded rolling
+window.</li>
+<li>Remove marker phrases and state commands from section payloads.</li>
+<li>Prefer boundary-like matches. For example, <code>command</code> at
+the start of a final segment should be accepted;
+<code>commandment</code> or <code>cancellation</code> should not
+match.</li>
+<li>Emit verbose diagnostics for state transitions without logging
+secrets.</li>
+</ul>
+<h2 id="failure-behavior">Failure Behavior</h2>
+<ul>
+<li>If <code>command &lt;operator&gt;</code> has an unknown operator or
+value, emit a warning on stderr (and <code>protocol.warning</code> in
+JSONL mode) and do not change state.</li>
+<li>If <code>command status</code> is spoken, report settings and do not
+change state.</li>
+<li>If <code>command send</code> is spoken when the current section is
+empty, emit a no-op <code>section.empty</code> diagnostic under verbose
+mode and do not call the LLM.</li>
+<li>If refinement or translation fails after <code>command send</code>,
+emit/render the best available prior value and do not fail the
+process.</li>
+<li>If clipboard copy fails, log under verbose and keep the processed
+output.</li>
+<li>If persisted settings are malformed at startup, raise
+<code>InvalidConfigurationError</code> so the user can delete or fix
+<code>state.json</code>.</li>
+<li>If settings cannot be saved during shutdown, warn on stderr and
+continue graceful exit.</li>
+<li>If shutdown occurs with a non-empty unsubmitted section, emit
+<code>section.cancelled</code> with reason <code>shutdown</code> before
+<code>session.ended</code>.</li>
+</ul>
+<h2 id="testing-plan">Testing Plan</h2>
+<p>Add focused unit tests, not live microphone tests, for the protocol
+logic.</p>
+<p>Required tests:</p>
+<ul>
+<li>Marker normalization matches case, accents, punctuation, and
+cross-final phrases while preserving slash-marker intent.</li>
+<li><code>command refine</code>, <code>command translate</code>,
+<code>command clipboard</code>, and their <code>off</code> forms update
+operator state.</li>
+<li><code>command status</code> emits/renders the current restored
+operator state and pending-section flag without mutating state.</li>
+<li><code>command send</code> submits the current section and strips
+markers from payload.</li>
+<li><code>command cancel</code> drops the current section and emits
+<code>section.cancelled</code>.</li>
+<li>Dictation mode remains compatible with current renderer
+behavior.</li>
+<li>Agent protocol mode emits valid JSONL and no carriage-return
+overwrite artifacts.</li>
+<li>Refinement success includes <code>refined_text</code>.</li>
+<li>Translation success includes <code>source_language</code>,
+<code>target_language</code>, and <code>output_text</code>.</li>
+<li>Operator failure emits the best available text only and does not
+exit non-zero.</li>
+<li>Shutdown with an unsubmitted section emits cancellation.</li>
+<li>Runtime settings persistence saves only non-secret protocol
+settings.</li>
+<li>Explicit CLI/env defaults override remembered protocol
+settings.</li>
+</ul>
+<h2 id="documentation-plan">Documentation Plan</h2>
+<p>Update:</p>
+<ul>
+<li><code>README.md</code>: add an “Oral Agent Commands” section with
+examples.</li>
+<li><code>docs/design/configuration-guide.md</code>: document new
+flags/env vars and priority.</li>
+<li><code>docs/design/configuration-guide.md</code>: document remembered
+<code>state.json</code> behavior and override precedence.</li>
+<li><code>docs/tools/mic-tool-ts.md</code>: mention agent protocol
+mode.</li>
+<li><code>docs/design/project-design.md</code>: replace this proposal
+with implemented design details after build.</li>
+<li><code>docs/design/project-functions.md</code>: promote proposed FRs
+to implemented FRs after build.</li>
+</ul>
+<h2 id="example-workflows">Example Workflows</h2>
+<p>Plain dictation remains unchanged:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">mic-tool-ts</span></span></code></pre></div>
+<p>Agent protocol mode:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">mic-tool-ts</span> <span class="at">--interaction-mode</span> agent-protocol</span></code></pre></div>
+<p>Example speech:</p>
+<pre class="text"><code>These are notes for later.
+command refine.
+command translate.
 Open docs design project design and find the LLM refinement section.
-/end.
+command status.
+command send.
 Continue dictating normal notes.</code></pre>
-            <p>
-              The section before <code>/end</code> is processed through the active pipeline:
-              refine first, then translate. The downstream agent consumes
-              <code>section.processed</code> and ignores ambient dictation events unless it wants
-              context.
-            </p>
-            <div class="callout success">
-              Recommendation: build this as a protocol layer with explicit operator state,
-              <code>/end</code> section submission, and JSONL events. Keep dictation as the default,
-              make protocol events opt-in, and let active operators process complete submitted
-              sections only.
-            </div>
-          </section>
-        </main>
-      </div>
-
-      <footer class="footer">
-        <p>
-          Source document:
-          <code>docs/design/plan-007-voice-agent-command-protocol.md</code>.
-          This HTML companion is a static inspection view.
-        </p>
-      </footer>
-    </div>
-  </body>
+<p>The section between the state commands and <code>command send</code>
+is processed through the active pipeline: refine first, then translate.
+The downstream agent consumes <code>section.processed</code> and ignores
+ambient dictation events unless it wants context.</p>
+<h2 id="recommendation">Recommendation</h2>
+<p>Build this as a protocol layer with explicit operator state,
+<code>command status</code> reporting, <code>command send</code> section
+submission, remembered non-secret runtime settings, and JSONL events. Do
+not expand the existing guard phrase into a general-purpose command
+parser. Keep dictation as the default, make protocol events opt-in, and
+let active operators process complete submitted sections only.</p>
+</body>
 </html>

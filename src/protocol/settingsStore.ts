@@ -166,9 +166,9 @@ function validateStateFile(value: unknown, path: string): PersistedStateFile {
     saved_at: value.saved_at,
     protocol: {
       operators: {
-        refine: operators.refine,
-        translate: operators.translate,
-        clipboard: operators.clipboard,
+        refine: operators.refine as boolean,
+        translate: operators.translate as boolean,
+        clipboard: operators.clipboard as boolean,
       },
       translation_policy: protocol.translation_policy as TranslationPolicy,
     },

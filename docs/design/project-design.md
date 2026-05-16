@@ -1411,12 +1411,13 @@ Configuration keys:
 | `--clipboard-default <on|off>` | `MIC_TOOL_TS_CLIPBOARD_DEFAULT` | `off` |
 | `--protocol-output <path>` | `MIC_TOOL_TS_PROTOCOL_OUTPUT` | required for `hybrid` |
 
-### 17.6 Proposed module layout
+### 17.6 Implemented module layout
 - `src/protocol/types.ts` — event types, interaction modes, operator state, marker config.
 - `src/protocol/markerMatcher.ts` — normalized marker matching and marker stripping while preserving slash-marker intent.
-- `src/protocol/stateMachine.ts` — section capture, state command parsing, `command send` submit, `command cancel` discard, shutdown cancellation.
+- `src/protocol/stateMachine.ts` — section capture, state command parsing, `command status` report, `command send` submit, `command cancel` discard, shutdown cancellation, and protocol settings snapshots.
 - `src/protocol/jsonlWriter.ts` — JSONL protocol sink with monotonic `seq` values.
 - `src/protocol/controller.ts` — connects renderer, refiner/translator, clipboard sink, and protocol writer.
+- `src/protocol/settingsStore.ts` — persists and restores non-secret runtime protocol settings in `~/.tool-agents/mic-tool-ts/state.json`.
 
 The orchestrator constructs `VoiceAgentProtocolController` and routes all finalized STT text through it. In `agent-protocol` mode, partial text and human transcript output are suppressed on stdout; only JSONL protocol events are written there. In `dictation` and `hybrid`, cleaned visible transcript text is still rendered through `StdoutRenderer`.
 
@@ -1427,6 +1428,29 @@ The orchestrator constructs `VoiceAgentProtocolController` and routes all finali
 ```text
 [mic-tool-ts] status: refine=on, translate=off, clipboard=off, translation_policy=opposite, pending_section=yes
 ```
+
+### 17.8 Remembered protocol settings
+
+Runtime protocol settings are persisted separately from configuration and secrets. `src/protocol/settingsStore.ts` owns the state file at `~/.tool-agents/mic-tool-ts/state.json`:
+
+```json
+{
+  "version": 1,
+  "saved_at": "2026-05-16T19:30:00.000Z",
+  "protocol": {
+    "operators": {
+      "refine": true,
+      "translate": false,
+      "clipboard": false
+    },
+    "translation_policy": "opposite"
+  }
+}
+```
+
+The file intentionally excludes API keys, provider endpoints, prompts, transcript text, section payloads, and processed output. On graceful shutdown, `main()` asks `VoiceAgentProtocolController` for `settingsSnapshot()` after `endSession()` and writes the snapshot. On startup, `main()` loads the persisted state and applies it through `applyPersistedProtocolSettings()`. Each persisted value is used only when the corresponding startup setting came from a built-in default. Explicit CLI flags and env-chain values for `--refine-default`, `--translate-default`, `--clipboard-default`, and `--translation-policy` override saved state.
+
+The store creates the per-user tool folder with mode `0700` and writes `state.json` with mode `0600`. Malformed saved state is treated as configuration corruption and raises `InvalidConfigurationError`; shutdown write failures are reported to stderr but do not block graceful exit.
 
 ---
 

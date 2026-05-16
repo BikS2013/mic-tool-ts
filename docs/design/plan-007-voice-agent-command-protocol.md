@@ -2,7 +2,10 @@
 
 ## Status
 
-Implemented 2026-05-16.
+Implemented 2026-05-16. Follow-up additions are also implemented:
+
+- `command status` reports current protocol settings without changing state.
+- Runtime protocol settings are remembered across graceful restarts in `~/.tool-agents/mic-tool-ts/state.json`.
 
 HTML preview: `docs/design/plan-007-voice-agent-command-protocol.html`.
 
@@ -14,16 +17,17 @@ Add a speech-control protocol that lets `mic-tool-ts` be used as an oral input l
 - **Text section**: the paragraph or section accumulated until the user says `command send`.
 - **Operator state**: persistent toggles such as `refine`, `translate`, and `clipboard`.
 - **LLM operation**: optional cleanup, translation, suggestion, criticism, or another transformation applied to a submitted section.
+- **Remembered protocol settings**: non-secret operator state and translation policy restored on the next run unless explicit startup config overrides them.
 
 ## Recommended Approach
 
-Implement a small state machine above finalized STT text and below output rendering. The state machine should recognize explicit spoken markers, maintain operator state, and submit the current text section when `command send` is spoken.
+Implement a small state machine above finalized STT text and below output rendering. The state machine recognizes explicit spoken markers, maintains operator state, reports current settings on `command status`, and submits the current text section when `command send` is spoken.
 
 The recommended initial state model is:
 
 | State | Meaning | Accepted marker actions |
 |-------|---------|-------------------------|
-| `capturing_section` | Normal transcription. Finalized non-command text is appended to the current section buffer. | `command refine|translate|clipboard` changes operator state; `command send` submits the section; `command cancel` discards the section. |
+| `capturing_section` | Normal transcription. Finalized non-command text is appended to the current section buffer. | `command refine|translate|clipboard` changes operator state; `command status` reports current settings; `command send` submits the section; `command cancel` discards the section. |
 | `processing_section` | The submitted section is being processed through active operators. | New speech continues into the next section; processing is asynchronous and fail-open. |
 
 Do not infer control intent from natural language. Explicit command-prefixed markers are safer, easier to test, and less likely to accidentally trigger processing.
@@ -35,6 +39,7 @@ Defaults should be configurable and should be selected for low collision with or
 | Marker | Default phrase | Purpose |
 |--------|----------------|---------|
 | `state_command` | `command <operator> [on|off]` | Change persistent processing state. Missing `on|off` means `on`. |
+| `status_command` | `command status` | Report current operator state, translation policy, and whether an unsent section is pending. |
 | `section_end` | `command send` | Submit the current paragraph or text section for processing by active operators. |
 | `section_cancel` | `command cancel` | Drop the current paragraph or text section without processing it. |
 | `literal_next` | `literal phrase` | Treat the next recognized marker phrase as ordinary dictated text. |
@@ -61,6 +66,7 @@ Recommended first operators:
 | `command translate off` | Disable translation. |
 | `command clipboard` | Copy the final processed result of future submitted sections to the clipboard. |
 | `command clipboard off` | Disable clipboard copy. |
+| `command status` | Report current settings. Does not change state or submit text. |
 
 The active pipeline at `command send` is:
 
@@ -88,11 +94,12 @@ Recommended event names:
 {"type":"session.started","protocol":"mic-tool-ts.voice-agent.v1","seq":1}
 {"type":"state.changed","seq":2,"key":"refine","value":true}
 {"type":"state.changed","seq":3,"key":"translate","value":true,"target_policy":"opposite"}
-{"type":"section.submitted","seq":4,"section_id":"sec_000001","raw_text":"..."}
-{"type":"section.processed","seq":5,"section_id":"sec_000001","operators":["refine","translate"],"raw_text":"...","refined_text":"...","source_language":"el","target_language":"en","output_text":"..."}
-{"type":"clipboard.copied","seq":6,"section_id":"sec_000001"}
-{"type":"section.cancelled","seq":7,"section_id":"sec_000002","reason":"spoken_cancel"}
-{"type":"session.ended","seq":8,"reason":"SIGINT"}
+{"type":"status.reported","seq":4,"operators":{"refine":true,"translate":true,"clipboard":false},"translation_policy":"opposite","pending_section":true}
+{"type":"section.submitted","seq":5,"section_id":"sec_000001","raw_text":"..."}
+{"type":"section.processed","seq":6,"section_id":"sec_000001","operators":["refine","translate"],"raw_text":"...","refined_text":"...","source_language":"el","target_language":"en","output_text":"..."}
+{"type":"clipboard.copied","seq":7,"section_id":"sec_000001"}
+{"type":"section.cancelled","seq":8,"section_id":"sec_000002","reason":"spoken_cancel"}
+{"type":"session.ended","seq":9,"reason":"SIGINT"}
 ```
 
 Rules:
@@ -102,6 +109,7 @@ Rules:
 - Consumers can rely on `section.processed` as the event that contains the final user-facing result.
 - Marker phrases are removed from `raw_text`.
 - State changes are emitted as `state.changed` events.
+- Status reports are emitted as `status.reported` events and never include secrets.
 - Events never contain unescaped newlines outside JSON strings.
 - `stdout` should contain either human transcript text or JSONL protocol events, not both by default.
 
@@ -112,10 +120,10 @@ Add a top-level interaction mode:
 | Mode | Behavior |
 |------|----------|
 | `dictation` | Plain transcript/output on stdout. `command <operator>` changes operator state and `command send` submits the current section for human-facing processing. |
-| `agent-protocol` | JSONL state and section events on stdout. Human status/logging stays on stderr. |
+| `agent-protocol` | JSONL state, status, and section events on stdout. Human status/logging stays on stderr. |
 | `hybrid` | Plain dictation remains on stdout and protocol events go to an explicit file or pipe target. This mode should require `--protocol-output`; it must not silently mix streams. |
 
-Recommended initial implementation: ship `dictation` and `agent-protocol` first. Add `hybrid` only if a concrete workflow needs simultaneous human text and machine events.
+The implemented tool supports all three modes. `hybrid` requires `--protocol-output` so human transcript text and machine JSONL events are not silently mixed.
 
 ## Proposed Configuration
 
@@ -136,6 +144,25 @@ All values follow the existing four-tier resolution chain.
 
 The existing `--guard-phrase` can be retained for backward compatibility, but the new section marker names should become the preferred protocol surface.
 
+Runtime protocol settings are remembered outside the four-tier env chain. On graceful shutdown, the tool writes `~/.tool-agents/mic-tool-ts/state.json` with non-secret state only:
+
+```json
+{
+  "version": 1,
+  "saved_at": "2026-05-16T19:30:00.000Z",
+  "protocol": {
+    "operators": {
+      "refine": true,
+      "translate": false,
+      "clipboard": false
+    },
+    "translation_policy": "opposite"
+  }
+}
+```
+
+On startup, saved values apply only when the matching CLI/env setting is absent. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, and `--translation-policy` values override saved state.
+
 ## Implementation Sketch
 
 Add a new protocol layer rather than expanding `GuardPhraseTurnDetector` until it becomes responsible for unrelated concepts.
@@ -144,9 +171,10 @@ Recommended modules:
 
 - `src/protocol/types.ts`: event types, interaction modes, operator state, marker config.
 - `src/protocol/markerMatcher.ts`: normalized marker matching and marker stripping.
-- `src/protocol/stateMachine.ts`: section capture, state command parsing, `command send` submit, `command cancel` discard.
+- `src/protocol/stateMachine.ts`: section capture, state command parsing, `command status` reporting, `command send` submit, `command cancel` discard, and settings snapshots.
 - `src/protocol/jsonlWriter.ts`: line-oriented protocol sink.
 - `src/protocol/controller.ts`: connects renderer, refiner/translator, clipboard sink, and protocol writer.
+- `src/protocol/settingsStore.ts`: loads/saves remembered non-secret runtime protocol settings.
 
 Orchestrator wiring:
 
@@ -155,9 +183,11 @@ Orchestrator wiring:
 3. Build optional LLM refiner.
 4. Route finalized STT text through the protocol controller.
 5. If a finalized segment contains a state command, update operator state and exclude the marker from section text.
-6. If a finalized segment contains `command send`, submit the accumulated section through the active operator pipeline.
-7. If `interactionMode === "agent-protocol"`, write JSONL events to stdout.
-8. Continue sending all diagnostics to stderr.
+6. If a finalized segment contains `command status`, report effective settings.
+7. If a finalized segment contains `command send`, submit the accumulated section through the active operator pipeline.
+8. If `interactionMode === "agent-protocol"`, write JSONL events to stdout.
+9. On graceful shutdown, persist remembered protocol settings.
+10. Continue sending all diagnostics to stderr.
 
 ## Matching Semantics
 
@@ -175,9 +205,12 @@ Marker matching should:
 ## Failure Behavior
 
 - If `command <operator>` has an unknown operator or value, emit a warning on stderr (and `protocol.warning` in JSONL mode) and do not change state.
+- If `command status` is spoken, report settings and do not change state.
 - If `command send` is spoken when the current section is empty, emit a no-op `section.empty` diagnostic under verbose mode and do not call the LLM.
 - If refinement or translation fails after `command send`, emit/render the best available prior value and do not fail the process.
 - If clipboard copy fails, log under verbose and keep the processed output.
+- If persisted settings are malformed at startup, raise `InvalidConfigurationError` so the user can delete or fix `state.json`.
+- If settings cannot be saved during shutdown, warn on stderr and continue graceful exit.
 - If shutdown occurs with a non-empty unsubmitted section, emit `section.cancelled` with reason `shutdown` before `session.ended`.
 
 ## Testing Plan
@@ -188,6 +221,7 @@ Required tests:
 
 - Marker normalization matches case, accents, punctuation, and cross-final phrases while preserving slash-marker intent.
 - `command refine`, `command translate`, `command clipboard`, and their `off` forms update operator state.
+- `command status` emits/renders the current restored operator state and pending-section flag without mutating state.
 - `command send` submits the current section and strips markers from payload.
 - `command cancel` drops the current section and emits `section.cancelled`.
 - Dictation mode remains compatible with current renderer behavior.
@@ -196,6 +230,8 @@ Required tests:
 - Translation success includes `source_language`, `target_language`, and `output_text`.
 - Operator failure emits the best available text only and does not exit non-zero.
 - Shutdown with an unsubmitted section emits cancellation.
+- Runtime settings persistence saves only non-secret protocol settings.
+- Explicit CLI/env defaults override remembered protocol settings.
 
 ## Documentation Plan
 
@@ -203,6 +239,7 @@ Update:
 
 - `README.md`: add an "Oral Agent Commands" section with examples.
 - `docs/design/configuration-guide.md`: document new flags/env vars and priority.
+- `docs/design/configuration-guide.md`: document remembered `state.json` behavior and override precedence.
 - `docs/tools/mic-tool-ts.md`: mention agent protocol mode.
 - `docs/design/project-design.md`: replace this proposal with implemented design details after build.
 - `docs/design/project-functions.md`: promote proposed FRs to implemented FRs after build.
@@ -228,6 +265,7 @@ These are notes for later.
 command refine.
 command translate.
 Open docs design project design and find the LLM refinement section.
+command status.
 command send.
 Continue dictating normal notes.
 ```
@@ -236,4 +274,4 @@ The section between the state commands and `command send` is processed through t
 
 ## Recommendation
 
-Build this as a protocol layer with explicit operator state, `command send` section submission, and JSONL events. Do not expand the existing guard phrase into a general-purpose command parser. Keep dictation as the default, make protocol events opt-in, and let active operators process complete submitted sections only.
+Build this as a protocol layer with explicit operator state, `command status` reporting, `command send` section submission, remembered non-secret runtime settings, and JSONL events. Do not expand the existing guard phrase into a general-purpose command parser. Keep dictation as the default, make protocol events opt-in, and let active operators process complete submitted sections only.

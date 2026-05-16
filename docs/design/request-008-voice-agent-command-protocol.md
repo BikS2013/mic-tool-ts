@@ -72,10 +72,24 @@ Out of scope for this proposal:
 
 ## Open Questions
 
-- Should section events be emitted to `stdout` in protocol mode, or should the tool support a separate `--protocol-output <path>` target?
-- Should any operators be enabled by default, or should all operator state begin as off?
-- Should processed-section events include every intermediate value (`raw_text`, `refined_text`, `translated_text`) or only the final selected output plus audit metadata?
-- Should `/end` also copy raw text when no operators are active and clipboard is off, or should it only emit/render a section boundary?
+- Resolved in implementation: `agent-protocol` writes JSONL events to stdout; `hybrid` requires `--protocol-output <path>` and writes JSONL there while keeping human text on stdout.
+- Resolved in implementation: operator defaults begin off unless set by CLI/env or restored from remembered non-secret runtime state.
+- Resolved in implementation: `section.processed` includes the raw text, final output, and intermediate fields such as `refined_text`, `source_language`, and `target_language` when applicable.
+- Resolved in implementation: `command send` processes through the active operators. If no operators are active and clipboard is off, it submits/processes the section as raw output without copying.
+
+## Implementation Update
+
+The protocol is implemented with command-prefixed spoken markers:
+
+- `command refine`, `command translate`, and `command clipboard` toggle persistent operators; adding `off` disables an operator.
+- `command status` reports the current operator state, translation policy, and whether an unsent section is pending.
+- `command send` submits the current section for processing.
+- `command cancel` discards the current section.
+- `literal phrase` treats the next recognized marker as dictated text.
+
+Protocol events include `session.started`, `state.changed`, `status.reported`, `section.submitted`, `section.processed`, `clipboard.copied`, `section.cancelled`, `protocol.warning`, and `session.ended`.
+
+Runtime protocol settings are remembered across graceful restarts in `~/.tool-agents/mic-tool-ts/state.json`. The file stores only non-secret operator state and `translation_policy`; explicit CLI/env defaults override the saved state.
 
 ## Original Request
 

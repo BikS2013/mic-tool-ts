@@ -183,6 +183,9 @@ Agent protocol mode MUST emit one UTF-8 JSON object per line with monotonically 
 ### FR-25 — Complete-section operator pipeline
 Operators MUST run only on complete submitted sections, never partial words. The active pipeline at `command send` is raw section → refine if enabled → translate if enabled → render or emit final output → copy to clipboard if enabled. The default translation policy translates Greek source text to English and English source text to Greek, with language detection based on the complete submitted section.
 
+### FR-26 — Remembered protocol settings
+The tool MUST remember non-secret voice-agent protocol settings across graceful restarts. On shutdown it MUST persist the current `refine`, `translate`, `clipboard`, and `translation_policy` values to `~/.tool-agents/mic-tool-ts/state.json` using file mode `0600` in a `0700` per-user tool folder. On startup it MUST restore those values when the corresponding CLI/env default was not explicitly configured. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, and `--translation-policy` values MUST override saved state. The persisted file MUST NOT contain API keys, provider endpoints, prompts, transcript text, or processed section content. Invalid persisted state at startup MUST raise a typed configuration error.
+
 ## Non-Functional Requirements — Voice Agent Command Protocol
 
 ### NFR-11 — Stream separation

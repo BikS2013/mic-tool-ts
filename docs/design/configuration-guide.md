@@ -31,6 +31,7 @@ Notes:
 - `mic-tool-ts` never mutates `process.env`. The chain is read-only.
 - The two `.env` files are optional. Missing files are not errors; malformed files (e.g. unterminated quote) raise `InvalidConfigurationError` so you are never silently deprived of a value you thought was loaded.
 - Run with `--verbose` to see which source supplied the active STT provider API key. The value itself is never logged.
+- Remembered runtime protocol settings are not part of this four-tier configuration chain. They are restored from `~/.tool-agents/mic-tool-ts/state.json` after config resolution, and only for protocol settings that still came from built-in defaults.
 
 ### Example resolution
 
@@ -66,6 +67,8 @@ The resolver yields:
 ## 2. Parameter reference
 
 The table below is the complete contract. The "Default" column shows the value used when neither a flag nor any env-var tier supplies a value.
+
+For `--refine-default`, `--translate-default`, `--clipboard-default`, and `--translation-policy`, the built-in default may be replaced by remembered runtime state from `~/.tool-agents/mic-tool-ts/state.json`. Explicit CLI or env values still take priority over remembered state.
 
 | CLI flag                            | Env var                                | Default                                              | Required? |
 |-------------------------------------|----------------------------------------|------------------------------------------------------|-----------|
@@ -239,6 +242,7 @@ Provider-specific env vars (consulted only when `--refine` is on AND `--llm-prov
 - **Markers**: `MIC_TOOL_TS_COMMAND_PHRASE`, `MIC_TOOL_TS_SECTION_END_PHRASE`, `MIC_TOOL_TS_SECTION_CANCEL_PHRASE`, and `MIC_TOOL_TS_LITERAL_NEXT_PHRASE` must be non-empty. Defaults are `command`, `command send`, `command cancel`, and `literal phrase`.
 - **Operators**: `MIC_TOOL_TS_REFINE_DEFAULT`, `MIC_TOOL_TS_TRANSLATE_DEFAULT`, and `MIC_TOOL_TS_CLIPBOARD_DEFAULT` set the initial persistent state for section processing. During a session, speak `command refine`, `command translate`, or `command clipboard` to enable an operator; add `off` to disable it.
 - **Translation**: `MIC_TOOL_TS_TRANSLATION_POLICY` is one of `opposite`, `to-en`, or `to-el`. `opposite` translates Greek sections to English and English sections to Greek using simple complete-section language detection.
+- **Remembered runtime state**: on graceful shutdown, the tool writes `~/.tool-agents/mic-tool-ts/state.json` with only non-secret protocol state: `refine`, `translate`, `clipboard`, and `translation_policy`. At startup, saved values are restored only when the corresponding CLI/env default is absent. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, or `--translation-policy` values override the saved state.
 - **Stream separation**: if JSONL uses stdout (`agent-protocol`), human transcript text is not written to stdout. `hybrid` requires `MIC_TOOL_TS_PROTOCOL_OUTPUT` so streams are not silently mixed.
 
 ### 3.18 `AZURE_OPENAI_API_KEY` — Azure OpenAI key
@@ -283,7 +287,8 @@ A canonical setup for the recommended secrets-grade per-user store:
 ```
 ~/.tool-agents/                            # mode 0700 (only you can read)
 └── mic-tool-ts/                              # mode 0700
-    └── .env                               # mode 0600
+    ├── .env                               # mode 0600
+    └── state.json                         # mode 0600, non-secret runtime protocol state
 
 # .env contents (example):
 SONIOX_API_KEY=sk_real_key_here
@@ -305,7 +310,7 @@ chmod 0600 ~/.tool-agents/mic-tool-ts/.env
 # then edit the file in your preferred editor
 ```
 
-`mic-tool-ts` does NOT create this folder for you — that is a deliberate choice (no runtime side-effects on first run; the user controls the file's existence and permissions).
+`mic-tool-ts` creates `~/.tool-agents/mic-tool-ts/state.json` when it saves remembered protocol settings. It does not create or populate `.env`; you still own secret setup and review.
 
 For non-secret project-specific overrides (e.g. `MIC_TOOL_TS_LANGUAGES=pt-BR,en` for a Portuguese project), use a project-local `<cwd>/.env`. Do NOT put secrets in this file if the project is under version control.
 

@@ -50,10 +50,16 @@ import { warnAboutExpiry } from "./config/expiry.js";
 import { MicToolError } from "./errors.js";
 import { VoiceAgentProtocolController } from "./protocol/controller.js";
 import { JsonlProtocolWriter } from "./protocol/jsonlWriter.js";
-import type { ProtocolWriter } from "./protocol/types.js";
+import type { ProtocolRuntimeConfig, ProtocolWriter } from "./protocol/types.js";
+import {
+  applyPersistedProtocolSettings,
+  loadPersistedProtocolSettings,
+  savePersistedProtocolSettings,
+} from "./protocol/settingsStore.js";
 
 const TRANSLATION_SYSTEM_PROMPT =
   "You are a translation assistant for live dictated agent commands. Translate the user's text to the requested target language. Preserve technical terms, filenames, command names, and code identifiers. Respond with ONLY the translated text — no preamble, no quotes, no markdown, no explanation.";
+const TOOL_NAME = "mic-tool-ts";
 
 /**
  * Entry point. Returns a numeric exit code; never calls `process.exit`.
@@ -91,6 +97,19 @@ export async function main(argv: string[]): Promise<number> {
     );
   }
 
+  let protocolConfig: ProtocolRuntimeConfig;
+  try {
+    const persisted = loadPersistedProtocolSettings({ toolName: TOOL_NAME });
+    protocolConfig = applyPersistedProtocolSettings(config.protocol, persisted);
+    if (config.verbose && persisted !== null) {
+      process.stderr.write(
+        `[mic-tool-ts] restored protocol settings: refine=${protocolConfig.initialOperators.refine ? "on" : "off"}, translate=${protocolConfig.initialOperators.translate ? "on" : "off"}, clipboard=${protocolConfig.initialOperators.clipboard ? "on" : "off"}, translation_policy=${protocolConfig.translationPolicy}\n`,
+      );
+    }
+  } catch (err) {
+    return handleTopLevelError(err);
+  }
+
   // ----- Step 2: build the renderer/protocol stack (sync; cannot fail) ----
   const baseRenderer = new StdoutRenderer({
     mode: config.outputMode,
@@ -118,14 +137,14 @@ export async function main(argv: string[]): Promise<number> {
     }
     return handleTopLevelError(err);
   }
-  const protocolWriter = createProtocolWriter(config);
+  const protocolWriter = createProtocolWriter(protocolConfig);
   const renderer = new VoiceAgentProtocolController({
-    mode: config.protocol.interactionMode,
+    mode: protocolConfig.interactionMode,
     renderer: baseRenderer,
     writer: protocolWriter,
-    markers: config.protocol.markers,
-    initialOperators: config.protocol.initialOperators,
-    translationPolicy: config.protocol.translationPolicy,
+    markers: protocolConfig.markers,
+    initialOperators: protocolConfig.initialOperators,
+    translationPolicy: protocolConfig.translationPolicy,
     verbose: config.verbose,
     refiner,
     translator,
@@ -199,6 +218,7 @@ export async function main(argv: string[]): Promise<number> {
       // 3. Renderer cleanup — synchronous, must not throw.
       try {
         await renderer.endSession(reason);
+        persistProtocolSettings(renderer, config.verbose);
         renderer.dispose();
       } catch (err) {
         recordAsyncError(err);
@@ -360,16 +380,35 @@ function handleTopLevelError(err: unknown): number {
   return 1;
 }
 
-function createProtocolWriter(config: ResolvedConfig): ProtocolWriter | undefined {
-  if (config.protocol.interactionMode === "agent-protocol") {
+function createProtocolWriter(protocol: ProtocolRuntimeConfig): ProtocolWriter | undefined {
+  if (protocol.interactionMode === "agent-protocol") {
     return new JsonlProtocolWriter({ out: process.stdout });
   }
-  if (config.protocol.interactionMode === "hybrid") {
-    const out = createWriteStream(config.protocol.protocolOutput as string, {
+  if (protocol.interactionMode === "hybrid") {
+    const out = createWriteStream(protocol.protocolOutput as string, {
       flags: "a",
       encoding: "utf8",
     });
     return new JsonlProtocolWriter({ out, closeOnEnd: true });
   }
   return undefined;
+}
+
+function persistProtocolSettings(
+  controller: VoiceAgentProtocolController,
+  verbose: boolean,
+): void {
+  try {
+    savePersistedProtocolSettings(controller.settingsSnapshot(), {
+      toolName: TOOL_NAME,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `[mic-tool-ts] WARNING: failed to persist protocol settings: ${message}\n`,
+    );
+    if (verbose && err instanceof Error && err.stack !== undefined) {
+      process.stderr.write(`${err.stack}\n`);
+    }
+  }
 }

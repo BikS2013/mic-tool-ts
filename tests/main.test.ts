@@ -72,6 +72,8 @@ let fakeRenderer: FakeRenderer;
 
 // Controls what resolveConfig returns or throws.
 let resolveConfigImpl: (argv: string[]) => unknown;
+let loadPersistedProtocolSettingsMock: ReturnType<typeof vi.fn>;
+let savePersistedProtocolSettingsMock: ReturnType<typeof vi.fn>;
 
 // --------------------------------------------------------------------------
 // Mocks
@@ -106,6 +108,17 @@ vi.mock("../src/render/renderer.js", () => ({
     refined(t: string) { fakeRenderer.refined(t); }
     dispose() { fakeRenderer.dispose(); }
   },
+}));
+
+vi.mock("../src/protocol/settingsStore.js", () => ({
+  applyPersistedProtocolSettings: (
+    protocol: unknown,
+    persisted: unknown,
+  ) => protocol,
+  loadPersistedProtocolSettings: (...args: unknown[]) =>
+    loadPersistedProtocolSettingsMock(...args),
+  savePersistedProtocolSettings: (...args: unknown[]) =>
+    savePersistedProtocolSettingsMock(...args),
 }));
 
 // Import main AFTER mocks are set up.
@@ -153,6 +166,14 @@ const GOOD_CONFIG: ResolvedConfig = Object.freeze({
       clipboard: false,
     }),
     translationPolicy: "opposite" as const,
+    settingSources: Object.freeze({
+      operators: Object.freeze({
+        refine: "default" as const,
+        translate: "default" as const,
+        clipboard: "default" as const,
+      }),
+      translationPolicy: "default" as const,
+    }),
   }),
   llm: Object.freeze({
     enabled: false,
@@ -186,6 +207,8 @@ beforeEach(() => {
   fakeMic = new FakeMicSource();
   fakeTranscriber = new FakeTranscriber();
   fakeRenderer = new FakeRenderer();
+  loadPersistedProtocolSettingsMock = vi.fn(() => null);
+  savePersistedProtocolSettingsMock = vi.fn();
   setupGoodConfig();
   vi.useFakeTimers();
 });
@@ -227,6 +250,7 @@ describe("main() — happy path", () => {
     expect(fakeTranscriber.onFinal).toHaveBeenCalledOnce();
     expect(fakeTranscriber.onError).toHaveBeenCalledOnce();
     expect(fakeRenderer.dispose).toHaveBeenCalledOnce();
+    expect(savePersistedProtocolSettingsMock).toHaveBeenCalledOnce();
   });
 
   it("forwards partial and final callbacks to the renderer", async () => {

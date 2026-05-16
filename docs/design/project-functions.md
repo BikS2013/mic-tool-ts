@@ -175,16 +175,19 @@ The tool MUST support `--interaction-mode dictation|agent-protocol|hybrid` / `MI
 The protocol MUST recognize configurable spoken markers for state commands, section submission, section cancellation, and literal-marker escape, with defaults `command`, `command send`, `command cancel`, and `literal phrase`. Marker matching MUST run on finalized STT text only. Slash-marker intent MUST be preserved for explicitly configured slash markers so they do not degrade to bare-word matches after punctuation normalization.
 
 ### FR-23 — Operator state and section processing
-The protocol MUST maintain persistent operator state for `refine`, `translate`, and `clipboard`. `command <operator>` enables the operator, and `command <operator> off` disables it. `command status` reports the current operator state, translation policy, and whether an unsent section is pending without changing operator state. `command send` submits the current paragraph or text section for processing by the active operators. `command cancel` drops the current section without processing. Marker phrases and state commands MUST be removed from section payloads.
+The protocol MUST maintain persistent operator state for `refine`, `translate`, `clipboard`, and `input`. `command <operator>` enables the operator, and `command <operator> off` disables it. `command status` reports the current operator state, translation policy, and whether an unsent section is pending without changing operator state. `command send` submits the current paragraph or text section for processing by the active operators. `command cancel` drops the current section without processing. Marker phrases and state commands MUST be removed from section payloads.
 
 ### FR-24 — JSONL agent events
-Agent protocol mode MUST emit one UTF-8 JSON object per line with monotonically increasing `seq` values. Downstream agents can act on `session.started`, `state.changed`, `status.reported`, `section.submitted`, `section.processed`, `section.cancelled`, `clipboard.copied`, `protocol.warning`, and `session.ended` events without parsing free-form transcript text.
+Agent protocol mode MUST emit one UTF-8 JSON object per line with monotonically increasing `seq` values. Downstream agents can act on `session.started`, `state.changed`, `status.reported`, `section.submitted`, `section.processed`, `section.cancelled`, `clipboard.copied`, `input.sent`, `protocol.warning`, and `session.ended` events without parsing free-form transcript text.
 
 ### FR-25 — Complete-section operator pipeline
-Operators MUST run only on complete submitted sections, never partial words. The active pipeline at `command send` is raw section → refine if enabled → translate if enabled → render or emit final output → copy to clipboard if enabled. The default translation policy translates Greek source text to English and English source text to Greek, with language detection based on the complete submitted section.
+Operators MUST run only on complete submitted sections, never partial words. The active pipeline at `command send` is raw section → refine if enabled → translate if enabled → render or emit final output → copy to clipboard if enabled → send to focused input if enabled. The default translation policy translates Greek source text to English and English source text to Greek, with language detection based on the complete submitted section.
 
 ### FR-26 — Remembered protocol settings
-The tool MUST remember non-secret voice-agent protocol settings across graceful restarts. On shutdown it MUST persist the current `refine`, `translate`, `clipboard`, and `translation_policy` values to `~/.tool-agents/mic-tool-ts/state.json` using file mode `0600` in a `0700` per-user tool folder. On startup it MUST restore those values when the corresponding CLI/env default was not explicitly configured. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, and `--translation-policy` values MUST override saved state. The persisted file MUST NOT contain API keys, provider endpoints, prompts, transcript text, or processed section content. Invalid persisted state at startup MUST raise a typed configuration error.
+The tool MUST remember non-secret voice-agent protocol settings across graceful restarts. On shutdown it MUST persist the current `refine`, `translate`, `clipboard`, `input`, and `translation_policy` values to `~/.tool-agents/mic-tool-ts/state.json` using file mode `0600` in a `0700` per-user tool folder. On startup it MUST restore those values when the corresponding CLI/env default was not explicitly configured. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, and `--translation-policy` values MUST override saved state. The persisted file MUST NOT contain API keys, provider endpoints, prompts, transcript text, or processed section content. Invalid persisted state at startup MUST raise a typed configuration error.
+
+### FR-27 — Focused input operator
+When the `input` operator is enabled, the tool MUST send the final processed section output to the currently focused macOS input control after the section pipeline completes. The implementation MUST use a dependency-free macOS path (`pbcopy` plus System Events Command-V) and MUST emit `input.sent` on success in protocol modes. Focused-input failures, including missing Accessibility permission, MUST be fail-open: they emit a non-fatal stderr warning and a `protocol.warning` event in protocol modes, and they MUST NOT cause the process to exit non-zero.
 
 ## Non-Functional Requirements — Voice Agent Command Protocol
 
@@ -193,3 +196,33 @@ Human transcript text and machine protocol events MUST remain stream-separated b
 
 ### NFR-12 — Protocol robustness
 The protocol MUST prefer deterministic command-prefixed markers over inference-based intent detection. False state changes or section processing are more harmful than requiring explicit `command refine`, `command send`, and `command cancel` markers.
+
+---
+
+## Proposed Functional Requirements — Electron UI Command
+
+Source: `docs/design/request-014-electron-ui-command.md`, `docs/design/plan-008-electron-ui-command.md`, `docs/design/request-016-modern-macos-ui-review.md`, `docs/design/plan-009-modern-macos-ui-review.md`, `docs/reference/investigation-008-electron-ui-command.md`, and `docs/reference/investigation-009-modern-macos-ui-review.md`.
+Status: proposed, not implemented.
+
+### FR-28 — Electron UI subcommand
+The tool SHOULD add `mic-tool-ts ui` as a user-facing subcommand that opens an Electron-based UI while preserving the existing `mic-tool-ts` CLI behavior.
+
+### FR-29 — UI-owned transcript rendering
+When UI mode is active, human-facing partial transcripts, final transcripts, refined or translated outputs, readiness messages, warnings, and session status SHOULD render in the UI instead of stdout/stderr. Console output SHOULD be limited to fatal bootstrap or crash diagnostics that cannot be delivered to the UI.
+
+### FR-30 — UI configuration surface
+The UI SHOULD expose the existing major configuration categories: STT provider, API-key status and expiry, model, endpoint, language hints, sample rate, endpoint detection, guard phrase, protocol markers, operator defaults, translation policy, LLM refinement settings, and diagnostics. Missing required configuration MUST still raise typed configuration errors; the UI MUST NOT substitute fallback values.
+
+### FR-31 — UI event stream
+The UI SHOULD receive typed events for session lifecycle, transcript partials/finals, turn boundaries, refined output, protocol events, warnings, diagnostics, and audio state. The UI MUST NOT parse terminal output to derive its state.
+
+### FR-32 — macOS visual target
+The UI SHOULD target the current macOS Tahoe 26 design language with native-feeling traffic lights, a translucent sidebar/control layer, restrained animation, system typography, and high-legibility content surfaces. The implementation SHOULD use Electron's macOS vibrancy/window APIs and local CSS to approximate Liquid Glass while respecting reduced-motion and reduced-transparency accessibility settings. The preferred visual direction is the Plan 009 revision: transcript content remains the primary stable content plane, while glass-like styling is reserved mainly for navigation, toolbars, segmented controls, and capture controls.
+
+## Proposed Non-Functional Requirements — Electron UI Command
+
+### NFR-13 — Electron security boundary
+The Electron renderer MUST load only local packaged content, MUST NOT have Node.js integration, MUST use context isolation and sandboxing, and MUST communicate with the main process through a narrow preload bridge that validates payloads.
+
+### NFR-14 — Dependency vetting for Electron
+Before adding Electron or any UI build/runtime dependency, the implementation MUST follow the project's dependency-vetting policy, pin a vetted current stable version, run the audit command, and record the decision in `Issues - Pending Items.md`.

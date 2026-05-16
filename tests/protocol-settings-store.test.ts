@@ -32,7 +32,7 @@ describe("protocol settings persistence", () => {
   it("saves and loads non-secret protocol settings", () => {
     savePersistedProtocolSettings(
       {
-        operators: { refine: true, translate: false, clipboard: true },
+        operators: { refine: true, translate: false, clipboard: true, input: true },
         translation_policy: "to-en",
       },
       { toolName: "mic-tool-ts", home },
@@ -47,25 +47,26 @@ describe("protocol settings persistence", () => {
     expect(
       loadPersistedProtocolSettings({ toolName: "mic-tool-ts", home }),
     ).toEqual({
-      operators: { refine: true, translate: false, clipboard: true },
+      operators: { refine: true, translate: false, clipboard: true, input: true },
       translation_policy: "to-en",
     });
   });
 
   it("applies persisted settings only when the matching config value is defaulted", () => {
     const protocol = protocolConfig({
-      initialOperators: { refine: false, translate: false, clipboard: false },
+      initialOperators: { refine: false, translate: false, clipboard: false, input: false },
       translationPolicy: "opposite",
       sources: {
         refine: "default",
         translate: "configured",
         clipboard: "default",
+        input: "default",
         translationPolicy: "configured",
       },
     });
 
     const applied = applyPersistedProtocolSettings(protocol, {
-      operators: { refine: true, translate: true, clipboard: true },
+      operators: { refine: true, translate: true, clipboard: true, input: true },
       translation_policy: "to-en",
     });
 
@@ -73,6 +74,7 @@ describe("protocol settings persistence", () => {
       refine: true,
       translate: false,
       clipboard: true,
+      input: true,
     });
     expect(applied.translationPolicy).toBe("opposite");
   });
@@ -92,6 +94,30 @@ describe("protocol settings persistence", () => {
       loadPersistedProtocolSettings({ toolName: "mic-tool-ts", home }),
     ).toThrow(InvalidConfigurationError);
   });
+
+  it("loads old state files without input as input off", () => {
+    const path = protocolSettingsPath({ toolName: "mic-tool-ts", home });
+    mkdirSync(join(home, ".tool-agents", "mic-tool-ts"), { recursive: true });
+    writeFileSync(
+      path,
+      JSON.stringify({
+        version: 1,
+        saved_at: "2026-05-16T00:00:00.000Z",
+        protocol: {
+          operators: { refine: true, translate: false, clipboard: true },
+          translation_policy: "opposite",
+        },
+      }),
+      "utf8",
+    );
+
+    expect(
+      loadPersistedProtocolSettings({ toolName: "mic-tool-ts", home }),
+    ).toEqual({
+      operators: { refine: true, translate: false, clipboard: true, input: false },
+      translation_policy: "opposite",
+    });
+  });
 });
 
 function protocolConfig(opts: {
@@ -101,6 +127,7 @@ function protocolConfig(opts: {
     refine: "configured" | "default";
     translate: "configured" | "default";
     clipboard: "configured" | "default";
+    input: "configured" | "default";
     translationPolicy: "configured" | "default";
   };
 }): ProtocolRuntimeConfig {
@@ -120,6 +147,7 @@ function protocolConfig(opts: {
         refine: opts.sources.refine,
         translate: opts.sources.translate,
         clipboard: opts.sources.clipboard,
+        input: opts.sources.input,
       },
       translationPolicy: opts.sources.translationPolicy,
     },

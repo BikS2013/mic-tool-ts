@@ -246,6 +246,8 @@ Command Protocol</h1>
 without changing state.</li>
 <li>Runtime protocol settings are remembered across graceful restarts in
 <code>~/.tool-agents/mic-tool-ts/state.json</code>.</li>
+<li><code>command input</code> sends the final processed section output
+to the currently focused macOS input control.</li>
 </ul>
 <p>HTML preview:
 <code>docs/design/plan-007-voice-agent-command-protocol.html</code>.</p>
@@ -260,8 +262,8 @@ a human or plain text sink.</li>
 <li><strong>Text section</strong>: the paragraph or section accumulated
 until the user says <code>command send</code>.</li>
 <li><strong>Operator state</strong>: persistent toggles such as
-<code>refine</code>, <code>translate</code>, and
-<code>clipboard</code>.</li>
+<code>refine</code>, <code>translate</code>, <code>clipboard</code>, and
+<code>input</code>.</li>
 <li><strong>LLM operation</strong>: optional cleanup, translation,
 suggestion, criticism, or another transformation applied to a submitted
 section.</li>
@@ -294,8 +296,8 @@ maintains operator state, reports current settings on
 <td><code>capturing_section</code></td>
 <td>Normal transcription. Finalized non-command text is appended to the
 current section buffer.</td>
-<td><code>command refine|translate|clipboard</code> changes operator
-state; <code>command status</code> reports current settings;
+<td><code>command refine|translate|clipboard|input</code> changes
+operator state; <code>command status</code> reports current settings;
 <code>command send</code> submits the section;
 <code>command cancel</code> discards the section.</td>
 </tr>
@@ -412,6 +414,15 @@ clipboard.</td>
 <td>Disable clipboard copy.</td>
 </tr>
 <tr>
+<td><code>command input</code></td>
+<td>Send the final processed result of future submitted sections to the
+currently focused macOS input control.</td>
+</tr>
+<tr>
+<td><code>command input off</code></td>
+<td>Disable focused-input delivery.</td>
+</tr>
+<tr>
 <td><code>command status</code></td>
 <td>Report current settings. Does not change state or submit text.</td>
 </tr>
@@ -422,7 +433,8 @@ clipboard.</td>
   -&gt; refine, if refine is on
   -&gt; translate, if translate is on
   -&gt; render / emit final output
-  -&gt; copy final output to clipboard, if clipboard is on</code></pre>
+  -&gt; copy final output to clipboard, if clipboard is on
+  -&gt; send final output to focused input, if input is on</code></pre>
 <p>Translation must run on the complete submitted section, not partial
 words. With the default <code>opposite</code> translation policy:</p>
 <ul>
@@ -439,12 +451,13 @@ line is one complete UTF-8 JSON object.</p>
 class="sourceCode json"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;session.started&quot;</span><span class="fu">,</span><span class="dt">&quot;protocol&quot;</span><span class="fu">:</span><span class="st">&quot;mic-tool-ts.voice-agent.v1&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">1</span><span class="fu">}</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;state.changed&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">2</span><span class="fu">,</span><span class="dt">&quot;key&quot;</span><span class="fu">:</span><span class="st">&quot;refine&quot;</span><span class="fu">,</span><span class="dt">&quot;value&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">}</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;state.changed&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">3</span><span class="fu">,</span><span class="dt">&quot;key&quot;</span><span class="fu">:</span><span class="st">&quot;translate&quot;</span><span class="fu">,</span><span class="dt">&quot;value&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">,</span><span class="dt">&quot;target_policy&quot;</span><span class="fu">:</span><span class="st">&quot;opposite&quot;</span><span class="fu">}</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;status.reported&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">4</span><span class="fu">,</span><span class="dt">&quot;operators&quot;</span><span class="fu">:{</span><span class="dt">&quot;refine&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">,</span><span class="dt">&quot;translate&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">,</span><span class="dt">&quot;clipboard&quot;</span><span class="fu">:</span><span class="kw">false</span><span class="fu">},</span><span class="dt">&quot;translation_policy&quot;</span><span class="fu">:</span><span class="st">&quot;opposite&quot;</span><span class="fu">,</span><span class="dt">&quot;pending_section&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">}</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;status.reported&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">4</span><span class="fu">,</span><span class="dt">&quot;operators&quot;</span><span class="fu">:{</span><span class="dt">&quot;refine&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">,</span><span class="dt">&quot;translate&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">,</span><span class="dt">&quot;clipboard&quot;</span><span class="fu">:</span><span class="kw">false</span><span class="fu">,</span><span class="dt">&quot;input&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">},</span><span class="dt">&quot;translation_policy&quot;</span><span class="fu">:</span><span class="st">&quot;opposite&quot;</span><span class="fu">,</span><span class="dt">&quot;pending_section&quot;</span><span class="fu">:</span><span class="kw">true</span><span class="fu">}</span></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;section.submitted&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">5</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000001&quot;</span><span class="fu">,</span><span class="dt">&quot;raw_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">}</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;section.processed&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">6</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000001&quot;</span><span class="fu">,</span><span class="dt">&quot;operators&quot;</span><span class="fu">:</span><span class="ot">[</span><span class="st">&quot;refine&quot;</span><span class="ot">,</span><span class="st">&quot;translate&quot;</span><span class="ot">]</span><span class="fu">,</span><span class="dt">&quot;raw_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">,</span><span class="dt">&quot;refined_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">,</span><span class="dt">&quot;source_language&quot;</span><span class="fu">:</span><span class="st">&quot;el&quot;</span><span class="fu">,</span><span class="dt">&quot;target_language&quot;</span><span class="fu">:</span><span class="st">&quot;en&quot;</span><span class="fu">,</span><span class="dt">&quot;output_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">}</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;section.processed&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">6</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000001&quot;</span><span class="fu">,</span><span class="dt">&quot;operators&quot;</span><span class="fu">:</span><span class="ot">[</span><span class="st">&quot;refine&quot;</span><span class="ot">,</span><span class="st">&quot;translate&quot;</span><span class="ot">,</span><span class="st">&quot;input&quot;</span><span class="ot">]</span><span class="fu">,</span><span class="dt">&quot;raw_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">,</span><span class="dt">&quot;refined_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">,</span><span class="dt">&quot;source_language&quot;</span><span class="fu">:</span><span class="st">&quot;el&quot;</span><span class="fu">,</span><span class="dt">&quot;target_language&quot;</span><span class="fu">:</span><span class="st">&quot;en&quot;</span><span class="fu">,</span><span class="dt">&quot;output_text&quot;</span><span class="fu">:</span><span class="st">&quot;...&quot;</span><span class="fu">}</span></span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;clipboard.copied&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">7</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000001&quot;</span><span class="fu">}</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;section.cancelled&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">8</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000002&quot;</span><span class="fu">,</span><span class="dt">&quot;reason&quot;</span><span class="fu">:</span><span class="st">&quot;spoken_cancel&quot;</span><span class="fu">}</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;session.ended&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">9</span><span class="fu">,</span><span class="dt">&quot;reason&quot;</span><span class="fu">:</span><span class="st">&quot;SIGINT&quot;</span><span class="fu">}</span></span></code></pre></div>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;input.sent&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">8</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000001&quot;</span><span class="fu">}</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;section.cancelled&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">9</span><span class="fu">,</span><span class="dt">&quot;section_id&quot;</span><span class="fu">:</span><span class="st">&quot;sec_000002&quot;</span><span class="fu">,</span><span class="dt">&quot;reason&quot;</span><span class="fu">:</span><span class="st">&quot;spoken_cancel&quot;</span><span class="fu">}</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;type&quot;</span><span class="fu">:</span><span class="st">&quot;session.ended&quot;</span><span class="fu">,</span><span class="dt">&quot;seq&quot;</span><span class="fu">:</span><span class="dv">10</span><span class="fu">,</span><span class="dt">&quot;reason&quot;</span><span class="fu">:</span><span class="st">&quot;SIGINT&quot;</span><span class="fu">}</span></span></code></pre></div>
 <p>Rules:</p>
 <ul>
 <li><code>seq</code> is monotonically increasing per process.</li>
@@ -570,6 +583,12 @@ machine JSONL events are not silently mixed.</p>
 <td>Initial clipboard-copy state.</td>
 </tr>
 <tr>
+<td><code>--input-default &lt;on|off&gt;</code></td>
+<td><code>MIC_TOOL_TS_INPUT_DEFAULT</code></td>
+<td><code>off</code></td>
+<td>Initial focused-input delivery state.</td>
+</tr>
+<tr>
 <td><code>--protocol-output &lt;path&gt;</code></td>
 <td><code>MIC_TOOL_TS_PROTOCOL_OUTPUT</code></td>
 <td>required for <code>hybrid</code></td>
@@ -592,15 +611,17 @@ class="sourceCode json"><code class="sourceCode json"><span id="cb3-1"><a href="
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;operators&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;refine&quot;</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;translate&quot;</span><span class="fu">:</span> <span class="kw">false</span><span class="fu">,</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;clipboard&quot;</span><span class="fu">:</span> <span class="kw">false</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">},</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;translation_policy&quot;</span><span class="fu">:</span> <span class="st">&quot;opposite&quot;</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;clipboard&quot;</span><span class="fu">:</span> <span class="kw">false</span><span class="fu">,</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;input&quot;</span><span class="fu">:</span> <span class="kw">true</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">},</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;translation_policy&quot;</span><span class="fu">:</span> <span class="st">&quot;opposite&quot;</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
 <p>On startup, saved values apply only when the matching CLI/env setting
 is absent. Explicit <code>--refine-default</code>,
-<code>--translate-default</code>, <code>--clipboard-default</code>, and
-<code>--translation-policy</code> values override saved state.</p>
+<code>--translate-default</code>, <code>--clipboard-default</code>,
+<code>--input-default</code>, and <code>--translation-policy</code>
+values override saved state.</p>
 <h2 id="implementation-sketch">Implementation Sketch</h2>
 <p>Add a new protocol layer rather than expanding
 <code>GuardPhraseTurnDetector</code> until it becomes responsible for
@@ -618,7 +639,8 @@ and settings snapshots.</li>
 <li><code>src/protocol/jsonlWriter.ts</code>: line-oriented protocol
 sink.</li>
 <li><code>src/protocol/controller.ts</code>: connects renderer,
-refiner/translator, clipboard sink, and protocol writer.</li>
+refiner/translator, clipboard sink, focused-input sink, and protocol
+writer.</li>
 <li><code>src/protocol/settingsStore.ts</code>: loads/saves remembered
 non-secret runtime protocol settings.</li>
 </ul>
@@ -675,6 +697,10 @@ emit/render the best available prior value and do not fail the
 process.</li>
 <li>If clipboard copy fails, log under verbose and keep the processed
 output.</li>
+<li>If focused-input delivery fails, log under verbose and keep the
+processed output. The implemented macOS path uses <code>pbcopy</code>
+plus System Events Command-V, so Accessibility permission may be
+required for the terminal app running <code>mic-tool-ts</code>.</li>
 <li>If persisted settings are malformed at startup, raise
 <code>InvalidConfigurationError</code> so the user can delete or fix
 <code>state.json</code>.</li>
@@ -692,8 +718,8 @@ logic.</p>
 <li>Marker normalization matches case, accents, punctuation, and
 cross-final phrases while preserving slash-marker intent.</li>
 <li><code>command refine</code>, <code>command translate</code>,
-<code>command clipboard</code>, and their <code>off</code> forms update
-operator state.</li>
+<code>command clipboard</code>, <code>command input</code>, and their
+<code>off</code> forms update operator state.</li>
 <li><code>command status</code> emits/renders the current restored
 operator state and pending-section flag without mutating state.</li>
 <li><code>command send</code> submits the current section and strips
@@ -710,8 +736,10 @@ overwrite artifacts.</li>
 <li>Operator failure emits the best available text only and does not
 exit non-zero.</li>
 <li>Shutdown with an unsubmitted section emits cancellation.</li>
+<li>Focused-input delivery emits <code>input.sent</code> on success and
+fails open on delivery errors.</li>
 <li>Runtime settings persistence saves only non-secret protocol
-settings.</li>
+settings, including <code>input</code>.</li>
 <li>Explicit CLI/env defaults override remembered protocol
 settings.</li>
 </ul>
@@ -740,14 +768,16 @@ to implemented FRs after build.</li>
 <pre class="text"><code>These are notes for later.
 command refine.
 command translate.
+command input.
 Open docs design project design and find the LLM refinement section.
 command status.
 command send.
 Continue dictating normal notes.</code></pre>
 <p>The section between the state commands and <code>command send</code>
-is processed through the active pipeline: refine first, then translate.
-The downstream agent consumes <code>section.processed</code> and ignores
-ambient dictation events unless it wants context.</p>
+is processed through the active pipeline: refine first, then translate,
+then focused-input delivery when enabled. The downstream agent consumes
+<code>section.processed</code> and ignores ambient dictation events
+unless it wants context.</p>
 <h2 id="recommendation">Recommendation</h2>
 <p>Build this as a protocol layer with explicit operator state,
 <code>command status</code> reporting, <code>command send</code> section

@@ -1364,7 +1364,7 @@ Implemented 2026-05-16.
 
 - Dictation text: continuous plain transcript.
 - Text section: the paragraph or section accumulated until `command send`.
-- Operator state: persistent toggles such as `refine`, `translate`, and `clipboard`.
+- Operator state: persistent toggles such as `refine`, `translate`, `clipboard`, and `input`.
 - LLM operation: optional cleanup, translation, suggestion, criticism, or another transformation applied to a submitted section.
 
 The current guard-phrase detector is a good fit for simple turn closure, but it should not become the whole protocol. The proposed protocol moves section handling and operator state into a dedicated protocol layer.
@@ -1374,7 +1374,7 @@ The protocol controller sits above finalized STT callbacks:
 
 | State | Meaning | Marker behavior |
 |-------|---------|-----------------|
-| `capturing_section` | Current default transcript mode; finalized non-command text accumulates in a section buffer. | `command refine|translate|clipboard` changes operator state; `command status` reports current protocol settings; `command send` submits the section; `command cancel` discards it. |
+| `capturing_section` | Current default transcript mode; finalized non-command text accumulates in a section buffer. | `command refine|translate|clipboard|input` changes operator state; `command status` reports current protocol settings; `command send` submits the section; `command cancel` discards it. |
 | `processing_section` | A submitted section is being processed through active operators. | New speech continues into the next section; processing is asynchronous and fail-open. |
 
 Partial STT text is rendered or ignored according to the active mode, but it never triggers protocol state transitions.
@@ -1385,8 +1385,9 @@ Agent protocol mode emits JSON Lines rather than plain transcript text:
 ```json
 {"type":"state.changed","seq":1,"key":"refine","value":true}
 {"type":"state.changed","seq":2,"key":"translate","value":true,"target_policy":"opposite"}
-{"type":"status.reported","seq":3,"operators":{"refine":true,"translate":true,"clipboard":false},"translation_policy":"opposite","pending_section":true}
-{"type":"section.processed","seq":4,"section_id":"sec_000001","operators":["refine","translate"],"raw_text":"...","refined_text":"...","source_language":"el","target_language":"en","output_text":"..."}
+{"type":"status.reported","seq":3,"operators":{"refine":true,"translate":true,"clipboard":false,"input":true},"translation_policy":"opposite","pending_section":true}
+{"type":"section.processed","seq":4,"section_id":"sec_000001","operators":["refine","translate","input"],"raw_text":"...","refined_text":"...","source_language":"el","target_language":"en","output_text":"..."}
+{"type":"input.sent","seq":5,"section_id":"sec_000001"}
 ```
 
 Human transcript text and machine protocol events are not mixed in one stream by default:
@@ -1409,6 +1410,7 @@ Configuration keys:
 | `--translate-default <on|off>` | `MIC_TOOL_TS_TRANSLATE_DEFAULT` | `off` |
 | `--translation-policy <opposite|to-en|to-el>` | `MIC_TOOL_TS_TRANSLATION_POLICY` | `opposite` |
 | `--clipboard-default <on|off>` | `MIC_TOOL_TS_CLIPBOARD_DEFAULT` | `off` |
+| `--input-default <on|off>` | `MIC_TOOL_TS_INPUT_DEFAULT` | `off` |
 | `--protocol-output <path>` | `MIC_TOOL_TS_PROTOCOL_OUTPUT` | required for `hybrid` |
 
 ### 17.6 Implemented module layout
@@ -1423,13 +1425,25 @@ The orchestrator constructs `VoiceAgentProtocolController` and routes all finali
 
 ### 17.7 Status command
 
-`command status` is parsed through the same `command` marker as operator toggles, but it is not an operator and does not mutate state. The state machine emits `status.reported` with the current `refine`, `translate`, and `clipboard` booleans, the active `translation_policy`, and `pending_section` indicating whether the current section buffer contains unsent dictated text. The controller writes this event to the protocol writer in `agent-protocol` and `hybrid` modes. In human-facing modes, it renders a single status line such as:
+`command status` is parsed through the same `command` marker as operator toggles, but it is not an operator and does not mutate state. The state machine emits `status.reported` with the current `refine`, `translate`, `clipboard`, and `input` booleans, the active `translation_policy`, and `pending_section` indicating whether the current section buffer contains unsent dictated text. The controller writes this event to the protocol writer in `agent-protocol` and `hybrid` modes. In human-facing modes, it renders a single status line such as:
 
 ```text
-[mic-tool-ts] status: refine=on, translate=off, clipboard=off, translation_policy=opposite, pending_section=yes
+[mic-tool-ts] status: refine=on, translate=off, clipboard=off, input=on, translation_policy=opposite, pending_section=yes
 ```
 
-### 17.8 Remembered protocol settings
+### 17.8 Focused input operator
+
+`command input` enables the focused-input operator, and `command input off` disables it. When enabled, the final processed output for a submitted section is sent to the currently focused macOS input control after refinement and translation complete. The implemented delivery path copies the final text with `pbcopy` and invokes paste with:
+
+```applescript
+tell application "System Events" to keystroke "v" using command down
+```
+
+This supports terminals, text fields, browser editors, and other controls that accept normal paste. The user is responsible for focusing the target control before `command send` completes. macOS may require Accessibility permission for the terminal app running `mic-tool-ts`. Focused-input failures emit a non-fatal stderr warning plus a `protocol.warning` event in protocol modes, produce no `input.sent` event, and do not fail the process.
+
+When System Events returns error `1002` / `not allowed to send keystrokes`, the warning names the macOS permission path: System Settings > Privacy & Security > Accessibility. The user must enable the app that launched `mic-tool-ts`, such as Terminal, iTerm2, VS Code, or Cursor, then restart that app before retrying.
+
+### 17.9 Remembered protocol settings
 
 Runtime protocol settings are persisted separately from configuration and secrets. `src/protocol/settingsStore.ts` owns the state file at `~/.tool-agents/mic-tool-ts/state.json`:
 
@@ -1441,14 +1455,15 @@ Runtime protocol settings are persisted separately from configuration and secret
     "operators": {
       "refine": true,
       "translate": false,
-      "clipboard": false
+      "clipboard": false,
+      "input": true
     },
     "translation_policy": "opposite"
   }
 }
 ```
 
-The file intentionally excludes API keys, provider endpoints, prompts, transcript text, section payloads, and processed output. On graceful shutdown, `main()` asks `VoiceAgentProtocolController` for `settingsSnapshot()` after `endSession()` and writes the snapshot. On startup, `main()` loads the persisted state and applies it through `applyPersistedProtocolSettings()`. Each persisted value is used only when the corresponding startup setting came from a built-in default. Explicit CLI flags and env-chain values for `--refine-default`, `--translate-default`, `--clipboard-default`, and `--translation-policy` override saved state.
+The file intentionally excludes API keys, provider endpoints, prompts, transcript text, section payloads, and processed output. On graceful shutdown, `main()` asks `VoiceAgentProtocolController` for `settingsSnapshot()` after `endSession()` and writes the snapshot. On startup, `main()` loads the persisted state and applies it through `applyPersistedProtocolSettings()`. Each persisted value is used only when the corresponding startup setting came from a built-in default. Explicit CLI flags and env-chain values for `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, and `--translation-policy` override saved state.
 
 The store creates the per-user tool folder with mode `0700` and writes `state.json` with mode `0600`. Malformed saved state is treated as configuration corruption and raises `InvalidConfigurationError`; shutdown write failures are reported to stderr but do not block graceful exit.
 
@@ -1462,3 +1477,19 @@ These do not block the design but should be revisited during Phase 5:
 - `RealtimeUtteranceBuffer` from the SDK is not used; Unit C maintains its own minimal `partialBuffer`. If utterance segmentation gets richer in v2, switching to `RealtimeUtteranceBuffer` is a localized change in `client.ts`.
 - `total_audio_proc_ms` verbose-mode logging (mentioned as nice-to-have in research §6) is deferred — not in v1 scope.
 - A `--keepalive-interval-ms` hidden flag is deferred — SDK default of 5 000 ms is correct for v1 (audio-as-keepalive during active capture means it never triggers anyway).
+
+---
+
+## 19. Proposed Electron UI Command
+
+Status: proposed design only. Implementation plan: `docs/design/plan-008-electron-ui-command.md`. Modern visual review: `docs/design/plan-009-modern-macos-ui-review.md`. Original standalone visual: `docs/design/plan-008-electron-ui-command-visual.html`. Preferred revised visual: `docs/design/plan-009-modern-macos-ui-visual.html`.
+
+The proposed `mic-tool-ts ui` subcommand would open an Electron-based macOS UI for configuring the existing tool settings and monitoring a live transcription session. The current CLI invocation remains `mic-tool-ts`; the UI is an additional subcommand, not a replacement.
+
+The key architectural change is to split the current orchestration in `src/main.ts` into a shared session runner with injectable sinks. CLI mode continues to use `StdoutRenderer` and stderr diagnostics. UI mode uses an IPC-backed UI renderer and diagnostic sink so human transcript text, partials, finals, readiness messages, warnings, and protocol status render inside the Electron window instead of the console.
+
+The Electron main process should own mic/STT lifecycle, settings persistence, secrets, clipboard/input operations, and IPC. The renderer should be local packaged content with no Node.js integration, context isolation enabled, sandboxing enabled, a restrictive Content Security Policy, and a narrow preload bridge.
+
+The visual target is macOS Tahoe 26 on the current host (`sw_vers`: macOS 26.4.1 build 25E253). Electron should approximate the design with native macOS vibrancy, hidden/inset titlebar traffic lights, transparent window backgrounds, system typography, subtle motion, and CSS `backdrop-filter`. Exact AppKit/SwiftUI Liquid Glass parity is outside Electron's web-rendered surface.
+
+Plan 009 supersedes only the visual direction from the original mockup. It keeps Plan 008's technical architecture but shifts the look toward a calmer macOS utility: native titlebar space, a translucent sidebar/control layer, a stable transcript content plane, a compact toolbar, a bottom capture bar for live audio state, and a contextual inspector instead of nested dashboard cards. Glass-like treatment should be applied mainly to controls and navigation, while transcript content should stay high-contrast and readable. The UI should include reduced-motion and reduced-transparency handling.

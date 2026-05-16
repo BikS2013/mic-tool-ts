@@ -26,6 +26,7 @@ export interface VoiceAgentProtocolControllerOptions {
   refiner?: LLMRefiner | null;
   translator?: LLMRefiner | null;
   clipboardWriter?: (text: string) => Promise<void>;
+  inputWriter?: (text: string) => Promise<void>;
 }
 
 export class VoiceAgentProtocolController {
@@ -38,6 +39,7 @@ export class VoiceAgentProtocolController {
   private readonly refiner: LLMRefiner | null;
   private readonly translator: LLMRefiner | null;
   private readonly clipboardWriter: (text: string) => Promise<void>;
+  private readonly inputWriter: (text: string) => Promise<void>;
   private readonly inFlight = new Set<Promise<void>>();
   private sessionStarted = false;
   private sessionEnded = false;
@@ -52,6 +54,7 @@ export class VoiceAgentProtocolController {
     this.refiner = opts.refiner ?? null;
     this.translator = opts.translator ?? null;
     this.clipboardWriter = opts.clipboardWriter ?? copyToClipboard;
+    this.inputWriter = opts.inputWriter ?? sendToFocusedInput;
     this.stateMachine = new VoiceCommandStateMachine({
       markers: opts.markers,
       initialOperators: opts.initialOperators,
@@ -257,6 +260,22 @@ export class VoiceAgentProtocolController {
         this.logOperatorFailure("clipboard", err);
       }
     }
+
+    if (operators.includes("input")) {
+      try {
+        await this.inputWriter(current);
+        this.writeProtocol({
+          type: "input.sent",
+          section_id: action.sectionId,
+        });
+      } catch (err) {
+        this.warnOperatorFailure(
+          "input",
+          err,
+          inputFailureRemediation(err),
+        );
+      }
+    }
   }
 
   private writeProtocol(event: ProtocolEvent): void {
@@ -280,6 +299,34 @@ export class VoiceAgentProtocolController {
       `[mic-tool-ts] protocol ${operator} failed (${tag}): ${message}\n`,
     );
   }
+
+  private warnOperatorFailure(
+    operator: OperatorKey,
+    err: unknown,
+    remediation: string,
+  ): void {
+    const message = err instanceof Error ? err.message : String(err);
+    const warning = `${operator} operator failed: ${message}. ${remediation}`;
+    this.warn(warning);
+    if (this.verbose && err instanceof Error && err.stack !== undefined) {
+      process.stderr.write(`${err.stack}\n`);
+    }
+  }
+}
+
+function inputFailureRemediation(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (
+    message.includes("not allowed to send keystrokes") ||
+    message.includes("(1002)")
+  ) {
+    return [
+      "macOS blocked System Events keystrokes.",
+      "Open System Settings > Privacy & Security > Accessibility and enable the app that launched mic-tool-ts, such as Terminal, iTerm2, VS Code, or Cursor.",
+      "Restart that app after changing the permission, then focus the target input control before command send completes.",
+    ].join(" ");
+  }
+  return "Check that the target control is focused before command send completes, and grant Accessibility permission to the terminal app running mic-tool-ts.";
 }
 
 function formatStatusReport(report: {
@@ -300,6 +347,7 @@ function formatStatusSummary(report: {
     `refine=${operators.refine ? "on" : "off"}`,
     `translate=${operators.translate ? "on" : "off"}`,
     `clipboard=${operators.clipboard ? "on" : "off"}`,
+    `input=${operators.input ? "on" : "off"}`,
     `translation_policy=${report.translation_policy}`,
     `pending_section=${report.pending_section ? "yes" : "no"}`,
   ].join(", ");
@@ -318,12 +366,31 @@ export function targetLanguageFor(
   return source === "el" ? "en" : "el";
 }
 
+async function sendToFocusedInput(text: string): Promise<void> {
+  if (process.platform !== "darwin") {
+    throw new Error("focused input send is only implemented on macOS");
+  }
+  await copyToClipboard(text);
+  await runCommand("osascript", [
+    "-e",
+    'tell application "System Events" to keystroke "v" using command down',
+  ]);
+}
+
 async function copyToClipboard(text: string): Promise<void> {
   if (process.platform !== "darwin") {
     throw new Error("clipboard copy is only implemented with pbcopy on macOS");
   }
+  await runCommand("pbcopy", [], text);
+}
+
+async function runCommand(
+  command: string,
+  args: string[],
+  stdinText?: string,
+): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("pbcopy", [], {
+    const child = spawn(command, args, {
       stdio: ["pipe", "ignore", "pipe"],
     });
     let stderr = "";
@@ -334,8 +401,8 @@ async function copyToClipboard(text: string): Promise<void> {
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`pbcopy exited ${code}: ${stderr.trim()}`));
+      else reject(new Error(`${command} exited ${code}: ${stderr.trim()}`));
     });
-    child.stdin.end(text);
+    child.stdin.end(stdinText ?? "");
   });
 }

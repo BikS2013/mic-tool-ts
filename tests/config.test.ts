@@ -85,6 +85,7 @@ const TRACKED_ENV_KEYS = [
   "MIC_TOOL_TS_TRANSLATE_DEFAULT",
   "MIC_TOOL_TS_TRANSLATION_POLICY",
   "MIC_TOOL_TS_CLIPBOARD_DEFAULT",
+  "MIC_TOOL_TS_INPUT_DEFAULT",
   "MIC_TOOL_TS_PROTOCOL_OUTPUT",
   "HOME",
 ] as const;
@@ -183,6 +184,7 @@ describe("resolveConfig — default values", () => {
       refine: false,
       translate: false,
       clipboard: false,
+      input: false,
     });
     expect(cfg.protocol.translationPolicy).toBe("opposite");
     expect(cfg.protocol.protocolOutput).toBeUndefined();
@@ -779,6 +781,7 @@ describe("resolveConfig — env-var aliases for every flag", () => {
         "MIC_TOOL_TS_REFINE_DEFAULT=on",
         "MIC_TOOL_TS_TRANSLATE_DEFAULT=yes",
         "MIC_TOOL_TS_CLIPBOARD_DEFAULT=1",
+        "MIC_TOOL_TS_INPUT_DEFAULT=true",
         "MIC_TOOL_TS_TRANSLATION_POLICY=to-en",
       ].join("\n"),
     );
@@ -791,6 +794,7 @@ describe("resolveConfig — env-var aliases for every flag", () => {
       refine: true,
       translate: true,
       clipboard: true,
+      input: true,
     });
     expect(cfg.protocol.translationPolicy).toBe("to-en");
   });

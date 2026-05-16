@@ -16,12 +16,13 @@ export const TRANSLATION_POLICIES: readonly TranslationPolicy[] = [
   "to-el",
 ] as const;
 
-export type OperatorKey = "refine" | "translate" | "clipboard";
+export type OperatorKey = "refine" | "translate" | "clipboard" | "input";
 
 export interface OperatorState {
   refine: boolean;
   translate: boolean;
   clipboard: boolean;
+  input: boolean;
 }
 
 export type ProtocolSettingSource = "configured" | "default";
@@ -31,6 +32,7 @@ export interface ProtocolSettingSources {
     refine: ProtocolSettingSource;
     translate: ProtocolSettingSource;
     clipboard: ProtocolSettingSource;
+    input: ProtocolSettingSource;
   };
   translationPolicy: ProtocolSettingSource;
 }
@@ -96,6 +98,10 @@ export type ProtocolEvent =
     }
   | {
       type: "clipboard.copied";
+      section_id: string;
+    }
+  | {
+      type: "input.sent";
       section_id: string;
     }
   | {

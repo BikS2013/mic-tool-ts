@@ -164,6 +164,7 @@ const GOOD_CONFIG: ResolvedConfig = Object.freeze({
       refine: false,
       translate: false,
       clipboard: false,
+      input: false,
     }),
     translationPolicy: "opposite" as const,
     settingSources: Object.freeze({
@@ -171,6 +172,7 @@ const GOOD_CONFIG: ResolvedConfig = Object.freeze({
         refine: "default" as const,
         translate: "default" as const,
         clipboard: "default" as const,
+        input: "default" as const,
       }),
       translationPolicy: "default" as const,
     }),

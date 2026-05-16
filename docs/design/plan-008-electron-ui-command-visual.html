@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mic-tool-ts UI Concept</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --text: rgba(20, 22, 25, 0.92);
+      --muted: rgba(20, 22, 25, 0.58);
+      --line: rgba(255, 255, 255, 0.42);
+      --stroke: rgba(70, 74, 82, 0.22);
+      --glass: rgba(248, 250, 252, 0.66);
+      --glass-strong: rgba(255, 255, 255, 0.78);
+      --content: rgba(246, 247, 249, 0.74);
+      --accent: #0a84ff;
+      --green: #30d158;
+      --orange: #ff9f0a;
+      --red: #ff453a;
+      --purple: #bf5af2;
+      --shadow: 0 30px 80px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255, 255, 255, 0.55) inset;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --text: rgba(246, 247, 249, 0.94);
+        --muted: rgba(246, 247, 249, 0.58);
+        --line: rgba(255, 255, 255, 0.16);
+        --stroke: rgba(255, 255, 255, 0.14);
+        --glass: rgba(34, 38, 45, 0.62);
+        --glass-strong: rgba(44, 48, 56, 0.78);
+        --content: rgba(28, 31, 36, 0.72);
+        --shadow: 0 30px 86px rgba(0, 0, 0, 0.48), 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: var(--text);
+      background:
+        linear-gradient(135deg, rgba(74, 144, 226, 0.36), transparent 34%),
+        linear-gradient(215deg, rgba(255, 149, 0, 0.24), transparent 38%),
+        linear-gradient(315deg, rgba(48, 209, 88, 0.20), transparent 42%),
+        linear-gradient(180deg, #eef2f6 0%, #d8dee8 100%);
+    }
+
+    .desktop {
+      width: min(1180px, calc(100vw - 44px));
+      height: min(760px, calc(100vh - 44px));
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+
+    .window {
+      width: 100%;
+      height: 100%;
+      min-height: 640px;
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr) 300px;
+      grid-template-rows: 58px minmax(0, 1fr) 42px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--content);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(34px) saturate(1.55);
+      -webkit-backdrop-filter: blur(34px) saturate(1.55);
+    }
+
+    .traffic {
+      grid-column: 1;
+      grid-row: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-left: 18px;
+      background: var(--glass);
+      border-right: 1px solid var(--stroke);
+      backdrop-filter: blur(40px) saturate(1.65);
+      -webkit-backdrop-filter: blur(40px) saturate(1.65);
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12) inset;
+    }
+
+    .close { background: #ff5f57; }
+    .min { background: #febc2e; }
+    .zoom { background: #28c840; }
+
+    .toolbar {
+      grid-column: 2 / 4;
+      grid-row: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 16px;
+      background: rgba(255, 255, 255, 0.40);
+      border-bottom: 1px solid var(--stroke);
+      backdrop-filter: blur(38px) saturate(1.45);
+      -webkit-backdrop-filter: blur(38px) saturate(1.45);
+    }
+
+    .toolbar h1 {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.2;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .toolbar .sub {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+      margin-top: 2px;
+    }
+
+    .pill-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 28px;
+      padding: 0 10px;
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.40);
+      color: var(--text);
+      font-size: 12px;
+      white-space: nowrap;
+      backdrop-filter: blur(18px) saturate(1.35);
+      -webkit-backdrop-filter: blur(18px) saturate(1.35);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.16);
+      animation: breathe 2.6s ease-in-out infinite;
+    }
+
+    .sidebar {
+      grid-column: 1;
+      grid-row: 2 / 4;
+      padding: 12px;
+      border-right: 1px solid var(--stroke);
+      background: var(--glass);
+      backdrop-filter: blur(46px) saturate(1.75);
+      -webkit-backdrop-filter: blur(46px) saturate(1.75);
+    }
+
+    .tool-title {
+      margin: 2px 6px 14px;
+      font-size: 22px;
+      line-height: 1.05;
+      font-weight: 720;
+      letter-spacing: 0;
+    }
+
+    .start {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 36px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
+      font-weight: 650;
+      box-shadow: 0 8px 22px rgba(10, 132, 255, 0.26);
+    }
+
+    .nav {
+      margin-top: 18px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .nav-item {
+      height: 32px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 0 10px;
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .nav-item.active {
+      background: rgba(255, 255, 255, 0.42);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.40) inset;
+    }
+
+    .sidebar-section {
+      margin-top: 20px;
+      padding: 12px 10px;
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.26);
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+
+    .metric {
+      margin-top: 7px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+
+    main {
+      grid-column: 2;
+      grid-row: 2;
+      min-width: 0;
+      padding: 18px 18px 12px;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 14px;
+    }
+
+    .segment {
+      width: max-content;
+      display: flex;
+      padding: 3px;
+      border-radius: 8px;
+      background: rgba(120, 126, 136, 0.16);
+      border: 1px solid var(--stroke);
+    }
+
+    .segment span {
+      min-width: 92px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .segment .selected {
+      background: var(--glass-strong);
+      color: var(--text);
+      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08);
+    }
+
+    .transcript {
+      min-height: 0;
+      overflow: auto;
+      padding-right: 4px;
+      display: grid;
+      align-content: end;
+      gap: 10px;
+    }
+
+    .message {
+      width: min(680px, 100%);
+      padding: 12px 14px;
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.48);
+      backdrop-filter: blur(18px) saturate(1.25);
+      -webkit-backdrop-filter: blur(18px) saturate(1.25);
+      animation: lift 420ms ease both;
+    }
+
+    .message.final {
+      background: rgba(255, 255, 255, 0.58);
+    }
+
+    .message.partial {
+      border-color: rgba(10, 132, 255, 0.32);
+      background: rgba(10, 132, 255, 0.10);
+    }
+
+    .message.refined {
+      border-color: rgba(191, 90, 242, 0.28);
+      background: rgba(191, 90, 242, 0.10);
+    }
+
+    .meta {
+      margin-bottom: 5px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .text {
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .live {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 46px;
+      padding: 10px 12px;
+      border: 1px solid rgba(10, 132, 255, 0.32);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.56);
+      backdrop-filter: blur(22px) saturate(1.35);
+      -webkit-backdrop-filter: blur(22px) saturate(1.35);
+    }
+
+    .wave {
+      width: 34px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .bar {
+      width: 4px;
+      border-radius: 999px;
+      background: var(--accent);
+      animation: meter 900ms ease-in-out infinite;
+    }
+
+    .bar:nth-child(1) { height: 9px; animation-delay: 0ms; }
+    .bar:nth-child(2) { height: 18px; animation-delay: 80ms; }
+    .bar:nth-child(3) { height: 13px; animation-delay: 160ms; }
+    .bar:nth-child(4) { height: 21px; animation-delay: 240ms; }
+    .bar:nth-child(5) { height: 11px; animation-delay: 320ms; }
+
+    aside {
+      grid-column: 3;
+      grid-row: 2;
+      overflow: auto;
+      padding: 16px;
+      border-left: 1px solid var(--stroke);
+      background: rgba(255, 255, 255, 0.30);
+      backdrop-filter: blur(30px) saturate(1.35);
+      -webkit-backdrop-filter: blur(30px) saturate(1.35);
+    }
+
+    .panel {
+      margin-bottom: 12px;
+      padding: 12px;
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.38);
+    }
+
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      line-height: 1.2;
+      font-weight: 680;
+    }
+
+    .field {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      border-top: 1px solid rgba(120, 126, 136, 0.16);
+      font-size: 12px;
+    }
+
+    .field:first-of-type {
+      border-top: 0;
+    }
+
+    .value {
+      color: var(--muted);
+      text-align: right;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .toggle {
+      width: 34px;
+      height: 20px;
+      padding: 2px;
+      border-radius: 999px;
+      background: var(--green);
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .toggle.off {
+      background: rgba(120, 126, 136, 0.32);
+      justify-content: flex-start;
+    }
+
+    .knob {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: white;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .footer {
+      grid-column: 2 / 4;
+      grid-row: 3;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 14px;
+      border-top: 1px solid var(--stroke);
+      background: rgba(255, 255, 255, 0.34);
+      color: var(--muted);
+      font-size: 12px;
+      backdrop-filter: blur(24px) saturate(1.25);
+      -webkit-backdrop-filter: blur(24px) saturate(1.25);
+    }
+
+    .logline {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.16); opacity: 1; }
+    }
+
+    @keyframes meter {
+      0%, 100% { transform: scaleY(0.62); opacity: 0.72; }
+      50% { transform: scaleY(1); opacity: 1; }
+    }
+
+    @keyframes lift {
+      from { transform: translateY(6px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+      }
+    }
+
+    @media (max-width: 920px) {
+      .window {
+        grid-template-columns: 206px minmax(0, 1fr);
+      }
+      aside {
+        display: none;
+      }
+      .toolbar,
+      .footer {
+        grid-column: 2;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .desktop {
+        width: 100vw;
+        height: 100vh;
+        padding: 0;
+      }
+      .window {
+        min-height: 100vh;
+        border-radius: 0;
+        grid-template-columns: 1fr;
+        grid-template-rows: 58px auto minmax(0, 1fr) 42px;
+      }
+      .traffic {
+        grid-column: 1;
+        grid-row: 1;
+        border-right: 0;
+        border-bottom: 1px solid var(--stroke);
+      }
+      .toolbar {
+        display: none;
+      }
+      .sidebar {
+        grid-column: 1;
+        grid-row: 2;
+        border-right: 0;
+        border-bottom: 1px solid var(--stroke);
+      }
+      main {
+        grid-column: 1;
+        grid-row: 3;
+      }
+      .footer {
+        grid-column: 1;
+        grid-row: 4;
+      }
+      .nav,
+      .sidebar-section {
+        display: none;
+      }
+      .tool-title {
+        font-size: 18px;
+        margin-bottom: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="desktop">
+    <div class="window" role="img" aria-label="Concept mockup for a macOS-style mic-tool-ts Electron UI">
+      <div class="traffic">
+        <span class="dot close"></span>
+        <span class="dot min"></span>
+        <span class="dot zoom"></span>
+      </div>
+
+      <header class="toolbar">
+        <div>
+          <h1>Live Transcription</h1>
+          <div class="sub">Soniox · stt-rt-v4 · Greek + English · 16 kHz</div>
+        </div>
+        <div class="pill-row">
+          <span class="pill"><span class="status-dot"></span>Listening</span>
+          <span class="pill">Endpoint detection on</span>
+          <span class="pill">Refine off</span>
+        </div>
+      </header>
+
+      <nav class="sidebar">
+        <div class="tool-title">mic-tool-ts</div>
+        <button class="start">■ Stop Listening</button>
+
+        <div class="nav">
+          <div class="nav-item active">⌁ Monitor</div>
+          <div class="nav-item">⚙ Settings</div>
+          <div class="nav-item">◇ Protocol</div>
+          <div class="nav-item">☰ Logs</div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="label">Session</div>
+          <div class="metric"><span>Provider</span><strong>Soniox</strong></div>
+          <div class="metric"><span>Mode</span><strong>Dictation</strong></div>
+          <div class="metric"><span>Latency</span><strong>420 ms</strong></div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="label">Operators</div>
+          <div class="metric"><span>Translate</span><strong>Off</strong></div>
+          <div class="metric"><span>Clipboard</span><strong>Off</strong></div>
+          <div class="metric"><span>Input</span><strong>On</strong></div>
+        </div>
+      </nav>
+
+      <main>
+        <div class="segment" aria-hidden="true">
+          <span class="selected">Transcript</span>
+          <span>Sections</span>
+          <span>Events</span>
+        </div>
+
+        <section class="transcript">
+          <article class="message final">
+            <div class="meta"><span>Final · 22:58:10</span><span>el</span></div>
+            <div class="text">Άνοιξε το αρχείο ρυθμίσεων και έλεγξε αν το Soniox API key είναι ενεργό.</div>
+          </article>
+
+          <article class="message refined">
+            <div class="meta"><span>Processed section · input sent</span><span>opposite</span></div>
+            <div class="text">Open the configuration file and check whether the Soniox API key is active.</div>
+          </article>
+
+          <article class="message final">
+            <div class="meta"><span>Final · 22:58:18</span><span>en</span></div>
+            <div class="text">Now switch the provider to ElevenLabs, but keep endpoint detection enabled.</div>
+          </article>
+
+          <article class="message partial">
+            <div class="meta"><span>Partial</span><span>live</span></div>
+            <div class="text">and show me the current command status before sending...</div>
+          </article>
+        </section>
+
+        <div class="live">
+          <div class="wave" aria-hidden="true">
+            <span class="bar"></span>
+            <span class="bar"></span>
+            <span class="bar"></span>
+            <span class="bar"></span>
+            <span class="bar"></span>
+          </div>
+          <div>
+            <div class="label">Rendering in UI</div>
+            <div class="text">Console transcript output is suppressed while this window is active.</div>
+          </div>
+          <span class="pill">Ready</span>
+        </div>
+      </main>
+
+      <aside>
+        <section class="panel">
+          <h2>Transcription</h2>
+          <div class="field"><span>Provider</span><span class="value">Soniox</span></div>
+          <div class="field"><span>Model</span><span class="value">stt-rt-v4</span></div>
+          <div class="field"><span>Languages</span><span class="value">el, en</span></div>
+          <div class="field"><span>Sample rate</span><span class="value">16000</span></div>
+          <div class="field"><span>Endpoint detection</span><span class="toggle"><span class="knob"></span></span></div>
+        </section>
+
+        <section class="panel">
+          <h2>Protocol</h2>
+          <div class="field"><span>Interaction mode</span><span class="value">dictation</span></div>
+          <div class="field"><span>Command phrase</span><span class="value">command</span></div>
+          <div class="field"><span>Send phrase</span><span class="value">command send</span></div>
+          <div class="field"><span>Input operator</span><span class="toggle"><span class="knob"></span></span></div>
+          <div class="field"><span>Clipboard</span><span class="toggle off"><span class="knob"></span></span></div>
+        </section>
+
+        <section class="panel">
+          <h2>Credentials</h2>
+          <div class="field"><span>SONIOX_API_KEY</span><span class="value">configured</span></div>
+          <div class="field"><span>Expires</span><span class="value">2026-07-01</span></div>
+          <div class="field"><span>Storage</span><span class="value">user .env</span></div>
+        </section>
+      </aside>
+
+      <footer class="footer">
+        <span class="logline">[mic-tool-ts] Ready to listen. Press Stop Listening to end the session.</span>
+        <span>stdout transcript: off · UI event sink: active</span>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>

@@ -37,11 +37,12 @@ Full configuration reference: `docs/design/configuration-guide.md`.
 
 ## Voice Agent Protocol
 
-- Default markers: `command refine|translate|clipboard`, `command status`, `command send`, `command cancel`, and `literal phrase`.
-- Supported operators: `refine`, `translate`, and `clipboard`.
+- Default markers: `command refine|translate|clipboard|input`, `command status`, `command send`, `command cancel`, and `literal phrase`.
+- Supported operators: `refine`, `translate`, `clipboard`, and `input`.
 - `--interaction-mode agent-protocol` emits one JSON object per line on stdout for downstream agents.
 - `--interaction-mode hybrid --protocol-output <path>` keeps human text on stdout and writes JSONL events to the selected file.
-- Runtime protocol settings are remembered in `~/.tool-agents/mic-tool-ts/state.json`: `refine`, `translate`, `clipboard`, and `translation_policy`. Explicit CLI/env defaults override saved state.
+- `command input` sends the final processed section output to the currently focused macOS input control using clipboard + paste; Accessibility permission may be required, and failures emit a non-fatal warning.
+- Runtime protocol settings are remembered in `~/.tool-agents/mic-tool-ts/state.json`: `refine`, `translate`, `clipboard`, `input`, and `translation_policy`. Explicit CLI/env defaults override saved state.
 
 ## User Documentation
 

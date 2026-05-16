@@ -112,6 +112,10 @@ export function applyPersistedProtocolSettings(
       protocol.settingSources.operators.clipboard === "default"
         ? persisted.operators.clipboard
         : protocol.initialOperators.clipboard,
+    input:
+      protocol.settingSources.operators.input === "default"
+        ? persisted.operators.input
+        : protocol.initialOperators.input,
   };
 
   const translationPolicy =
@@ -150,6 +154,12 @@ function validateStateFile(value: unknown, path: string): PersistedStateFile {
     }
   }
   if (
+    operators.input !== undefined &&
+    typeof operators.input !== "boolean"
+  ) {
+    throw invalidState(path, "protocol.operators.input must be a boolean");
+  }
+  if (
     typeof protocol.translation_policy !== "string" ||
     !(TRANSLATION_POLICIES as readonly string[]).includes(
       protocol.translation_policy,
@@ -169,6 +179,7 @@ function validateStateFile(value: unknown, path: string): PersistedStateFile {
         refine: operators.refine as boolean,
         translate: operators.translate as boolean,
         clipboard: operators.clipboard as boolean,
+        input: (operators.input as boolean | undefined) ?? false,
       },
       translation_policy: protocol.translation_policy as TranslationPolicy,
     },

@@ -110,4 +110,4 @@ These instructions are adapted from `~/.claude/claude.md` for Codex and other ag
 
 ## Tools
 
-- `mic-tool-ts` — TypeScript CLI that captures macOS microphone audio, streams it to a realtime STT provider (Soniox by default, ElevenLabs when selected), detects guard-phrase turn boundaries, and optionally refines closed turns through an LLM. Tool reference: `docs/tools/mic-tool-ts.md`.
+- `mic-tool-ts` — TypeScript CLI that captures macOS microphone audio, streams it to a realtime STT provider, and supports a voice-agent protocol for refinement, translation, clipboard copy, focused-input delivery, and JSONL agent events. Tool reference: `docs/tools/mic-tool-ts.md`.

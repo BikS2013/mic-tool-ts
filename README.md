@@ -80,7 +80,7 @@ chmod 0600 ~/.tool-agents/mic-tool-ts/.env
 
 For non-secret project overrides (e.g. a per-project language pair) use a project-local `<cwd>/.env`.
 
-Live voice-agent operator settings are remembered separately from secrets. On graceful shutdown, `mic-tool-ts` writes `~/.tool-agents/mic-tool-ts/state.json` with only non-secret protocol settings: `refine`, `translate`, `clipboard`, and `translation_policy`. On the next startup, those saved values become the initial settings unless you explicitly set the matching CLI flag or env var such as `--refine-default off` or `MIC_TOOL_TS_TRANSLATE_DEFAULT=on`.
+Live voice-agent operator settings are remembered separately from secrets. On graceful shutdown, `mic-tool-ts` writes `~/.tool-agents/mic-tool-ts/state.json` with only non-secret protocol settings: `refine`, `translate`, `clipboard`, `input`, and `translation_policy`. On the next startup, those saved values become the initial settings unless you explicitly set the matching CLI flag or env var such as `--refine-default off` or `MIC_TOOL_TS_TRANSLATE_DEFAULT=on`.
 
 ---
 
@@ -127,7 +127,7 @@ While running, the tool emits:
 - Verbatim partial / final tokens (according to `--output-mode`), with repeated Soniox finalized prefixes and identical consecutive partial snapshots suppressed.
 - On `command send` or the configured section-end phrase: a blank line in dictation mode.
 - On `command status`: a status line in dictation mode, or a `status.reported` JSONL event in agent-protocol mode.
-- If active operators process the section: the processed text on its own line + another blank line in dictation mode, or a `section.processed` JSONL event in agent-protocol mode.
+- If active operators process the section: the processed text on its own line + another blank line in dictation mode, a `section.processed` JSONL event in agent-protocol mode, a `clipboard.copied` event when clipboard copy succeeds, and an `input.sent` event when focused-input delivery succeeds.
 
 Press Ctrl+C to stop. A second Ctrl+C during shutdown force-quits (exit code 130).
 
@@ -139,7 +139,7 @@ Press Ctrl+C to stop. A second Ctrl+C during shutdown force-quits (exit code 130
 
 Default spoken markers:
 
-- `command refine`, `command translate`, or `command clipboard` enables a persistent operator. Add `off` to disable it, for example `command refine off`.
+- `command refine`, `command translate`, `command clipboard`, or `command input` enables a persistent operator. Add `off` to disable it, for example `command input off`.
 - `command status` reports the current operator state, translation policy, and whether an unsent section is pending.
 - `command send` submits the current section for processing.
 - `command cancel` discards the current section.
@@ -150,21 +150,24 @@ Example:
 ```
 command refine.
 command translate.
+command input.
 Open docs design project design and find the LLM refinement section.
 command status.
 command send.
 ```
 
-In `agent-protocol` mode, stdout contains JSON Lines such as `state.changed`, `status.reported`, `section.submitted`, `section.processed`, `section.cancelled`, `clipboard.copied`, and `session.ended`. Human diagnostics, including the ready message, stay on stderr.
+In `agent-protocol` mode, stdout contains JSON Lines such as `state.changed`, `status.reported`, `section.submitted`, `section.processed`, `section.cancelled`, `clipboard.copied`, `input.sent`, and `session.ended`. Human diagnostics, including the ready message, stay on stderr.
+
+`command input` sends the final processed section output to the currently focused macOS input control by copying the text to the clipboard and issuing Command-V through System Events. Focus must already be on the target control before `command send` completes. macOS may require Accessibility permission for the terminal app running `mic-tool-ts`; failures emit a non-fatal warning on stderr and a `protocol.warning` event in protocol modes.
 
 Remembered settings:
 
-- On graceful shutdown, the current `refine`, `translate`, `clipboard`, and `translation_policy` values are saved to `~/.tool-agents/mic-tool-ts/state.json`.
+- On graceful shutdown, the current `refine`, `translate`, `clipboard`, `input`, and `translation_policy` values are saved to `~/.tool-agents/mic-tool-ts/state.json`.
 - The next run starts with those saved values unless you explicitly set a matching default through CLI or env, such as `--refine-default off` or `MIC_TOOL_TS_TRANSLATION_POLICY=to-en`.
 - `command status` reports the effective settings after restoration. Example human output:
 
 ```text
-[mic-tool-ts] status: refine=on, translate=off, clipboard=off, translation_policy=opposite, pending_section=no
+[mic-tool-ts] status: refine=on, translate=off, clipboard=off, input=on, translation_policy=opposite, pending_section=no
 ```
 
 ---
@@ -186,6 +189,7 @@ Remembered settings:
 | `elevenlabs_auth: ...`                                                              |    4 | ElevenLabs rejected the key or account access. Rotate/check the key and Scribe access.                   |
 | `elevenlabs_network: ...`                                                           |    5 | Network issue / ElevenLabs unreachable. Re-try; check `--endpoint`.                                      |
 | `elevenlabs_protocol: ...`                                                          |    6 | ElevenLabs rejected the session config, quota, rate limit, or input shape.                               |
+| `protocol warning: input operator failed: ... not allowed to send keystrokes ... (1002)` | n/a | macOS blocked paste automation. Open System Settings → Privacy & Security → Accessibility, enable the app that launched `mic-tool-ts` (Terminal, iTerm2, VS Code, Cursor, etc.), restart it, then focus the target input before `command send`. |
 | `[mic-tool-ts] WARNING: SONIOX_API_KEY expired N days ago ...`                         |  n/a | Renew the key at <https://console.soniox.com>; update `SONIOX_API_KEY_EXPIRES_AT`.                       |
 
 `--verbose` is the fastest path to a more detailed diagnostic for any of the above.

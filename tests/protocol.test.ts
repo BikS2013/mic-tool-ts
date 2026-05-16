@@ -29,6 +29,7 @@ const OFF: OperatorState = Object.freeze({
   refine: false,
   translate: false,
   clipboard: false,
+  input: false,
 });
 
 const DEFINITIONS = [
@@ -64,6 +65,15 @@ function fakeRefiner(fn: (text: string) => Promise<string>): LLMRefiner & {
   return {
     refine: vi.fn(fn),
     dispose: vi.fn(),
+  };
+}
+
+function enabledOperators(...enabled: (keyof OperatorState)[]): OperatorState {
+  return {
+    refine: enabled.includes("refine"),
+    translate: enabled.includes("translate"),
+    clipboard: enabled.includes("clipboard"),
+    input: enabled.includes("input"),
   };
 }
 
@@ -108,7 +118,7 @@ describe("protocol marker matching", () => {
 });
 
 describe("VoiceCommandStateMachine", () => {
-  it("updates refine, translate, and clipboard state", () => {
+  it("updates refine, translate, clipboard, and input state", () => {
     const sm = new VoiceCommandStateMachine({
       markers: MARKERS,
       initialOperators: OFF,
@@ -122,28 +132,35 @@ describe("VoiceCommandStateMachine", () => {
     });
     sm.processFinal("command translate");
     sm.processFinal("command clipboard");
+    sm.processFinal("command input");
     expect(sm.state).toEqual({
       refine: true,
       translate: true,
       clipboard: true,
+      input: true,
     });
   });
 
   it("reports operator status without changing state", () => {
     const sm = new VoiceCommandStateMachine({
       markers: MARKERS,
-      initialOperators: { refine: true, translate: false, clipboard: true },
+      initialOperators: enabledOperators("refine", "clipboard", "input"),
       translationPolicy: "to-en",
     });
     const result = sm.processFinal("command status");
     expect(result.visibleText).toBe("");
     expect(result.actions).toContainEqual({
       type: "status.reported",
-      operators: { refine: true, translate: false, clipboard: true },
+      operators: { refine: true, translate: false, clipboard: true, input: true },
       translation_policy: "to-en",
       pending_section: false,
     });
-    expect(sm.state).toEqual({ refine: true, translate: false, clipboard: true });
+    expect(sm.state).toEqual({
+      refine: true,
+      translate: false,
+      clipboard: true,
+      input: true,
+    });
   });
 
   it("reports a pending section when status is spoken after dictated text", () => {
@@ -170,7 +187,7 @@ describe("VoiceCommandStateMachine", () => {
   it("submits the current section and strips the command send marker from raw text", () => {
     const sm = new VoiceCommandStateMachine({
       markers: MARKERS,
-      initialOperators: { ...OFF, refine: true },
+      initialOperators: enabledOperators("refine"),
       translationPolicy: "opposite",
     });
     const result = sm.processFinal("Open the design docs. command send");
@@ -271,7 +288,7 @@ describe("JSONL protocol controller", () => {
       renderer,
       writer: new JsonlProtocolWriter({ out }),
       markers: MARKERS,
-      initialOperators: { refine: true, translate: false, clipboard: true },
+      initialOperators: enabledOperators("refine", "clipboard", "input"),
       translationPolicy: "to-en",
     });
 
@@ -284,7 +301,7 @@ describe("JSONL protocol controller", () => {
     expect(parseJsonl(out)).toContainEqual(
       expect.objectContaining({
         type: "status.reported",
-        operators: { refine: true, translate: false, clipboard: true },
+        operators: { refine: true, translate: false, clipboard: true, input: true },
         translation_policy: "to-en",
         pending_section: true,
       }),
@@ -301,7 +318,7 @@ describe("JSONL protocol controller", () => {
       renderer: fakeRenderer(),
       writer,
       markers: MARKERS,
-      initialOperators: { refine: true, translate: true, clipboard: false },
+      initialOperators: enabledOperators("refine", "translate"),
       translationPolicy: "opposite",
       refiner,
       translator,
@@ -335,7 +352,7 @@ describe("JSONL protocol controller", () => {
       renderer: fakeRenderer(),
       writer: new JsonlProtocolWriter({ out }),
       markers: MARKERS,
-      initialOperators: { refine: false, translate: false, clipboard: true },
+      initialOperators: enabledOperators("clipboard"),
       translationPolicy: "opposite",
       clipboardWriter,
     });
@@ -353,6 +370,140 @@ describe("JSONL protocol controller", () => {
     );
   });
 
+  it("sends processed output to the focused input when input is enabled", async () => {
+    const out = new PassThrough();
+    const inputWriter = vi.fn(async () => {});
+    const controller = new VoiceAgentProtocolController({
+      mode: "agent-protocol",
+      renderer: fakeRenderer(),
+      writer: new JsonlProtocolWriter({ out }),
+      markers: MARKERS,
+      initialOperators: enabledOperators("input"),
+      translationPolicy: "opposite",
+      inputWriter,
+    });
+
+    controller.startSession();
+    controller.final("paste me command send");
+    await controller.endSession("test");
+
+    expect(inputWriter).toHaveBeenCalledWith("paste me");
+    expect(parseJsonl(out)).toContainEqual(
+      expect.objectContaining({
+        type: "input.sent",
+        section_id: "sec_000001",
+      }),
+    );
+  });
+
+  it("sends the final refined and translated output to focused input", async () => {
+    const out = new PassThrough();
+    const inputWriter = vi.fn(async () => {});
+    const refiner = fakeRefiner(async () => "Καλημέρα κόσμε.");
+    const translator = fakeRefiner(async () => "Good morning world.");
+    const controller = new VoiceAgentProtocolController({
+      mode: "agent-protocol",
+      renderer: fakeRenderer(),
+      writer: new JsonlProtocolWriter({ out }),
+      markers: MARKERS,
+      initialOperators: enabledOperators("refine", "translate", "input"),
+      translationPolicy: "opposite",
+      refiner,
+      translator,
+      inputWriter,
+    });
+
+    controller.startSession();
+    controller.final("καλημέρα κόσμε command send");
+    await controller.endSession("test");
+
+    expect(inputWriter).toHaveBeenCalledWith("Good morning world.");
+    expect(parseJsonl(out)).toContainEqual(
+      expect.objectContaining({
+        type: "input.sent",
+        section_id: "sec_000001",
+      }),
+    );
+  });
+
+  it("emits a protocol warning when focused input delivery fails", async () => {
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    const out = new PassThrough();
+    const inputWriter = vi.fn(async () => {
+      throw new Error("not allowed");
+    });
+    const controller = new VoiceAgentProtocolController({
+      mode: "agent-protocol",
+      renderer: fakeRenderer(),
+      writer: new JsonlProtocolWriter({ out }),
+      markers: MARKERS,
+      initialOperators: enabledOperators("input"),
+      translationPolicy: "opposite",
+      inputWriter,
+    });
+
+    try {
+      controller.startSession();
+      controller.final("paste me command send");
+      await controller.endSession("test");
+    } finally {
+      stderrWrite.mockRestore();
+    }
+
+    const events = parseJsonl(out);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "protocol.warning",
+        message: expect.stringContaining("input operator failed: not allowed"),
+      }),
+    );
+    expect(events).not.toContainEqual(
+      expect.objectContaining({
+        type: "input.sent",
+      }),
+    );
+  });
+
+  it("explains macOS accessibility remediation for System Events keystroke denial", async () => {
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    const out = new PassThrough();
+    const inputWriter = vi.fn(async () => {
+      throw new Error(
+        "osascript exited 1: execution error: System Events got an error: osascript is not allowed to send keystrokes. (1002)",
+      );
+    });
+    const controller = new VoiceAgentProtocolController({
+      mode: "agent-protocol",
+      renderer: fakeRenderer(),
+      writer: new JsonlProtocolWriter({ out }),
+      markers: MARKERS,
+      initialOperators: enabledOperators("input"),
+      translationPolicy: "opposite",
+      inputWriter,
+    });
+
+    try {
+      controller.startSession();
+      controller.final("paste me command send");
+      await controller.endSession("test");
+    } finally {
+      stderrWrite.mockRestore();
+    }
+
+    expect(parseJsonl(out)).toContainEqual(
+      expect.objectContaining({
+        type: "protocol.warning",
+        message: expect.stringContaining(
+          "System Settings > Privacy & Security > Accessibility",
+        ),
+      }),
+    );
+  });
+
   it("renders dictation text and processed output in dictation mode", async () => {
     const renderer = fakeRenderer();
     const refiner = fakeRefiner(async () => "Polished.");
@@ -360,7 +511,7 @@ describe("JSONL protocol controller", () => {
       mode: "dictation",
       renderer,
       markers: MARKERS,
-      initialOperators: { refine: true, translate: false, clipboard: false },
+      initialOperators: enabledOperators("refine"),
       translationPolicy: "opposite",
       refiner,
     });
@@ -382,7 +533,7 @@ describe("JSONL protocol controller", () => {
       mode: "dictation",
       renderer,
       markers: MARKERS,
-      initialOperators: { refine: false, translate: true, clipboard: false },
+      initialOperators: enabledOperators("translate"),
       translationPolicy: "opposite",
     });
 
@@ -390,7 +541,7 @@ describe("JSONL protocol controller", () => {
 
     expect(renderer.final).not.toHaveBeenCalled();
     expect(renderer.refined).toHaveBeenCalledWith(
-      "[mic-tool-ts] status: refine=off, translate=on, clipboard=off, translation_policy=opposite, pending_section=no",
+      "[mic-tool-ts] status: refine=off, translate=on, clipboard=off, input=off, translation_policy=opposite, pending_section=no",
     );
   });
 });

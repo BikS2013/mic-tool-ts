@@ -200,6 +200,7 @@ interface ParsedCliOptions {
   translateDefault?: string;
   translationPolicy?: string;
   clipboardDefault?: string;
+  inputDefault?: string;
   protocolOutput?: string;
   verbose?: boolean;
   refine?: boolean;
@@ -319,6 +320,10 @@ function parseCli(argv: string[], version: string): ParsedCliOptions {
     .option(
       "--clipboard-default <on|off>",
       "Initial protocol clipboard operator state. Env: MIC_TOOL_TS_CLIPBOARD_DEFAULT.",
+    )
+    .option(
+      "--input-default <on|off>",
+      "Initial protocol focused-input operator state. Env: MIC_TOOL_TS_INPUT_DEFAULT.",
     )
     .option(
       "--protocol-output <path>",
@@ -744,6 +749,16 @@ export function resolveConfig(argv: string[]): ResolvedConfig {
     "--clipboard-default",
     "MIC_TOOL_TS_CLIPBOARD_DEFAULT",
   );
+  const inputDefault = parseBoolean(
+    resolveString(
+      parsed.inputDefault,
+      chain,
+      "MIC_TOOL_TS_INPUT_DEFAULT",
+      "off",
+    ),
+    "--input-default",
+    "MIC_TOOL_TS_INPUT_DEFAULT",
+  );
   const translationPolicy = validateTranslationPolicy(
     resolveString(
       parsed.translationPolicy,
@@ -776,6 +791,7 @@ export function resolveConfig(argv: string[]): ResolvedConfig {
       refine: refineDefault,
       translate: translateDefault,
       clipboard: clipboardDefault,
+      input: inputDefault,
     }),
     translationPolicy,
     protocolOutput,
@@ -795,6 +811,11 @@ export function resolveConfig(argv: string[]): ResolvedConfig {
           parsed.clipboardDefault,
           chain,
           "MIC_TOOL_TS_CLIPBOARD_DEFAULT",
+        ),
+        input: protocolSettingSource(
+          parsed.inputDefault,
+          chain,
+          "MIC_TOOL_TS_INPUT_DEFAULT",
         ),
       }),
       translationPolicy: protocolSettingSource(
@@ -877,7 +898,7 @@ export function resolveConfig(argv: string[]): ResolvedConfig {
       `[mic-tool-ts] transcription: provider=${sttProvider}, model=${model}, endpoint=${endpoint}, languages=[${languages.join(", ")}], sample_rate=${sampleRate}, endpoint_detection=${enableEndpointDetection}\n`,
     );
     process.stderr.write(
-      `[mic-tool-ts] protocol: mode=${interactionMode}, command=${commandPhrase}, send=${sectionEndPhrase}, cancel=${sectionCancelPhrase}, refine_default=${refineDefault}, translate_default=${translateDefault}, clipboard_default=${clipboardDefault}, translation_policy=${translationPolicy}\n`,
+      `[mic-tool-ts] protocol: mode=${interactionMode}, command=${commandPhrase}, send=${sectionEndPhrase}, cancel=${sectionCancelPhrase}, refine_default=${refineDefault}, translate_default=${translateDefault}, clipboard_default=${clipboardDefault}, input_default=${inputDefault}, translation_policy=${translationPolicy}\n`,
     );
     process.stderr.write(
       `[mic-tool-ts] llm: ${llmEnabled ? "enabled" : "disabled"} (provider=${llmProvider}, model=${llmModel})\n`,

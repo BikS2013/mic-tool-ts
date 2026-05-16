@@ -68,7 +68,7 @@ The resolver yields:
 
 The table below is the complete contract. The "Default" column shows the value used when neither a flag nor any env-var tier supplies a value.
 
-For `--refine-default`, `--translate-default`, `--clipboard-default`, and `--translation-policy`, the built-in default may be replaced by remembered runtime state from `~/.tool-agents/mic-tool-ts/state.json`. Explicit CLI or env values still take priority over remembered state.
+For `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, and `--translation-policy`, the built-in default may be replaced by remembered runtime state from `~/.tool-agents/mic-tool-ts/state.json`. Explicit CLI or env values still take priority over remembered state.
 
 | CLI flag                            | Env var                                | Default                                              | Required? |
 |-------------------------------------|----------------------------------------|------------------------------------------------------|-----------|
@@ -93,6 +93,7 @@ For `--refine-default`, `--translate-default`, `--clipboard-default`, and `--tra
 | `--translate-default <on|off>`      | `MIC_TOOL_TS_TRANSLATE_DEFAULT`           | `off`                                                | no        |
 | `--translation-policy <policy>`     | `MIC_TOOL_TS_TRANSLATION_POLICY`          | `opposite`                                           | no        |
 | `--clipboard-default <on|off>`      | `MIC_TOOL_TS_CLIPBOARD_DEFAULT`           | `off`                                                | no        |
+| `--input-default <on|off>`          | `MIC_TOOL_TS_INPUT_DEFAULT`               | `off`                                                | no        |
 | `--protocol-output <path>`          | `MIC_TOOL_TS_PROTOCOL_OUTPUT`             | _unset_                                              | required when `--interaction-mode=hybrid` |
 | `--refine` / `--no-refine`          | `MIC_TOOL_TS_REFINE`                      | `true`                                               | no        |
 | `--llm-provider <name>`             | `MIC_TOOL_TS_LLM_PROVIDER`                | `azure-openai`                                       | no        |
@@ -240,9 +241,10 @@ Provider-specific env vars (consulted only when `--refine` is on AND `--llm-prov
   - `agent-protocol` — JSONL protocol events on stdout; diagnostics remain on stderr.
   - `hybrid` — human transcript remains on stdout and JSONL events are written to `--protocol-output`.
 - **Markers**: `MIC_TOOL_TS_COMMAND_PHRASE`, `MIC_TOOL_TS_SECTION_END_PHRASE`, `MIC_TOOL_TS_SECTION_CANCEL_PHRASE`, and `MIC_TOOL_TS_LITERAL_NEXT_PHRASE` must be non-empty. Defaults are `command`, `command send`, `command cancel`, and `literal phrase`.
-- **Operators**: `MIC_TOOL_TS_REFINE_DEFAULT`, `MIC_TOOL_TS_TRANSLATE_DEFAULT`, and `MIC_TOOL_TS_CLIPBOARD_DEFAULT` set the initial persistent state for section processing. During a session, speak `command refine`, `command translate`, or `command clipboard` to enable an operator; add `off` to disable it.
+- **Operators**: `MIC_TOOL_TS_REFINE_DEFAULT`, `MIC_TOOL_TS_TRANSLATE_DEFAULT`, `MIC_TOOL_TS_CLIPBOARD_DEFAULT`, and `MIC_TOOL_TS_INPUT_DEFAULT` set the initial persistent state for section processing. During a session, speak `command refine`, `command translate`, `command clipboard`, or `command input` to enable an operator; add `off` to disable it.
+- **Focused input delivery**: when `input` is enabled, the final processed section output is pasted into the currently focused macOS input control. The tool uses `pbcopy` plus System Events Command-V, so the terminal app may need macOS Accessibility permission. The operation is fail-open and logs failures under `--verbose`.
 - **Translation**: `MIC_TOOL_TS_TRANSLATION_POLICY` is one of `opposite`, `to-en`, or `to-el`. `opposite` translates Greek sections to English and English sections to Greek using simple complete-section language detection.
-- **Remembered runtime state**: on graceful shutdown, the tool writes `~/.tool-agents/mic-tool-ts/state.json` with only non-secret protocol state: `refine`, `translate`, `clipboard`, and `translation_policy`. At startup, saved values are restored only when the corresponding CLI/env default is absent. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, or `--translation-policy` values override the saved state.
+- **Remembered runtime state**: on graceful shutdown, the tool writes `~/.tool-agents/mic-tool-ts/state.json` with only non-secret protocol state: `refine`, `translate`, `clipboard`, `input`, and `translation_policy`. At startup, saved values are restored only when the corresponding CLI/env default is absent. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, or `--translation-policy` values override the saved state.
 - **Stream separation**: if JSONL uses stdout (`agent-protocol`), human transcript text is not written to stdout. `hybrid` requires `MIC_TOOL_TS_PROTOCOL_OUTPUT` so streams are not silently mixed.
 
 ### 3.18 `AZURE_OPENAI_API_KEY` — Azure OpenAI key

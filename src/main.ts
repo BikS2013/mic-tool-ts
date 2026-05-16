@@ -103,7 +103,7 @@ export async function main(argv: string[]): Promise<number> {
     protocolConfig = applyPersistedProtocolSettings(config.protocol, persisted);
     if (config.verbose && persisted !== null) {
       process.stderr.write(
-        `[mic-tool-ts] restored protocol settings: refine=${protocolConfig.initialOperators.refine ? "on" : "off"}, translate=${protocolConfig.initialOperators.translate ? "on" : "off"}, clipboard=${protocolConfig.initialOperators.clipboard ? "on" : "off"}, translation_policy=${protocolConfig.translationPolicy}\n`,
+        `[mic-tool-ts] restored protocol settings: refine=${protocolConfig.initialOperators.refine ? "on" : "off"}, translate=${protocolConfig.initialOperators.translate ? "on" : "off"}, clipboard=${protocolConfig.initialOperators.clipboard ? "on" : "off"}, input=${protocolConfig.initialOperators.input ? "on" : "off"}, translation_policy=${protocolConfig.translationPolicy}\n`,
       );
     }
   } catch (err) {

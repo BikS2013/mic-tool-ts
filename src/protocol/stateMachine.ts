@@ -254,6 +254,7 @@ export class VoiceCommandStateMachine {
     if (this.operatorState.refine) keys.push("refine");
     if (this.operatorState.translate) keys.push("translate");
     if (this.operatorState.clipboard) keys.push("clipboard");
+    if (this.operatorState.input) keys.push("input");
     return keys;
   }
 
@@ -300,5 +301,10 @@ function unique(values: readonly string[]): string[] {
 }
 
 function isOperatorKey(value: string | undefined): value is OperatorKey {
-  return value === "refine" || value === "translate" || value === "clipboard";
+  return (
+    value === "refine" ||
+    value === "translate" ||
+    value === "clipboard" ||
+    value === "input"
+  );
 }

@@ -27,6 +27,7 @@ export interface VoiceAgentProtocolControllerOptions {
   translator?: LLMRefiner | null;
   clipboardWriter?: (text: string) => Promise<void>;
   inputWriter?: (text: string) => Promise<void>;
+  diagnosticWriter?: (line: string, warning: boolean) => void;
 }
 
 export class VoiceAgentProtocolController {
@@ -40,6 +41,7 @@ export class VoiceAgentProtocolController {
   private readonly translator: LLMRefiner | null;
   private readonly clipboardWriter: (text: string) => Promise<void>;
   private readonly inputWriter: (text: string) => Promise<void>;
+  private readonly diagnosticWriter: (line: string, warning: boolean) => void;
   private readonly inFlight = new Set<Promise<void>>();
   private sessionStarted = false;
   private sessionEnded = false;
@@ -55,6 +57,9 @@ export class VoiceAgentProtocolController {
     this.translator = opts.translator ?? null;
     this.clipboardWriter = opts.clipboardWriter ?? copyToClipboard;
     this.inputWriter = opts.inputWriter ?? sendToFocusedInput;
+    this.diagnosticWriter = opts.diagnosticWriter ?? ((line) => {
+      process.stderr.write(line.endsWith("\n") ? line : `${line}\n`);
+    });
     this.stateMachine = new VoiceCommandStateMachine({
       markers: opts.markers,
       initialOperators: opts.initialOperators,
@@ -127,8 +132,9 @@ export class VoiceAgentProtocolController {
           target_policy: action.targetPolicy,
         });
         if (this.verbose) {
-          process.stderr.write(
-            `[mic-tool-ts] protocol state: ${action.key}=${action.value ? "on" : "off"}\n`,
+          this.diagnosticWriter(
+            `[mic-tool-ts] protocol state: ${action.key}=${action.value ? "on" : "off"}`,
+            false,
           );
         }
         return;
@@ -144,8 +150,9 @@ export class VoiceAgentProtocolController {
           this.renderer.refined(formatStatusReport(action));
         }
         if (this.verbose) {
-          process.stderr.write(
-            `[mic-tool-ts] protocol status: ${formatStatusSummary(action)}\n`,
+          this.diagnosticWriter(
+            `[mic-tool-ts] protocol status: ${formatStatusSummary(action)}`,
+            false,
           );
         }
         return;
@@ -171,8 +178,9 @@ export class VoiceAgentProtocolController {
           reason: action.reason,
         });
         if (this.verbose) {
-          process.stderr.write(
-            `[mic-tool-ts] protocol section cancelled: ${action.sectionId} (${action.reason})\n`,
+          this.diagnosticWriter(
+            `[mic-tool-ts] protocol section cancelled: ${action.sectionId} (${action.reason})`,
+            false,
           );
         }
         return;
@@ -183,7 +191,7 @@ export class VoiceAgentProtocolController {
       }
       case "section.empty": {
         if (this.verbose) {
-          process.stderr.write("[mic-tool-ts] protocol: empty section ignored\n");
+          this.diagnosticWriter("[mic-tool-ts] protocol: empty section ignored", false);
         }
         return;
       }
@@ -283,7 +291,7 @@ export class VoiceAgentProtocolController {
   }
 
   private warn(message: string): void {
-    process.stderr.write(`[mic-tool-ts] protocol warning: ${message}\n`);
+    this.diagnosticWriter(`[mic-tool-ts] protocol warning: ${message}`, true);
     this.writeProtocol({
       type: "protocol.warning",
       message,
@@ -295,8 +303,9 @@ export class VoiceAgentProtocolController {
     const tag =
       err instanceof LLMRefinementError ? `llm-${err.kind}` : operator;
     const message = err instanceof Error ? err.message : String(err);
-    process.stderr.write(
-      `[mic-tool-ts] protocol ${operator} failed (${tag}): ${message}\n`,
+    this.diagnosticWriter(
+      `[mic-tool-ts] protocol ${operator} failed (${tag}): ${message}`,
+      true,
     );
   }
 
@@ -309,7 +318,7 @@ export class VoiceAgentProtocolController {
     const warning = `${operator} operator failed: ${message}. ${remediation}`;
     this.warn(warning);
     if (this.verbose && err instanceof Error && err.stack !== undefined) {
-      process.stderr.write(`${err.stack}\n`);
+      this.diagnosticWriter(err.stack, true);
     }
   }
 }

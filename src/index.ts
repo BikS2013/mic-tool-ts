@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 import { main } from "./main.js";
+import { launchElectronUi } from "./ui/launcher.js";
 
-main(process.argv).then(
+const argv = process.argv;
+const run = argv[2] === "ui"
+  ? launchElectronUi()
+  : main(argv);
+
+run.then(
   (code) => process.exit(code),
   (err: unknown) => {
     // Top-level safety net; main() should normally catch its own errors and

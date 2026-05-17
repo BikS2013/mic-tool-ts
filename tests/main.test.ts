@@ -143,6 +143,7 @@ const GOOD_CONFIG: ResolvedConfig = Object.freeze({
   sttProvider: "soniox",
   apiKey: "test-api-key",
   apiKeyEnvName: "SONIOX_API_KEY",
+  apiKeySource: "flag",
   languages: ["en"],
   model: "stt-rt-v4",
   endpoint: "wss://stt-rt.soniox.com/transcribe-websocket",

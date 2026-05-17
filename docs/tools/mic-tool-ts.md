@@ -16,6 +16,12 @@ The supported user-facing invocation is the direct OS command:
 mic-tool-ts
 ```
 
+The macOS monitoring UI is launched with:
+
+```
+mic-tool-ts ui
+```
+
 Do not document `node dist/index.js`, `tsx src/index.ts`, `pnpm run dev`, or package-manager scripts as the installed-tool invocation. Those commands are development conveniences only.
 
 For local development installs, prefer a symlink from a PATH directory:
@@ -50,3 +56,12 @@ Full configuration reference: `docs/design/configuration-guide.md`.
 - `docs/design/configuration-guide.md`
 - `docs/design/project-functions.md`
 - `docs/design/project-design.md`
+
+## Electron UI
+
+- `mic-tool-ts ui` opens the Electron UI.
+- The Electron main process runs the shared session runner and owns configuration resolution, mic/STT lifecycle, protocol persistence, clipboard/input operations, and IPC.
+- Human transcript text and status messages render in the UI through typed session events, not by parsing terminal output.
+- On load, the UI resolves the same config chain as the CLI and displays non-secret runtime state: active provider, model, language hints, sample rate, protocol mode, operator state, API-key configured/missing status, expiry, and source tier.
+- The settings/protocol panes contain editable controls for STT provider, model, language hints, sample rate, endpoint detection, protocol mode, operator defaults, translation policy, and LLM enablement. UI edits are sent through the preload bridge, refresh provider credential status, and apply as explicit CLI-equivalent settings on the next started session.
+- Renderer content is local packaged content under `dist/ui/renderer/`, with no Node integration, context isolation, sandboxing, and a narrow preload API.

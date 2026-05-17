@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed design refresh only. No production Electron code has been written for this plan.
+Implemented 2026-05-16. The production renderer assets under `src/ui/renderer/` apply this visual direction with light mode, dark mode, reduced-motion, and reduced-transparency support.
 
 Related artifacts:
 
@@ -10,6 +10,7 @@ Related artifacts:
 - Investigation: `docs/reference/investigation-009-modern-macos-ui-review.md`
 - Previous visual: `docs/design/plan-008-electron-ui-command-visual.html`
 - Revised visual: `docs/design/plan-009-modern-macos-ui-visual.html`
+- Implementation research: `docs/reference/investigation-010-electron-ui-implementation.md`
 
 ## Goal
 
@@ -60,7 +61,7 @@ The mockup represents:
 - Use `BrowserWindow` with `titleBarStyle: "hiddenInset"` or `"hidden"`, tuned `trafficLightPosition`, macOS vibrancy, and `visualEffectState: "followWindow"`.
 - Let the Electron main process own secrets, mic capture, STT sessions, focused-input delivery, and file IO.
 - Keep renderer text focused on user tasks and state. Put internal stream-routing details in logs and documentation.
-- Before adding Electron, repeat dependency vetting and record the result in `Issues - Pending Items.md`.
+- Electron dependency vetting was repeated during implementation and recorded in `Issues - Pending Items.md`.
 
 ## Acceptance Criteria For The Visual Direction
 

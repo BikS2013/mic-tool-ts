@@ -81,7 +81,7 @@ For `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-d
 | `--endpoint <wss-url>`              | `MIC_TOOL_TS_ENDPOINT`                    | provider-specific                                    | no        |
 | `--language <code>` (repeatable)    | `MIC_TOOL_TS_LANGUAGES` (CSV)             | provider-specific                                    | no        |
 | `--sample-rate <hz>`                | `MIC_TOOL_TS_SAMPLE_RATE`                 | `16000`                                              | no        |
-| `--no-endpoint-detection`           | `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION`   | `true`                                               | no        |
+| `--endpoint-detection` / `--no-endpoint-detection` | `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION`   | `true`                                               | no        |
 | `--output-mode <mode>`              | `MIC_TOOL_TS_OUTPUT_MODE`                 | `overwrite`                                          | no        |
 | `--guard-phrase <phrase>`           | `MIC_TOOL_TS_GUARD_PHRASE`                | `τέλος εντολής`                                      | no        |
 | `--interaction-mode <mode>`         | `MIC_TOOL_TS_INTERACTION_MODE`            | `dictation`                                          | no        |
@@ -188,7 +188,7 @@ Provider-specific env vars (consulted only when `--refine` is on AND `--llm-prov
 - **Purpose**: when `true`, Soniox uses server-side endpoint detection and ElevenLabs uses VAD commit strategy. When `false`, provider finality/commits are less automatic.
 - **Obtain**: pick a boolean.
 - **Storage**: project-local `.env` or shell.
-- **Options**: `true` / `false` / `yes` / `no` / `on` / `off` / `1` / `0` (case-insensitive). The CLI side uses the flag `--no-endpoint-detection` to set it to `false`; there is no `--endpoint-detection` flag because the default is already on.
+- **Options**: `true` / `false` / `yes` / `no` / `on` / `off` / `1` / `0` (case-insensitive). The CLI side accepts `--endpoint-detection` to force it on and `--no-endpoint-detection` to force it off, so UI mode can override either env setting explicitly.
 - **Default**: `true`.
 
 ### 3.11 `MIC_TOOL_TS_OUTPUT_MODE` — stdout rendering mode

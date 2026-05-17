@@ -2,17 +2,18 @@
 
 ## Status
 
-Proposed design only. No production code has been written for this plan.
+Implemented 2026-05-16. The production implementation keeps this plan's shared session runner, UI event sink, Electron shell, and preload security model. Plan 009 supersedes the original visual direction.
 
 Related artifacts:
 
 - Refined request: `docs/design/request-014-electron-ui-command.md`
 - Investigation: `docs/reference/investigation-008-electron-ui-command.md`
 - Visual mockup: `docs/design/plan-008-electron-ui-command-visual.html`
+- Implementation research: `docs/reference/investigation-010-electron-ui-implementation.md`
 
 ## Goal
 
-Add a future `mic-tool-ts ui` subcommand that opens an Electron-based macOS-style interface for configuring the tool and monitoring an active transcription session. UI mode must render human transcript text, partials, finals, readiness, warnings, and session status inside the window instead of in the console.
+Add `mic-tool-ts ui` as an Electron-based macOS-style interface for monitoring and controlling an active transcription session. UI mode renders human transcript text, partials, finals, readiness, warnings, and session status inside the window instead of in the console.
 
 ## Design Target
 

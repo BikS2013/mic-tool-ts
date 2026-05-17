@@ -128,7 +128,7 @@ The tool MUST expose configuration for every non-secret Soniox session parameter
 | WebSocket endpoint      | `--endpoint`              | `MIC_TOOL_TS_ENDPOINT`                  | `wss://stt-rt.soniox.com/transcribe-websocket`         |
 | Language hints (repeat) | `--language` (variadic)   | `MIC_TOOL_TS_LANGUAGES` (CSV)           | `el,en`                                                |
 | PCM sample rate         | `--sample-rate`           | `MIC_TOOL_TS_SAMPLE_RATE`               | `16000`                                                |
-| Endpoint detection      | `--no-endpoint-detection` | `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION` | `true`                                                 |
+| Endpoint detection      | `--endpoint-detection` / `--no-endpoint-detection` | `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION` | `true`                                                 |
 
 `--language auto` MUST translate to `enable_language_identification: true` with no `language_hints`, and MUST NOT be combinable with other codes. The sample rate fed to `sox` and to the Soniox session MUST be the same value.
 
@@ -199,30 +199,33 @@ The protocol MUST prefer deterministic command-prefixed markers over inference-b
 
 ---
 
-## Proposed Functional Requirements — Electron UI Command
+## Functional Requirements — Electron UI Command
 
-Source: `docs/design/request-014-electron-ui-command.md`, `docs/design/plan-008-electron-ui-command.md`, `docs/design/request-016-modern-macos-ui-review.md`, `docs/design/plan-009-modern-macos-ui-review.md`, `docs/reference/investigation-008-electron-ui-command.md`, and `docs/reference/investigation-009-modern-macos-ui-review.md`.
-Status: proposed, not implemented.
+Source: `docs/design/request-014-electron-ui-command.md`, `docs/design/plan-008-electron-ui-command.md`, `docs/design/request-016-modern-macos-ui-review.md`, `docs/design/plan-009-modern-macos-ui-review.md`, `docs/design/request-017-ui-runtime-configuration-transcription.md`, `docs/reference/investigation-008-electron-ui-command.md`, `docs/reference/investigation-009-modern-macos-ui-review.md`, and `docs/reference/investigation-010-electron-ui-implementation.md`.
+Status: implemented 2026-05-16.
 
 ### FR-28 — Electron UI subcommand
-The tool SHOULD add `mic-tool-ts ui` as a user-facing subcommand that opens an Electron-based UI while preserving the existing `mic-tool-ts` CLI behavior.
+The tool MUST support `mic-tool-ts ui` as a user-facing subcommand that opens an Electron-based UI while preserving the existing `mic-tool-ts` CLI behavior.
 
 ### FR-29 — UI-owned transcript rendering
-When UI mode is active, human-facing partial transcripts, final transcripts, refined or translated outputs, readiness messages, warnings, and session status SHOULD render in the UI instead of stdout/stderr. Console output SHOULD be limited to fatal bootstrap or crash diagnostics that cannot be delivered to the UI.
+When UI mode is active, human-facing partial transcripts, final transcripts, refined or translated outputs, readiness messages, warnings, and session status MUST render in the UI instead of stdout/stderr. Console output MUST be limited to fatal bootstrap or crash diagnostics that cannot be delivered to the UI.
 
 ### FR-30 — UI configuration surface
-The UI SHOULD expose the existing major configuration categories: STT provider, API-key status and expiry, model, endpoint, language hints, sample rate, endpoint detection, guard phrase, protocol markers, operator defaults, translation policy, LLM refinement settings, and diagnostics. Missing required configuration MUST still raise typed configuration errors; the UI MUST NOT substitute fallback values.
+The UI MUST expose editable controls for the existing major runtime configuration categories: STT provider, API-key status and expiry, model, language hints, sample rate, endpoint detection, protocol mode, operator defaults, translation policy, LLM refinement settings, and diagnostics. On UI load, the displayed values MUST be resolved from the same configuration chain used by the CLI and persisted protocol settings. UI edits MUST cross the context-isolated preload IPC boundary as typed settings, MUST be validated in the Electron main process, and MUST be applied to the next started session as explicit CLI-equivalent settings. Missing required configuration MUST still raise typed configuration errors; the UI MUST NOT substitute fallback values.
+
+### FR-30.1 — UI credential status
+The UI MUST never receive API-key values. It MUST display only the active provider key name, configured/missing status, expiry reminder, and source tier (`CLI flag`, `local .env`, `user .env`, `shell env`, or `not found`). Switching provider in the UI MUST refresh the credential status for that provider before the next session starts.
 
 ### FR-31 — UI event stream
-The UI SHOULD receive typed events for session lifecycle, transcript partials/finals, turn boundaries, refined output, protocol events, warnings, diagnostics, and audio state. The UI MUST NOT parse terminal output to derive its state.
+The UI MUST receive typed events for session lifecycle, transcript partials/finals, turn boundaries, refined output, protocol events, warnings, and diagnostics. Live partial text MUST update the capture bar, and final/refined outputs MUST append to the transcript timeline. The UI MUST NOT parse terminal output to derive its state.
 
 ### FR-32 — macOS visual target
-The UI SHOULD target the current macOS Tahoe 26 design language with native-feeling traffic lights, a translucent sidebar/control layer, restrained animation, system typography, and high-legibility content surfaces. The implementation SHOULD use Electron's macOS vibrancy/window APIs and local CSS to approximate Liquid Glass while respecting reduced-motion and reduced-transparency accessibility settings. The preferred visual direction is the Plan 009 revision: transcript content remains the primary stable content plane, while glass-like styling is reserved mainly for navigation, toolbars, segmented controls, and capture controls.
+The UI MUST target the current macOS Tahoe 26 design language with native-feeling traffic lights, a translucent sidebar/control layer, restrained animation, system typography, and high-legibility content surfaces. The implementation MUST use Electron's macOS vibrancy/window APIs and local CSS to approximate Liquid Glass while respecting light mode, dark mode, reduced-motion, and reduced-transparency accessibility settings. The preferred visual direction is the Plan 009 revision: transcript content remains the primary stable content plane, while glass-like styling is reserved mainly for navigation, toolbars, segmented controls, and capture controls.
 
-## Proposed Non-Functional Requirements — Electron UI Command
+## Non-Functional Requirements — Electron UI Command
 
 ### NFR-13 — Electron security boundary
-The Electron renderer MUST load only local packaged content, MUST NOT have Node.js integration, MUST use context isolation and sandboxing, and MUST communicate with the main process through a narrow preload bridge that validates payloads.
+The Electron renderer MUST load only local packaged content, MUST NOT have Node.js integration, MUST use context isolation and sandboxing, and MUST communicate with the main process through a narrow preload bridge that validates payloads. The preload bridge MUST be packaged in a format supported by Electron's sandboxed preload environment. If the bridge does not load, the UI MUST show an explicit bridge-unavailable error instead of running in fake demo mode.
 
 ### NFR-14 — Dependency vetting for Electron
-Before adding Electron or any UI build/runtime dependency, the implementation MUST follow the project's dependency-vetting policy, pin a vetted current stable version, run the audit command, and record the decision in `Issues - Pending Items.md`.
+The Electron implementation MUST follow the project's dependency-vetting policy, pin a vetted current stable version, run the audit command, and record the decision in `Issues - Pending Items.md`.

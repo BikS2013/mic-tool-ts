@@ -214,6 +214,7 @@ describe("resolveConfig — API-key precedence chain (FR-5 / AC-7)", () => {
     setShellKey("sk_from_shell");
     const cfg = resolveConfig(argv("--api-key", "sk_from_flag"));
     expect(cfg.apiKey).toBe("sk_from_flag");
+    expect(cfg.apiKeySource).toBe("flag");
   });
 
   it(".env wins over shell env when no flag is provided", () => {
@@ -221,6 +222,7 @@ describe("resolveConfig — API-key precedence chain (FR-5 / AC-7)", () => {
     setShellKey("sk_from_shell");
     const cfg = resolveConfig(argv());
     expect(cfg.apiKey).toBe("sk_from_dotenv");
+    expect(cfg.apiKeySource).toBe(".env");
   });
 
   it("shell env is used when no flag and no .env file exists", () => {
@@ -228,6 +230,7 @@ describe("resolveConfig — API-key precedence chain (FR-5 / AC-7)", () => {
     setShellKey("sk_from_shell");
     const cfg = resolveConfig(argv());
     expect(cfg.apiKey).toBe("sk_from_shell");
+    expect(cfg.apiKeySource).toBe("env");
   });
 
   it(".env key is trimmed before being used", () => {
@@ -594,6 +597,16 @@ describe("resolveConfig — LLM refinement defaults", () => {
     ).toThrowError(/AZURE_OPENAI_API_KEY/);
   });
 
+  it("can inspect resolved UI settings without requiring LLM provider secrets", () => {
+    setCwd();
+    const cfg = resolveConfig(argvRefine("--api-key", "sk_test"), {
+      validateLlmProviderConfig: false,
+    });
+    expect(cfg.llm.enabled).toBe(true);
+    expect(cfg.llm.provider).toBe("azure-openai");
+    expect(cfg.apiKey).toBe("sk_test");
+  });
+
   it("reads Azure OpenAI env vars from project-local .env", () => {
     setCwd(
       "AZURE_OPENAI_API_KEY=az-key\nAZURE_OPENAI_ENDPOINT=https://x.openai.azure.com\nAZURE_OPENAI_DEPLOYMENT=my-deploy\nAZURE_OPENAI_API_VERSION=2025-01-01-preview\n",
@@ -726,6 +739,12 @@ describe("resolveConfig — env-var aliases for every flag", () => {
     setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION=true\n");
     const cfg = resolveConfig(argv("--no-endpoint-detection"));
     expect(cfg.enableEndpointDetection).toBe(false);
+  });
+
+  it("--endpoint-detection wins over env var", () => {
+    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION=false\n");
+    const cfg = resolveConfig(argv("--endpoint-detection"));
+    expect(cfg.enableEndpointDetection).toBe(true);
   });
 
   it("MIC_TOOL_TS_GUARD_PHRASE overrides the default", () => {

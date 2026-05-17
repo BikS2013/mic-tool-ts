@@ -28,7 +28,7 @@ import {
   LLMConfigurationError,
   MissingConfigurationError,
 } from "./errors.js";
-import { loadEnvChain, type EnvChain } from "./config/envChain.js";
+import { loadEnvChain, type EnvChain, type EnvSource } from "./config/envChain.js";
 import {
   parseBoolean,
   parseCsvNonEmpty,
@@ -69,6 +69,8 @@ export interface ResolvedConfig {
   readonly apiKey: string;
   /** Active provider API-key env var name. */
   readonly apiKeyEnvName: "SONIOX_API_KEY" | "ELEVENLABS_API_KEY";
+  /** Source tier that supplied the active provider API key. */
+  readonly apiKeySource: EnvSource;
   /** Optional YYYY-MM-DD reminder for active provider API-key renewal. */
   readonly apiKeyExpiresAt?: string;
   /** Active provider realtime model name. */
@@ -107,6 +109,15 @@ export class HelpOrVersionShown extends Error {
     this.name = "HelpOrVersionShown";
     this.kind = kind;
   }
+}
+
+export interface ResolveConfigOptions {
+  /**
+   * When false, validates and reports the selected LLM provider/model without
+   * requiring provider credentials. This is for non-secret UI inspection only;
+   * runtime session startup keeps the default strict behavior.
+   */
+  readonly validateLlmProviderConfig?: boolean;
 }
 
 // ----------------------------------------------------------------------------
@@ -188,7 +199,7 @@ interface ParsedCliOptions {
   endpoint?: string;
   language?: string[]; // commander variadic; undefined when not passed
   sampleRate?: string;
-  endpointDetection?: boolean; // false when --no-endpoint-detection was passed
+  endpointDetection?: boolean; // true/false when --endpoint-detection/--no-endpoint-detection was passed
   outputMode?: string;
   guardPhrase?: string;
   interactionMode?: string;
@@ -228,6 +239,7 @@ function parseCli(argv: string[], version: string): ParsedCliOptions {
         "  4. shell environment",
         "",
         "Examples:",
+        "  $ mic-tool-ts ui                              # open the macOS monitoring UI",
         "  $ mic-tool-ts --api-key sk_... --language el --language en",
         "  $ SONIOX_API_KEY=sk_... mic-tool-ts --output-mode append",
         "  $ mic-tool-ts --stt-provider elevenlabs --elevenlabs-api-key xi_...",
@@ -270,6 +282,10 @@ function parseCli(argv: string[], version: string): ParsedCliOptions {
     .option(
       "--sample-rate <hz>",
       "PCM sample rate (8000-48000). Env: MIC_TOOL_TS_SAMPLE_RATE.",
+    )
+    .option(
+      "--endpoint-detection",
+      "Enable provider endpoint/VAD detection. Env: MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION.",
     )
     .option(
       "--no-endpoint-detection",
@@ -512,10 +528,14 @@ function resolveProviderConfig(
  * Resolve CLI args + the four-tier env-var chain into a frozen
  * {@link ResolvedConfig}. See module header for full precedence rules.
  */
-export function resolveConfig(argv: string[]): ResolvedConfig {
+export function resolveConfig(
+  argv: string[],
+  opts: ResolveConfigOptions = {},
+): ResolvedConfig {
   const version = readPackageVersion();
   const parsed = parseCli(argv, version);
   const chain = loadEnvChain({ toolName: TOOL_NAME });
+  const validateLlmProviderConfig = opts.validateLlmProviderConfig ?? true;
 
   // ---- STT provider + active provider API key (required) -----------------
   const sttProvider = validateSttProvider(
@@ -640,9 +660,11 @@ export function resolveConfig(argv: string[]): ResolvedConfig {
   }
 
   let enableEndpointDetection: boolean;
-  if (parsed.endpointDetection === false) {
+  if (parsed.endpointDetection === true) {
+    enableEndpointDetection = true;
+  } else if (parsed.endpointDetection === false) {
     // commander sets `endpointDetection: false` when --no-endpoint-detection
-    // was passed; absent when neither was passed.
+    // was passed; absent when neither endpoint flag was passed.
     enableEndpointDetection = false;
   } else {
     const envVal = chain.value("MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION");
@@ -864,7 +886,7 @@ export function resolveConfig(argv: string[]): ResolvedConfig {
   }
 
   let providerConfig: ProviderConfig;
-  if (llmEnabled) {
+  if (llmEnabled && validateLlmProviderConfig) {
     providerConfig = resolveProviderConfig(llmProvider, llmModel, chain);
   } else {
     providerConfig =
@@ -909,6 +931,7 @@ export function resolveConfig(argv: string[]): ResolvedConfig {
     sttProvider,
     apiKey,
     apiKeyEnvName,
+    apiKeySource,
     apiKeyExpiresAt,
     model,
     endpoint,

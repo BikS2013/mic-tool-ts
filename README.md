@@ -114,11 +114,18 @@ mic-tool-ts --language auto
 # Custom Soniox model + sample rate
 mic-tool-ts --model stt-rt-v4 --sample-rate 24000
 
+# Force endpoint/VAD detection on or off
+mic-tool-ts --endpoint-detection
+mic-tool-ts --no-endpoint-detection
+
 # Use ElevenLabs Scribe Realtime instead of Soniox
 mic-tool-ts --stt-provider elevenlabs --elevenlabs-api-key xi_...
 
 # Emit JSONL events for downstream agents instead of human transcript text
 mic-tool-ts --interaction-mode agent-protocol --no-refine
+
+# Open the macOS monitoring UI
+mic-tool-ts ui
 ```
 
 While running, the tool emits:
@@ -130,6 +137,12 @@ While running, the tool emits:
 - If active operators process the section: the processed text on its own line + another blank line in dictation mode, a `section.processed` JSONL event in agent-protocol mode, a `clipboard.copied` event when clipboard copy succeeds, and an `input.sent` event when focused-input delivery succeeds.
 
 Press Ctrl+C to stop. A second Ctrl+C during shutdown force-quits (exit code 130).
+
+### macOS UI
+
+`mic-tool-ts ui` opens the Electron monitoring UI. The window uses the same configuration chain as the CLI, starts and stops the shared transcription session from the UI, and renders partials, finals, processed sections, readiness, warnings, and protocol events inside the window instead of stdout. On load, the settings inspector shows the resolved provider, model, languages, protocol mode, operator state, active API-key name, configured/missing status, expiry reminder, and config source tier without exposing secret values. The settings and protocol panes provide editable controls for provider, model, languages, sample rate, endpoint detection, protocol mode, operator defaults, translation policy, and LLM enablement. Changes are validated through the preload IPC bridge and applied to the next started session.
+
+The renderer supports light and dark mode, reduced motion, and reduced transparency. Missing required configuration still fails with the same typed errors; the UI does not invent placeholder secrets or fallback API keys.
 
 ---
 

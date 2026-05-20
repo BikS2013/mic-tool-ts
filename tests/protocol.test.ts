@@ -13,6 +13,7 @@ import {
   detectLanguage,
   targetLanguageFor,
 } from "../src/protocol/controller.js";
+import { FocusedInputDeliveryError } from "../src/platform/macos/focusedInputHelper.js";
 import type { MarkerConfig, OperatorState } from "../src/protocol/types.js";
 import type { Renderer } from "../src/render/renderer.js";
 import type { LLMRefiner } from "../src/llm/types.js";
@@ -517,6 +518,43 @@ describe("JSONL protocol controller", () => {
         message: expect.stringContaining(
           "System Settings > Privacy & Security > Accessibility",
         ),
+      }),
+    );
+  });
+
+  it("explains macOS accessibility remediation for native helper denial", async () => {
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    const out = new PassThrough();
+    const inputWriter = vi.fn(async () => {
+      throw new FocusedInputDeliveryError(
+        "accessibility_not_trusted: Grant Accessibility permission to mic-tool-ts-input-helper.",
+        { code: "accessibility_not_trusted" },
+      );
+    });
+    const controller = new VoiceAgentProtocolController({
+      mode: "agent-protocol",
+      renderer: fakeRenderer(),
+      writer: new JsonlProtocolWriter({ out }),
+      markers: MARKERS,
+      initialOperators: enabledOperators("input"),
+      translationPolicy: "opposite",
+      inputWriter,
+    });
+
+    try {
+      controller.startSession();
+      controller.final("paste me command send");
+      await controller.endSession("test");
+    } finally {
+      stderrWrite.mockRestore();
+    }
+
+    expect(parseJsonl(out)).toContainEqual(
+      expect.objectContaining({
+        type: "protocol.warning",
+        message: expect.stringContaining("mic-tool-ts-input-helper"),
       }),
     );
   });

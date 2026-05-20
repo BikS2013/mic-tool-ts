@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process";
 
 import type { LLMRefiner } from "../llm/types.js";
+import {
+  FocusedInputDeliveryError,
+  sendToFocusedInput,
+} from "../platform/macos/focusedInputHelper.js";
 import type { Renderer } from "../render/renderer.js";
 import { LLMRefinementError } from "../errors.js";
 import { VoiceCommandStateMachine, type ProtocolAction } from "./stateMachine.js";
@@ -330,6 +334,20 @@ export class VoiceAgentProtocolController {
 }
 
 function inputFailureRemediation(err: unknown): string {
+  if (err instanceof FocusedInputDeliveryError) {
+    if (err.code === "accessibility_not_trusted") {
+      return [
+        "Open System Settings > Privacy & Security > Accessibility and enable mic-tool-ts-input-helper, plus the app that launched mic-tool-ts if macOS lists it separately.",
+        "Restart the launching app after changing the permission, then focus the target input control before command send completes.",
+      ].join(" ");
+    }
+    if (err.code === "helper_unavailable") {
+      return "Rebuild mic-tool-ts so dist/native/macos/mic-tool-ts-input-helper exists and is executable.";
+    }
+    if (err.code === "unsupported_platform") {
+      return "Focused input delivery is currently macOS-only.";
+    }
+  }
   const message = err instanceof Error ? err.message : String(err);
   if (
     message.includes("not allowed to send keystrokes") ||
@@ -379,17 +397,6 @@ export function targetLanguageFor(
   if (policy === "to-en") return "en";
   if (policy === "to-el") return "el";
   return source === "el" ? "en" : "el";
-}
-
-async function sendToFocusedInput(text: string): Promise<void> {
-  if (process.platform !== "darwin") {
-    throw new Error("focused input send is only implemented on macOS");
-  }
-  await copyToClipboard(text);
-  await runCommand("osascript", [
-    "-e",
-    'tell application "System Events" to keystroke "v" using command down',
-  ]);
 }
 
 async function copyToClipboard(text: string): Promise<void> {

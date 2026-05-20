@@ -173,7 +173,7 @@ command send.
 
 In `agent-protocol` mode, stdout contains JSON Lines such as `state.changed`, `status.reported`, `section.submitted`, `section.processed`, `section.cancelled`, `clipboard.copied`, `input.sent`, and `session.ended`. Human diagnostics, including the ready message, stay on stderr.
 
-`command input` sends the final processed section output to the currently focused macOS input control by copying the text to the clipboard and issuing Command-V through System Events. Focus must already be on the target control before `command send` completes. macOS may require Accessibility permission for the terminal app running `mic-tool-ts`; failures emit a non-fatal warning on stderr and a `protocol.warning` event in protocol modes.
+`command input` sends the final processed section output to the currently focused macOS input control through the bundled native helper `dist/native/macos/mic-tool-ts-input-helper`. The helper reads the processed text from stdin, tries direct Accessibility insertion first, then Unicode keyboard events, then clipboard-preserving physical Command-V as fallback. Focus must already be on the target control before `command send` completes. macOS may require Accessibility permission for `mic-tool-ts-input-helper` and sometimes the app that launched `mic-tool-ts`; failures emit a non-fatal warning on stderr and a `protocol.warning` event in protocol modes.
 
 Remembered settings:
 
@@ -204,7 +204,8 @@ Remembered settings:
 | `elevenlabs_auth: ...`                                                              |    4 | ElevenLabs rejected the key or account access. Rotate/check the key and Scribe access.                   |
 | `elevenlabs_network: ...`                                                           |    5 | Network issue / ElevenLabs unreachable. Re-try; check `--endpoint`.                                      |
 | `elevenlabs_protocol: ...`                                                          |    6 | ElevenLabs rejected the session config, quota, rate limit, or input shape.                               |
-| `protocol warning: input operator failed: ... not allowed to send keystrokes ... (1002)` | n/a | macOS blocked paste automation. Open System Settings → Privacy & Security → Accessibility, enable the app that launched `mic-tool-ts` (Terminal, iTerm2, VS Code, Cursor, etc.), restart it, then focus the target input before `command send`. |
+| `protocol warning: input operator failed: accessibility_not_trusted ...` | n/a | macOS blocked the native focused-input helper. Open System Settings → Privacy & Security → Accessibility, enable `mic-tool-ts-input-helper` and the app that launched `mic-tool-ts` if macOS lists it separately, restart the launching app, then focus the target input before `command send`. |
+| `protocol warning: input operator failed: ... not allowed to send keystrokes ... (1002)` | n/a | Legacy paste automation was blocked by macOS. Open System Settings → Privacy & Security → Accessibility, enable the app that launched `mic-tool-ts` (Terminal, iTerm2, VS Code, Cursor, etc.), restart it, then focus the target input before `command send`. |
 | UI push-to-talk starts but does not stop on key release | n/a | macOS blocked the native key-release hook. Open System Settings → Privacy & Security → Input Monitoring and Accessibility, enable the app that launched `mic-tool-ts ui` (Terminal, iTerm2, VS Code, Cursor, etc.), restart that app, and relaunch `mic-tool-ts ui`. Until permission is granted, the registered hotkey falls back to press-to-toggle. |
 | `[mic-tool-ts] WARNING: SONIOX_API_KEY expired N days ago ...`                         |  n/a | Renew the key at <https://console.soniox.com>; update `SONIOX_API_KEY_EXPIRES_AT`.                       |
 

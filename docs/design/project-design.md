@@ -1433,15 +1433,11 @@ The orchestrator constructs `VoiceAgentProtocolController` and routes all finali
 
 ### 17.8 Focused input operator
 
-`command input` enables the focused-input operator, and `command input off` disables it. When enabled, the final processed output for a submitted section is sent to the currently focused macOS input control after refinement and translation complete. The implemented delivery path copies the final text with `pbcopy` and invokes paste with:
+`command input` enables the focused-input operator, and `command input off` disables it. When enabled, the final processed output for a submitted section is sent to the currently focused macOS input control after refinement and translation complete. The implemented delivery path invokes the bundled Swift helper at `dist/native/macos/mic-tool-ts-input-helper`, writes the processed text to helper stdin, reads one JSON result from helper stdout, and maps helper failures into the existing fail-open protocol warning path.
 
-```applescript
-tell application "System Events" to keystroke "v" using command down
-```
+The helper's default `auto` method tries direct Accessibility insertion into the focused element first, then Unicode keyboard-event typing, then clipboard-preserving physical Command-V using virtual key code `9`. The user is responsible for focusing the target control before `command send` completes. macOS may require Accessibility permission for `mic-tool-ts-input-helper` and sometimes for the app that launched `mic-tool-ts`, such as Terminal, iTerm2, VS Code, or Cursor. Focused-input failures emit a non-fatal stderr warning plus a `protocol.warning` event in protocol modes, produce no `input.sent` event, and do not fail the process.
 
-This supports terminals, text fields, browser editors, and other controls that accept normal paste. The user is responsible for focusing the target control before `command send` completes. macOS may require Accessibility permission for the terminal app running `mic-tool-ts`. Focused-input failures emit a non-fatal stderr warning plus a `protocol.warning` event in protocol modes, produce no `input.sent` event, and do not fail the process.
-
-When System Events returns error `1002` / `not allowed to send keystrokes`, the warning names the macOS permission path: System Settings > Privacy & Security > Accessibility. The user must enable the app that launched `mic-tool-ts`, such as Terminal, iTerm2, VS Code, or Cursor, then restart that app before retrying.
+The previous `pbcopy` plus System Events path remains documented only as historical context. The current runtime does not silently fall back to it if the helper is missing; a missing or non-executable helper produces an explicit `helper_unavailable` warning so packaging defects are visible.
 
 ### 17.9 Remembered protocol settings
 
@@ -1507,3 +1503,39 @@ The UI settings surface includes a push-to-talk enable switch and an editable ac
 The implementation combines Electron `globalShortcut` with `uiohook-napi`. `globalShortcut` reserves the configured accelerator for the press path so the foreground application does not receive `Command+'` and beep. `uiohook-napi` remains responsible for system-wide key release because Electron does not expose a release event for registered global shortcuts. `src/ui/globalHotkeyManager.ts` dynamically loads the native hook module, registers the Electron global shortcut, listens for native global `keydown` and `keyup`, and matches those events against the current UI accelerator. Electron main owns session start/stop callbacks. Focused-window handling through `webContents.before-input-event` and the renderer fallback remain available if the native hook cannot start. Repeated keydown events while the key is held are ignored. Keyup stops only the hotkey-owned session. If macOS blocks the native release hook, the registered global shortcut remains active and falls back to press-to-toggle with a visible warning. Manual Start/Stop remains independent.
 
 Hotkey release calls `stopSession({ submitPending: true })`. Electron main encodes that request as the `AbortSignal.reason` for the shared session runner. During UI shutdown, `src/core/sessionRunner.ts` passes `submitPending` to `VoiceAgentProtocolController.endSession()`. The protocol state machine then drains any finalized pending section as `section.submitted` rather than `section.cancelled`, so the existing refine, translate, clipboard, and focused-input operators run after release. Normal manual stop keeps the previous shutdown-cancellation behavior. Native hook startup failures are reported as UI warnings and do not crash UI mode.
+
+---
+
+## 21. UI Section Scrolling
+
+Status: implemented 2026-05-20. Refined request: `docs/reference/refined-request-ui-section-scrolling.md`. Codebase scan: `docs/reference/codebase-scan-ui-section-scrolling.md`. Implementation plan: `docs/design/plan-013-ui-section-scrolling.md`.
+
+The Electron renderer keeps `body` and `.app-shell` fixed to the BrowserWindow and makes each major region responsible for its own overflow. The toolbar and capture bar allow horizontal scrolling so compact windows do not permanently clip controls or status text. The sidebar, inspector, active view panel, transcript timeline, settings/protocol summary lists, and event lists use local `overflow: auto` with stable scrollbar gutters.
+
+The active content view is a bounded grid area. Settings and protocol forms keep a practical minimum content width so controls remain usable and horizontal scrolling appears when the window is narrower than the control surface. Transcript rows and event/list rows also keep minimum widths while allowing text to wrap where appropriate. Existing transcript auto-scroll remains owned by `src/ui/renderer/app.ts`, which continues to set `timeline.scrollTop = timeline.scrollHeight` after transcript render.
+
+---
+
+## 22. Native Focused Input Helper
+
+Status: implemented 2026-05-20. Refined requests: `docs/reference/refined-request-focused-input-helper-plan-design.md` and `docs/reference/refined-request-focused-input-helper-implementation.md`. Codebase scan: `docs/reference/codebase-scan-focused-input-helper-implementation.md`. Prior investigation: `docs/reference/investigation-focused-control-text-delivery.md`. Implementation plan: `docs/design/plan-014-focused-input-helper.md`. Focused design: `docs/design/focused-input-helper-design.md`.
+
+The focused-input helper is a bundled macOS user-level assistive binary named `mic-tool-ts-input-helper`. It is an internal component invoked by `mic-tool-ts`; it is not the primary user-facing command. The helper exists because there is no single universal macOS API for inserting arbitrary text into every active focused control. The chosen architecture is therefore ordered and fallback-capable: first try direct Accessibility insertion into the focused element, then try Unicode keyboard-event typing, then use clipboard-preserving physical key-code paste as the broad compatibility fallback.
+
+The TypeScript process remains the orchestrator. `VoiceAgentProtocolController` keeps ownership of the `input` operator and calls a focused-input adapter after section processing completes. The adapter locates the bundled helper under `dist/native/macos/`, spawns it as a short-lived child process, writes processed text to stdin, reads one structured JSON object from stdout, and maps failures into the existing `protocol.warning` path. Transcript text must never be passed as a command-line argument, echoed in diagnostics, or written to persistent helper files.
+
+The helper command surface is intentionally small:
+
+```text
+mic-tool-ts-input-helper diagnose
+mic-tool-ts-input-helper send --method auto
+mic-tool-ts-input-helper send --method ax-value
+mic-tool-ts-input-helper send --method unicode-events
+mic-tool-ts-input-helper send --method paste-keycode
+```
+
+`diagnose` is non-mutating and reports Accessibility trust plus focused-element capabilities. `send --method auto` reads stdin and runs the delivery cascade. A successful result returns JSON such as `{"ok":true,"method":"ax-value","target_role":"AXTextArea"}`. An actionable failure returns JSON such as `{"ok":false,"code":"accessibility_not_trusted","message":"Grant Accessibility permission to mic-tool-ts-input-helper."}` and exits with code `2`. Unexpected helper failures exit with code `1`.
+
+Deployment is bundled rather than privileged. The build compiles `native/macos/input-helper/main.swift` with `swiftc` and copies the executable to `dist/native/macos/mic-tool-ts-input-helper`. No LaunchAgent, root daemon, or global system installation is required. macOS Accessibility permission applies to the process that performs UI control, so users may need to approve the helper binary, the launching terminal/app, or both depending on how macOS presents the permission request.
+
+Manual compatibility testing is part of the design, not an optional polish step. The implementation must record behavior for TextEdit, Notes, Terminal/iTerm2, Safari and Chrome textareas, Google Docs or another contenteditable web editor, VS Code, Cursor, and a chat app such as Slack or Discord, using English, Greek, mixed-language, punctuation-heavy, multiline, and long text payloads. Direct Accessibility insertion is expected to work only for some controls; paste remains the universal fallback.

@@ -187,7 +187,13 @@ Operators MUST run only on complete submitted sections, never partial words. The
 The tool MUST remember non-secret voice-agent protocol settings across graceful restarts. On shutdown it MUST persist the current `refine`, `translate`, `clipboard`, `input`, and `translation_policy` values to `~/.tool-agents/mic-tool-ts/state.json` using file mode `0600` in a `0700` per-user tool folder. On startup it MUST restore those values when the corresponding CLI/env default was not explicitly configured. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, and `--translation-policy` values MUST override saved state. The persisted file MUST NOT contain API keys, provider endpoints, prompts, transcript text, or processed section content. Invalid persisted state at startup MUST raise a typed configuration error.
 
 ### FR-27 — Focused input operator
-When the `input` operator is enabled, the tool MUST send the final processed section output to the currently focused macOS input control after the section pipeline completes. The implementation MUST use a dependency-free macOS path (`pbcopy` plus System Events Command-V) and MUST emit `input.sent` on success in protocol modes. Focused-input failures, including missing Accessibility permission, MUST be fail-open: they emit a non-fatal stderr warning and a `protocol.warning` event in protocol modes, and they MUST NOT cause the process to exit non-zero.
+When the `input` operator is enabled, the tool MUST send the final processed section output to the currently focused macOS input control after the section pipeline completes. The implementation MUST use the bundled macOS focused-input helper and MUST emit `input.sent` only after the helper reports successful delivery. Focused-input failures, including missing Accessibility permission, missing helper binary, or unsupported focused controls, MUST be fail-open: they emit a non-fatal stderr warning and a `protocol.warning` event in protocol modes, and they MUST NOT cause the process to exit non-zero.
+
+### FR-27.1 — Native focused input helper
+Source: `docs/reference/refined-request-focused-input-helper-plan-design.md`, `docs/reference/refined-request-focused-input-helper-implementation.md`, `docs/reference/codebase-scan-focused-input-helper-implementation.md`, `docs/reference/investigation-focused-control-text-delivery.md`, `docs/design/plan-014-focused-input-helper.md`, and `docs/design/focused-input-helper-design.md`.
+Status: implemented 2026-05-20.
+
+The focused-input implementation uses a bundled macOS user-level helper invoked by `mic-tool-ts`. The helper MUST read processed text from stdin, never from command-line arguments, and MUST return a structured JSON delivery result on stdout. Its default `auto` strategy MUST attempt direct Accessibility insertion first, Unicode keyboard-event typing second, and clipboard-preserving physical key-code paste as the universal fallback. The helper MUST expose a non-mutating `diagnose` mode for permission and focused-element troubleshooting. The public user-facing invocation remains `mic-tool-ts`; the helper is an internal implementation component, not a separate primary command.
 
 ## Non-Functional Requirements — Voice Agent Command Protocol
 
@@ -196,6 +202,9 @@ Human transcript text and machine protocol events MUST remain stream-separated b
 
 ### NFR-12 — Protocol robustness
 The protocol MUST prefer deterministic command-prefixed markers over inference-based intent detection. False state changes or section processing are more harmful than requiring explicit `command refine`, `command send`, and `command cancel` markers.
+
+### NFR-12.1 — Focused-input privacy and permission handling
+The native focused-input helper MUST NOT persist transcript text, echo transcript text in diagnostics, or receive transcript text through process arguments. Missing Accessibility permission or unsupported focused controls MUST produce explicit actionable warnings rather than hidden fallback behavior. Focused-input delivery MUST remain fail-open: helper failure MUST NOT terminate the transcription session.
 
 ---
 
@@ -224,6 +233,9 @@ The UI MUST target the current macOS Tahoe 26 design language with native-feelin
 
 ### FR-33 — UI push-to-talk hotkey
 The UI MUST expose a push-to-talk hotkey setting with an enable/disable control and an editable Electron-style accelerator string. The default hotkey MUST be `Command+'`. When enabled and `mic-tool-ts ui` is running, system-wide hotkey keydown MUST start a UI-owned capture session if no session is already active, even when another macOS app has focus. The press path MUST reserve the configured shortcut with the OS where Electron supports the accelerator so foreground apps do not receive the shortcut. System-wide hotkey keyup MUST stop the hotkey-owned session when the native release hook is available. Hotkey release MUST submit any finalized pending section to the existing protocol operator pipeline so configured refinement, translation, clipboard, and focused-input processing can run after release. Repeated keydown events while held MUST NOT start duplicate sessions. Manual Start/Stop sessions MUST remain independent and MUST NOT submit pending text on stop unless explicitly requested by the hotkey release path. If the native release hook cannot start, the UI MUST warn and the registered shortcut MUST fall back to press-to-toggle so the feature remains usable from other apps. Invalid hotkey strings MUST be rejected and reported in the UI rather than replaced with a hidden fallback.
+
+### FR-34 — UI section scrolling
+Every major Electron UI region MUST keep overflowing content reachable. The main view panels, transcript timeline, settings view, protocol view, logs view, sidebar, inspector, toolbar, and capture bar MUST provide local scrolling when their content exceeds the available section size vertically or horizontally. The document body MUST remain fixed to the Electron window so scrolling is contained within the relevant section.
 
 ## Non-Functional Requirements — Electron UI Command
 

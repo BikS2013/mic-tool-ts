@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import { createRefiner } from "../src/llm/factory.js";
 import { LLMConfigurationError } from "../src/errors.js";
 import { AzureOpenAIRefiner } from "../src/llm/azureOpenAI.js";
+import { GoogleRefiner } from "../src/llm/google.js";
 import type { LLMConfig, LLMProvider } from "../src/llm/types.js";
 
 function azureCfg(): LLMConfig {
@@ -38,6 +39,21 @@ function stubCfg(provider: Exclude<LLMProvider, "azure-openai">): LLMConfig {
   };
 }
 
+function googleCfg(): LLMConfig {
+  return {
+    enabled: true,
+    provider: "google",
+    model: "gemini-3.5-flash",
+    systemPrompt: "x",
+    requestTimeoutMs: 1000,
+    verbose: false,
+    providerConfig: {
+      provider: "google",
+      apiKey: "google-key",
+    },
+  };
+}
+
 describe("createRefiner", () => {
   it("returns null when disabled", () => {
     const cfg = { ...azureCfg(), enabled: false };
@@ -49,10 +65,14 @@ describe("createRefiner", () => {
     expect(r).toBeInstanceOf(AzureOpenAIRefiner);
   });
 
+  it("returns a GoogleRefiner for provider=google", () => {
+    const r = createRefiner(googleCfg());
+    expect(r).toBeInstanceOf(GoogleRefiner);
+  });
+
   for (const provider of [
     "openai",
     "anthropic",
-    "google",
     "azure-ai-inference",
     "ollama",
     "litellm",

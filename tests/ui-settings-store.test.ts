@@ -54,6 +54,8 @@ describe("UI settings store", () => {
         focusedInput: true,
         translationPolicy: "to-en",
         llmEnabled: false,
+        llmProvider: "openai",
+        llmModel: "gpt-5.4-mini",
         hotkeyEnabled: true,
         hotkey: "CmdOrCtrl+Shift+Space",
         apiKeyName: "SHOULD_NOT_BE_STORED",
@@ -83,6 +85,8 @@ describe("UI settings store", () => {
         focusedInput: true,
         translationPolicy: "to-en",
         llmEnabled: false,
+        llmProvider: "openai",
+        llmModel: "gpt-5.4-mini",
         hotkeyEnabled: true,
         hotkey: "CommandOrControl+Shift+Space",
       });
@@ -91,6 +95,8 @@ describe("UI settings store", () => {
       version: 1,
       settings: {
         provider: "elevenlabs",
+        llmProvider: "openai",
+        llmModel: "gpt-5.4-mini",
         hotkey: "CommandOrControl+Shift+Space",
       },
       push_to_talk: {
@@ -128,6 +134,41 @@ describe("UI settings store", () => {
       .toEqual({
         enabled: true,
         hotkey: "CommandOrControl+Shift+Space",
+      });
+  });
+
+  it("keeps reading UI state files saved before LLM provider controls existed", () => {
+    const path = uiSettingsPath({ toolName: "mic-tool-ts", home });
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(
+      path,
+      JSON.stringify({
+        version: 1,
+        saved_at: "2026-05-20T00:00:00.000Z",
+        settings: {
+          provider: "soniox",
+          model: "stt-rt-v4",
+          languages: ["el", "en"],
+          sampleRate: 16000,
+          endpointDetection: true,
+          protocolMode: "dictation",
+          refine: false,
+          translate: false,
+          clipboard: false,
+          focusedInput: false,
+          translationPolicy: "opposite",
+          llmEnabled: true,
+          hotkeyEnabled: false,
+          hotkey: "Command+'",
+        },
+      }),
+      "utf8",
+    );
+
+    expect(loadPersistedUiSettings({ toolName: "mic-tool-ts", home }))
+      .toMatchObject({
+        llmProvider: "azure-openai",
+        llmModel: "gpt-5.4",
       });
   });
 

@@ -435,17 +435,28 @@ select {
 }
 
 .timeline {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 100%;
-  display: grid;
-  align-content: end;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   padding-right: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.timeline::before {
+  content: "";
+  margin-top: auto;
 }
 
 .transcript-row {
-  min-width: 420px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
   gap: 12px;
@@ -460,8 +471,10 @@ select {
 }
 
 .bubble {
-  width: min(760px, 100%);
+  width: 100%;
+  max-width: 760px;
   min-width: 0;
+  justify-self: stretch;
   padding: 11px 13px;
   border: 1px solid var(--hairline);
   border-radius: 12px;
@@ -918,7 +931,7 @@ select {
   }
 
   .transcript-row {
-    min-width: 300px;
+    min-width: 0;
     grid-template-columns: 1fr;
     gap: 4px;
   }

@@ -74,6 +74,9 @@ AZURE_OPENAI_API_KEY=...
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
 AZURE_OPENAI_DEPLOYMENT=gpt-5.4
 AZURE_OPENAI_API_VERSION=2024-10-21
+
+# --- Google Gemini (only needed with MIC_TOOL_TS_LLM_PROVIDER=google) ---
+GOOGLE_API_KEY=...
 EOF
 chmod 0600 ~/.tool-agents/mic-tool-ts/.env
 ```

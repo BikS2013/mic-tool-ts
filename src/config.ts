@@ -517,6 +517,18 @@ function resolveProviderConfig(
       apiVersion,
     };
   }
+  if (provider === "google") {
+    const apiKey = chain.value("GOOGLE_API_KEY");
+    if (apiKey === undefined) {
+      throw new LLMConfigurationError(
+        "Google Gemini is enabled (--refine on, --llm-provider=google) but GOOGLE_API_KEY is not set in any of: CLI flag, ./.env, ~/.tool-agents/mic-tool-ts/.env, shell env. Set it or run with --no-refine to disable LLM refinement.",
+      );
+    }
+    return {
+      provider: "google",
+      apiKey,
+    };
+  }
   return { provider };
 }
 
@@ -888,17 +900,21 @@ export function resolveConfig(
   let providerConfig: ProviderConfig;
   if (llmEnabled && validateLlmProviderConfig) {
     providerConfig = resolveProviderConfig(llmProvider, llmModel, chain);
+  } else if (llmProvider === "azure-openai") {
+    providerConfig = {
+      provider: "azure-openai",
+      apiKey: "",
+      endpoint: "",
+      deployment: llmModel,
+      apiVersion: DEFAULT_AZURE_API_VERSION,
+    };
+  } else if (llmProvider === "google") {
+    providerConfig = {
+      provider: "google",
+      apiKey: "",
+    };
   } else {
-    providerConfig =
-      llmProvider === "azure-openai"
-        ? {
-            provider: "azure-openai",
-            apiKey: "",
-            endpoint: "",
-            deployment: llmModel,
-            apiVersion: DEFAULT_AZURE_API_VERSION,
-          }
-        : { provider: llmProvider };
+    providerConfig = { provider: llmProvider };
   }
 
   const llm: LLMConfig = Object.freeze({

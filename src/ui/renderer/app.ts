@@ -26,6 +26,8 @@ interface RendererSettings {
   focusedInput: boolean;
   translationPolicy: string;
   llmEnabled: boolean;
+  llmProvider: string;
+  llmModel: string;
   apiKeyName: string;
   apiKeyStatus: string;
   expiryStatus: string;
@@ -107,6 +109,8 @@ const defaultSettings: RendererSettings = {
   focusedInput: false,
   translationPolicy: "opposite",
   llmEnabled: true,
+  llmProvider: "azure-openai",
+  llmModel: "gpt-5.4",
   apiKeyName: "SONIOX_API_KEY",
   apiKeyStatus: "unknown",
   expiryStatus: "not set",
@@ -205,6 +209,8 @@ const clipboardControl = mustQuery<HTMLInputElement>("#clipboardControl");
 const focusedInputControl = mustQuery<HTMLInputElement>("#focusedInputControl");
 const translationPolicyControl = mustQuery<HTMLSelectElement>("#translationPolicyControl");
 const llmEnabledControl = mustQuery<HTMLInputElement>("#llmEnabledControl");
+const llmProviderControl = mustQuery<HTMLSelectElement>("#llmProviderControl");
+const llmModelControl = mustQuery<HTMLInputElement>("#llmModelControl");
 
 function mustQuery<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -264,6 +270,8 @@ function parseSettings(value: unknown): Partial<RendererSettings> {
   settings.focusedInput = booleanValue(record.focusedInput);
   settings.translationPolicy = stringValue(record.translationPolicy);
   settings.llmEnabled = booleanValue(record.llmEnabled);
+  settings.llmProvider = stringValue(record.llmProvider);
+  settings.llmModel = stringValue(record.llmModel);
   settings.apiKeyName = stringValue(record.apiKeyName);
   settings.apiKeyStatus = stringValue(record.apiKeyStatus);
   settings.expiryStatus = stringValue(record.expiryStatus);
@@ -302,6 +310,8 @@ function parseSettingsFromSafeConfig(value: unknown): Partial<RendererSettings> 
     focusedInput: inputEnabled,
     translationPolicy: stringValue(record.translationPolicy),
     llmEnabled: booleanValue(record.llmEnabled),
+    llmProvider: stringValue(record.llmProvider),
+    llmModel: stringValue(record.llmModel),
     apiKeyName: apiKeyEnvName,
     apiKeyStatus: apiKeyConfigured === undefined
       ? undefined
@@ -527,6 +537,8 @@ function renderSettings(): void {
     listRow("Focused input", settings.focusedInput ? "on" : "off"),
     listRow("Translation policy", settings.translationPolicy),
     listRow("LLM engine", settings.llmEnabled ? "on" : "off"),
+    listRow("LLM provider", settings.llmProvider),
+    listRow("LLM model", settings.llmModel),
   );
 }
 
@@ -549,6 +561,8 @@ function syncControls(settings: RendererSettings): void {
   focusedInputControl.checked = settings.focusedInput;
   translationPolicyControl.value = settings.translationPolicy;
   llmEnabledControl.checked = settings.llmEnabled;
+  llmProviderControl.value = normalizeLlmProvider(settings.llmProvider);
+  llmModelControl.value = settings.llmModel;
   updateControlDisabledState();
 }
 
@@ -582,6 +596,8 @@ function collectSettingsFromControls(): Partial<RendererSettings> {
     focusedInput: focusedInputControl.checked,
     translationPolicy: translationPolicyControl.value,
     llmEnabled: llmEnabledControl.checked,
+    llmProvider: normalizeLlmProvider(llmProviderControl.value),
+    llmModel: normalizeNonEmptyString(llmModelControl.value, "LLM model"),
   };
 }
 
@@ -597,6 +613,34 @@ function normalizeProvider(value: string): string {
   return value.trim().toLowerCase() === "elevenlabs" ? "elevenlabs" : "soniox";
 }
 
+function normalizeNonEmptyString(value: string, label: string): string {
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    throw new Error(`${label} must not be empty`);
+  }
+  return normalized;
+}
+
+function normalizeLlmProvider(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  const providers = new Set([
+    "azure-openai",
+    "openai",
+    "anthropic",
+    "google",
+    "azure-ai-inference",
+    "ollama",
+    "litellm",
+    "openai-compat",
+  ]);
+  if (providers.has(normalized)) return normalized;
+  throw new Error(`Unsupported LLM provider: ${value}`);
+}
+
+function defaultLlmModel(provider: string): string {
+  return provider === "google" ? "gemini-3.5-flash" : "gpt-5.4";
+}
+
 function mergeSettingsFromControls(): void {
   let next: Partial<RendererSettings>;
   try {
@@ -607,12 +651,16 @@ function mergeSettingsFromControls(): void {
     return;
   }
   const providerChanged = next.provider !== state.settings.provider;
+  const llmProviderChanged = next.llmProvider !== state.settings.llmProvider;
   if (providerChanged && next.provider === "elevenlabs") {
     next.model = "scribe_v2_realtime";
     next.languages = ["auto"];
   } else if (providerChanged && next.provider === "soniox") {
     next.model = "stt-rt-v4";
     next.languages = ["el", "en"];
+  }
+  if (llmProviderChanged && next.llmProvider !== undefined) {
+    next.llmModel = defaultLlmModel(next.llmProvider);
   }
   mergeSettings(next);
   renderSettings();

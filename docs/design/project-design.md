@@ -1155,7 +1155,7 @@ The `LLMProvider` union enumerates the eight standard provider names required by
 | `azure-openai`        | Fully implemented      | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, (`AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION` optional) |
 | `openai`              | Stubbed (throws at construction) | `OPENAI_API_KEY`                                               |
 | `anthropic`           | Stubbed                | `ANTHROPIC_API_KEY`                                             |
-| `google`              | Stubbed                | `GOOGLE_API_KEY`                                                |
+| `google`              | Fully implemented      | `GOOGLE_API_KEY`                                                |
 | `azure-ai-inference`  | Stubbed                | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY`     |
 | `ollama`              | Stubbed                | `OLLAMA_HOST`                                                   |
 | `litellm`             | Stubbed                | `LITELLM_BASE_URL`, `LITELLM_API_KEY`                           |
@@ -1167,7 +1167,8 @@ createRefiner(cfg: LLMConfig): LLMRefiner | null
 ```
 - Returns `null` when `cfg.enabled === false`.
 - Dispatches to `AzureOpenAIRefiner` for `azure-openai`.
-- For any other provider, throws `LLMConfigurationError` with a "not implemented in v1" message that names the env vars to set when the provider lands. This is a startup-fatal error (exit 2).
+- Dispatches to `GoogleRefiner` for `google`.
+- For the remaining unimplemented providers, throws `LLMConfigurationError` with a "not implemented in v1" message that names the env vars to set when the provider lands. This is a startup-fatal error (exit 2).
 
 ### 13.6 Azure OpenAI refiner (`src/llm/azureOpenAI.ts`)
 - Endpoint: `POST {endpoint}/openai/deployments/{deployment}/chat/completions?api-version={apiVersion}`
@@ -1177,7 +1178,13 @@ createRefiner(cfg: LLMConfig): LLMRefiner | null
 - Default system prompt (cleanup):
   > You are a transcript-cleanup assistant. The input is a verbatim transcript of someone speaking and may contain disfluencies, filler words, false starts, and grammatical noise. Rewrite the text so it is grammatically correct and easy to read, preserving the speaker's meaning AND the original language. Respond with ONLY the cleaned text — no preamble, no quotes, no markdown, no explanation.
 
-### 13.7 Error mapping (HTTP / network → `LLMRefinementError.kind`)
+### 13.7 Google Gemini refiner (`src/llm/google.ts`)
+- Endpoint: `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GOOGLE_API_KEY}`
+- Body: `systemInstruction.parts[0].text` carries the cleanup or translation prompt, and `contents[0].parts[0].text` carries the transcript text.
+- Response parsing reads and concatenates `candidates[0].content.parts[].text`, trims it, and treats an empty result as a response-shape failure.
+- Transport, timeout, disposal, and HTTP error mapping mirror the Azure OpenAI refiner.
+
+### 13.8 Error mapping (HTTP / network → `LLMRefinementError.kind`)
 - `401`, `403`                       → `"auth"`
 - `408`, `429`, `5xx`                 → `"server"`
 - Timeout (AbortError or "timed out") → `"timeout"`
@@ -1325,7 +1332,7 @@ When endpoint detection is enabled, the client uses ElevenLabs VAD commit strate
 
 ### Plan 003 (LLM refinement)
 - **Eight standard provider names enumerated in the type.** Even when most are stubs, listing them in the union keeps the contract honest with the project-wide tool conventions; future implementations slot in without a type churn.
-- **Only `azure-openai` fully implemented in v1.** Reduces surface area for the first release; the seven stubs throw a useful "set X env vars and add a refiner" message at construction so users know exactly what is missing.
+- **`azure-openai` and `google` implemented first.** Azure OpenAI remains the default enterprise deployment path; Google Gemini is available through `GOOGLE_API_KEY` because the UI exposes it as a first-class selectable provider. The remaining stubs throw a useful "set X env vars and add a refiner" message at construction so users know exactly what is missing.
 - **Refinement is fail-open at runtime, fail-closed at startup.** A flaky LLM call must not break dictation (NFR-10); a missing required Azure env var when refine is on is unambiguous misconfiguration and is fatal (NFR-8).
 - **Per-request `AbortController` + class-level `lifetimeAbort`.** Two controllers cleanly express "drop this one request after T ms" and "drop every in-flight request at shutdown" without conflating them.
 - **No SDK dependency for Azure OpenAI.** Native `fetch` (Node 20+) covers the Chat Completions REST surface in ~40 lines; the official SDK would add a transitive dependency tree larger than the rest of the tool combined.
@@ -1484,11 +1491,11 @@ Status: implemented 2026-05-16; runtime configuration fix documented in `docs/de
 
 The orchestration now lives in `src/core/sessionRunner.ts`. `src/main.ts` is a compatibility wrapper for CLI mode, while `src/ui/electronMain.ts` runs the same session runner with UI event sinks. CLI mode continues to use `StdoutRenderer` and stderr diagnostics. UI mode uses `UiRenderer`, `SessionEvent` objects, and a preload-backed IPC bridge so human transcript text, partials, finals, readiness messages, warnings, and protocol status render inside the Electron window instead of stdout.
 
-The Electron main process owns the app lifecycle, window creation, native menu, session start/stop, configuration resolution, mic/STT lifecycle, secrets, protocol persistence, clipboard/input operations, and IPC. On UI load, Electron main resolves the same CLI configuration chain (`./.env` > `~/.tool-agents/mic-tool-ts/.env` > shell env, with UI edits later becoming explicit CLI-equivalent flags for that UI-started session), applies persisted protocol settings, and sends only non-secret renderer settings across IPC. API-key values never cross the preload boundary; the renderer receives only the active key name, configured/missing status, expiry reminder, and source tier such as `local .env`, `user .env`, or `shell env`. If strict startup config fails because LLM provider secrets are missing, the UI still shows the resolved STT configuration and credential status while reporting the blocking error. If the active STT API key itself is missing, the UI reports the typed configuration error and does not show a false-ready state.
+The Electron main process owns the app lifecycle, window creation, native menu, session start/stop, configuration resolution, mic/STT lifecycle, secrets, protocol persistence, clipboard/input operations, and IPC. On UI load, Electron main resolves the same CLI configuration chain (`./.env` > `~/.tool-agents/mic-tool-ts/.env` > shell env) with persisted non-secret UI settings applied as CLI-equivalent arguments before strict validation, applies persisted protocol settings, and sends only non-secret renderer settings across IPC. API-key values never cross the preload boundary; the renderer receives only the active key name, configured/missing status, expiry reminder, and source tier such as `local .env`, `user .env`, or `shell env`. If strict startup config fails because LLM provider secrets are missing, the UI still shows the resolved STT configuration and credential status while reporting the blocking error. If the active STT API key itself is missing, the UI reports the typed configuration error and does not show a false-ready state.
 
 The renderer loads local packaged files from `dist/ui/renderer/`, has no Node.js integration, uses context isolation and sandboxing, and communicates only through the narrow `window.micToolTs` preload API. The preload bridge is compiled as CommonJS (`src/ui/preload.cts` → `dist/ui/preload.cjs`) because the sandboxed preload environment cannot use ESM imports. If the bridge is unavailable, the renderer shows a visible `Bridge unavailable` error instead of falling back to fake demo behavior.
 
-The renderer exposes real form controls and switch buttons for provider, model, language hints, sample rate, endpoint detection, protocol mode, refine/translate/clipboard/focused-input defaults, translation policy, and LLM enablement. Setting edits are sent through `mic-tool-ts:settings:update`; Electron main validates and stores the typed settings, refreshes the active provider credential status from the config chain, and session start converts the current UI settings to explicit CLI-equivalent arguments before invoking the shared session runner. This keeps the normal resolver, env-chain precedence, and missing-required-config errors in force while allowing UI choices to override env settings for that UI-started session. The production renderer clears demo seed data when the preload bridge is available so dictated text is displayed only from live `transcript.partial`, `transcript.final`, and `transcript.refined` events.
+The renderer exposes real form controls and switch buttons for provider, model, language hints, sample rate, endpoint detection, protocol mode, refine/translate/clipboard/focused-input defaults, translation policy, LLM enablement, LLM provider, and LLM model/deployment. Setting edits are sent through `mic-tool-ts:settings:update`; Electron main validates and stores the typed settings, refreshes the active provider credential status from the config chain, and session start converts the current UI settings to explicit CLI-equivalent arguments before invoking the shared session runner. This keeps the normal resolver, env-chain precedence, and missing-required-config errors in force while allowing UI choices to override env settings for that UI-started session. The production renderer clears demo seed data when the preload bridge is available so dictated text is displayed only from live `transcript.partial`, `transcript.final`, and `transcript.refined` events.
 
 The renderer implements the Plan 009 visual direction: a stable transcript content plane, translucent sidebar and toolbar, bottom capture bar, compact inspector, system typography, native traffic-light space, and restrained motion. CSS supports light mode, dark mode, `prefers-reduced-motion`, and `prefers-reduced-transparency`. The renderer can display static demo data when opened without the preload bridge, but production UI mode receives typed events from Electron main and does not parse terminal output.
 
@@ -1510,9 +1517,9 @@ Hotkey release calls `stopSession({ submitPending: true })`. Electron main encod
 
 Status: implemented 2026-05-20. Refined request: `docs/reference/refined-request-ui-section-scrolling.md`. Codebase scan: `docs/reference/codebase-scan-ui-section-scrolling.md`. Implementation plan: `docs/design/plan-013-ui-section-scrolling.md`.
 
-The Electron renderer keeps `body` and `.app-shell` fixed to the BrowserWindow and makes each major region responsible for its own overflow. The toolbar and capture bar allow horizontal scrolling so compact windows do not permanently clip controls or status text. The sidebar, inspector, active view panel, transcript timeline, settings/protocol summary lists, and event lists use local `overflow: auto` with stable scrollbar gutters.
+The Electron renderer keeps `body` and `.app-shell` fixed to the BrowserWindow and makes each major region responsible for its own overflow. The toolbar and capture bar allow horizontal scrolling so compact windows do not permanently clip controls or status text. The sidebar, inspector, active view panel, settings/protocol summary lists, and event lists use local `overflow: auto` with stable scrollbar gutters. The monitor timeline is a vertical-only scroll container so transcript content does not create an off-screen horizontal track.
 
-The active content view is a bounded grid area. Settings and protocol forms keep a practical minimum content width so controls remain usable and horizontal scrolling appears when the window is narrower than the control surface. Transcript rows and event/list rows also keep minimum widths while allowing text to wrap where appropriate. Existing transcript auto-scroll remains owned by `src/ui/renderer/app.ts`, which continues to set `timeline.scrollTop = timeline.scrollHeight` after transcript render.
+The active content view is a bounded grid area. Settings and protocol forms keep a practical minimum content width so controls remain usable and horizontal scrolling appears when the window is narrower than the control surface. Transcript rows fill the current monitor pane with `min-width: 0`, cap only the bubble width on wide panes, and use `overflow-wrap: anywhere` so long final or processed sections wrap instead of clipping under the right edge. Existing transcript auto-scroll remains owned by `src/ui/renderer/app.ts`, which continues to set `timeline.scrollTop = timeline.scrollHeight` after transcript render.
 
 ---
 
@@ -1539,3 +1546,13 @@ mic-tool-ts-input-helper send --method paste-keycode
 Deployment is bundled rather than privileged. The build compiles `native/macos/input-helper/main.swift` with `swiftc` and copies the executable to `dist/native/macos/mic-tool-ts-input-helper`. No LaunchAgent, root daemon, or global system installation is required. macOS Accessibility permission applies to the process that performs UI control, so users may need to approve the helper binary, the launching terminal/app, or both depending on how macOS presents the permission request.
 
 Manual compatibility testing is part of the design, not an optional polish step. The implementation must record behavior for TextEdit, Notes, Terminal/iTerm2, Safari and Chrome textareas, Google Docs or another contenteditable web editor, VS Code, Cursor, and a chat app such as Slack or Discord, using English, Greek, mixed-language, punctuation-heavy, multiline, and long text payloads. Direct Accessibility insertion is expected to work only for some controls; paste remains the universal fallback.
+
+---
+
+## 23. UI LLM Configuration
+
+Status: implemented 2026-05-20. Refined requests: `docs/reference/refined-request-ui-llm-configuration.md` and `docs/reference/refined-request-google-llm-provider-ui.md`. Codebase scans: `docs/reference/codebase-scan-ui-llm-configuration.md` and `docs/reference/codebase-scan-google-llm-provider-ui.md`. Implementation plan: `docs/design/plan-015-ui-llm-configuration.md`.
+
+The Electron UI Protocol view exposes `LLM engine`, `LLM provider`, and `LLM model` controls. The provider selector mirrors the existing `LLM_PROVIDERS` configuration contract, and the model field maps to the existing provider-specific model/deployment setting. Both values are non-secret UI settings: they load from `SafeConfigSummary.llmProvider` and `SafeConfigSummary.llmModel`, persist to `~/.tool-agents/mic-tool-ts/ui-state.json`, and are sent to UI-started sessions as `--llm-provider` and `--llm-model`. When the UI provider is changed to `google`, the renderer switches the model field to the Google default `gemini-3.5-flash`.
+
+The UI does not collect LLM API keys or provider endpoints. Those remain in the normal configuration chain, and session startup keeps the existing typed failure behavior for missing Azure OpenAI credentials, missing `GOOGLE_API_KEY`, or currently unimplemented provider adapters. Older UI state files that predate the LLM provider/model controls remain readable and receive the current default `azure-openai` / `gpt-5.4` values during normalization.

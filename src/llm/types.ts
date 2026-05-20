@@ -8,9 +8,9 @@
  *
  * Eight standard LLM provider names per project convention:
  *   - "azure-openai"        ← fully implemented in v1
+ *   - "google"              ← fully implemented in v1
  *   - "openai"              \
  *   - "anthropic"            \
- *   - "google"                \  scaffolded only — refiner throws at construction
  *   - "azure-ai-inference"    /  with a clear "not implemented in v1" message
  *   - "ollama"               /
  *   - "litellm"             /
@@ -46,17 +46,23 @@ export interface AzureOpenAIProviderConfig {
   readonly apiVersion: string;
 }
 
+export interface GoogleProviderConfig {
+  readonly provider: "google";
+  readonly apiKey: string;
+}
+
 /**
- * Placeholder shape for the seven not-yet-implemented providers. We collect
+ * Placeholder shape for the six not-yet-implemented providers. We collect
  * the env-var values we found (or `null`) so the stubbed refiner can produce
  * a useful "missing X / set Y" error message.
  */
 export interface UnimplementedProviderConfig {
-  readonly provider: Exclude<LLMProvider, "azure-openai">;
+  readonly provider: Exclude<LLMProvider, "azure-openai" | "google">;
 }
 
 export type ProviderConfig =
   | AzureOpenAIProviderConfig
+  | GoogleProviderConfig
   | UnimplementedProviderConfig;
 
 export interface LLMConfig {

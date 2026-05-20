@@ -76,6 +76,7 @@ const TRACKED_ENV_KEYS = [
   "AZURE_OPENAI_ENDPOINT",
   "AZURE_OPENAI_DEPLOYMENT",
   "AZURE_OPENAI_API_VERSION",
+  "GOOGLE_API_KEY",
   "MIC_TOOL_TS_INTERACTION_MODE",
   "MIC_TOOL_TS_COMMAND_PHRASE",
   "MIC_TOOL_TS_SECTION_END_PHRASE",
@@ -645,6 +646,45 @@ describe("resolveConfig — LLM refinement defaults", () => {
       throw new Error("unreachable");
     }
     expect(cfg.llm.providerConfig.deployment).toBe("my-deploy");
+  });
+
+  it("reads Google Gemini API key when google refinement is enabled", () => {
+    setCwd("GOOGLE_API_KEY=google-key\n");
+    const cfg = resolveConfig(
+      argvRefine(
+        "--api-key",
+        "sk_test",
+        "--llm-provider",
+        "google",
+        "--llm-model",
+        "gemini-3.5-flash",
+      ),
+    );
+
+    expect(cfg.llm.enabled).toBe(true);
+    expect(cfg.llm.provider).toBe("google");
+    expect(cfg.llm.model).toBe("gemini-3.5-flash");
+    expect(cfg.llm.providerConfig).toEqual({
+      provider: "google",
+      apiKey: "google-key",
+    });
+  });
+
+  it("throws LLMConfigurationError when google is enabled without GOOGLE_API_KEY", () => {
+    setCwd();
+
+    expect(() =>
+      resolveConfig(
+        argvRefine(
+          "--api-key",
+          "sk_test",
+          "--llm-provider",
+          "google",
+          "--llm-model",
+          "gemini-3.5-flash",
+        ),
+      ),
+    ).toThrowError(/GOOGLE_API_KEY/);
   });
 
   it("rejects an unknown --llm-provider", () => {

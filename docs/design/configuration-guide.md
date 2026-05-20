@@ -100,7 +100,7 @@ For `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-d
 | `--llm-model <name>`                | `MIC_TOOL_TS_LLM_MODEL`                   | `gpt-5.4`                                            | no        |
 | `-v, --verbose`                     | `MIC_TOOL_TS_VERBOSE`                     | `false`                                              | no        |
 
-Provider-specific env vars (consulted only when `--refine` is on AND `--llm-provider=azure-openai`):
+Provider-specific env vars (consulted only when `--refine` is on and the matching `--llm-provider` is selected):
 
 | Env var                       | Required when refine is on? | Default                |
 |-------------------------------|-----------------------------|------------------------|
@@ -108,6 +108,7 @@ Provider-specific env vars (consulted only when `--refine` is on AND `--llm-prov
 | `AZURE_OPENAI_ENDPOINT`       | **yes**                     | —                      |
 | `AZURE_OPENAI_DEPLOYMENT`     | no                          | value of `--llm-model` |
 | `AZURE_OPENAI_API_VERSION`    | no                          | `2024-10-21`           |
+| `GOOGLE_API_KEY`              | **yes**, for `google`       | —                      |
 
 ---
 
@@ -219,7 +220,8 @@ Provider-specific env vars (consulted only when `--refine` is on AND `--llm-prov
 - **Storage**: project-local `.env` or shell.
 - **Options**: one of the eight project-standard names:
   - `azure-openai` — fully implemented in v1.
-  - `openai`, `anthropic`, `google`, `azure-ai-inference`, `ollama`, `litellm`, `openai-compat` — accepted by validation but throw `LLMConfigurationError` at refiner construction with a message naming the env vars to set when the provider lands.
+  - `google` — fully implemented in v1 through Gemini `generateContent`; requires `GOOGLE_API_KEY`.
+  - `openai`, `anthropic`, `azure-ai-inference`, `ollama`, `litellm`, `openai-compat` — accepted by validation but throw `LLMConfigurationError` at refiner construction with a message naming the env vars to set when the provider lands.
 - **Default**: `azure-openai`.
 
 ### 3.15 `MIC_TOOL_TS_LLM_MODEL` — LLM model / deployment name

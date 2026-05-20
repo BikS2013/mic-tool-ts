@@ -168,6 +168,23 @@
               <span>LLM engine</span>
               <input id="llmEnabledControl" data-setting-control type="checkbox">
             </label>
+            <label class="field-row">
+              <span>LLM provider</span>
+              <select id="llmProviderControl" data-setting-control>
+                <option value="azure-openai">azure-openai</option>
+                <option value="openai">openai</option>
+                <option value="anthropic">anthropic</option>
+                <option value="google">google</option>
+                <option value="azure-ai-inference">azure-ai-inference</option>
+                <option value="ollama">ollama</option>
+                <option value="litellm">litellm</option>
+                <option value="openai-compat">openai-compat</option>
+              </select>
+            </label>
+            <label class="field-row">
+              <span>LLM model</span>
+              <input id="llmModelControl" data-setting-control type="text" autocomplete="off" spellcheck="false">
+            </label>
           </form>
           <div class="compact-list summary-list" id="protocolList"></div>
         </section>

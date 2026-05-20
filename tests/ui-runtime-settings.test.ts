@@ -14,6 +14,7 @@ import {
 import {
   DEFAULT_RENDERER_SETTINGS,
   mergeRendererSettings,
+  settingsToSessionArgs,
 } from "../src/ui/shared.js";
 import { savePersistedUiSettings } from "../src/ui/settingsStore.js";
 
@@ -23,6 +24,9 @@ const TRACKED_ENV_KEYS = [
   "ELEVENLABS_API_KEY",
   "AZURE_OPENAI_API_KEY",
   "AZURE_OPENAI_ENDPOINT",
+  "MIC_TOOL_TS_LLM_PROVIDER",
+  "MIC_TOOL_TS_LLM_MODEL",
+  "GOOGLE_API_KEY",
 ] as const;
 
 const originalEnv: Record<string, string | undefined> = {};
@@ -69,6 +73,8 @@ describe("UI runtime settings", () => {
       [
         "SONIOX_API_KEY=sk_configured",
         "MIC_TOOL_TS_REFINE=false",
+        "MIC_TOOL_TS_LLM_PROVIDER=litellm",
+        "MIC_TOOL_TS_LLM_MODEL=local-refiner",
         "MIC_TOOL_TS_MODEL=stt-custom",
         "MIC_TOOL_TS_LANGUAGES=el,en,fr",
         "MIC_TOOL_TS_SAMPLE_RATE=24000",
@@ -88,12 +94,14 @@ describe("UI runtime settings", () => {
     expect(result.settings.apiKeyStatus).toBe("configured");
     expect(result.settings.storageStatus).toBe("local .env");
     expect(result.settings.llmEnabled).toBe(false);
+    expect(result.settings.llmProvider).toBe("litellm");
+    expect(result.settings.llmModel).toBe("local-refiner");
     expect(result.settings.focusedInput).toBe(true);
     expect(result.settings.inputStatus).toBe("Ready");
   });
 
   it("restores persisted UI settings on UI load", () => {
-    setCwd("SONIOX_API_KEY=sk_configured\nMIC_TOOL_TS_REFINE=false\n");
+    setCwd("SONIOX_API_KEY=sk_configured\nELEVENLABS_API_KEY=xi_configured\nMIC_TOOL_TS_REFINE=false\n");
     savePersistedUiSettings(
       mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {
         provider: "elevenlabs",
@@ -108,6 +116,8 @@ describe("UI runtime settings", () => {
         focusedInput: true,
         translationPolicy: "to-en",
         llmEnabled: false,
+        llmProvider: "openai",
+        llmModel: "gpt-5.4-mini",
         hotkeyEnabled: true,
         hotkey: "CmdOrCtrl+Shift+Space",
       }),
@@ -129,11 +139,31 @@ describe("UI runtime settings", () => {
     expect(result.settings.focusedInput).toBe(true);
     expect(result.settings.translationPolicy).toBe("to-en");
     expect(result.settings.llmEnabled).toBe(false);
+    expect(result.settings.llmProvider).toBe("openai");
+    expect(result.settings.llmModel).toBe("gpt-5.4-mini");
     expect(result.settings.hotkeyEnabled).toBe(true);
     expect(result.settings.hotkey).toBe("CommandOrControl+Shift+Space");
     expect(result.settings.apiKeyName).toBe("ELEVENLABS_API_KEY");
-    expect(result.settings.apiKeyStatus).toBe("missing");
-    expect(result.settings.storageStatus).toBe("not found");
+    expect(result.settings.apiKeyStatus).toBe("configured");
+    expect(result.settings.storageStatus).toBe("local .env");
+  });
+
+  it("validates persisted Google LLM settings instead of default Azure settings on UI load", () => {
+    setCwd("SONIOX_API_KEY=sk_configured\nGOOGLE_API_KEY=google-key\n");
+    savePersistedUiSettings(
+      mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {
+        llmProvider: "google",
+        llmModel: "gemini-3.5-flash",
+      }),
+      { toolName: "mic-tool-ts", home: tmpHome ?? undefined },
+    );
+
+    const result = loadRendererSettingsForUi();
+
+    expect(result.ok).toBe(true);
+    expect(result.settings.llmEnabled).toBe(true);
+    expect(result.settings.llmProvider).toBe("google");
+    expect(result.settings.llmModel).toBe("gemini-3.5-flash");
   });
 
   it("reports invalid persisted UI settings as a UI settings error", () => {
@@ -179,6 +209,8 @@ describe("UI runtime settings", () => {
     expect(result.settings.apiKeyStatus).toBe("configured");
     expect(result.settings.storageStatus).toBe("local .env");
     expect(result.settings.llmEnabled).toBe(true);
+    expect(result.settings.llmProvider).toBe("azure-openai");
+    expect(result.settings.llmModel).toBe("gpt-5.4");
   });
 
   it("refreshes credential status when the UI switches provider", () => {
@@ -194,5 +226,17 @@ describe("UI runtime settings", () => {
     expect(refreshed.apiKeyName).toBe("ELEVENLABS_API_KEY");
     expect(refreshed.apiKeyStatus).toBe("missing");
     expect(refreshed.storageStatus).toBe("not found");
+  });
+
+  it("passes selected LLM provider and model to UI-started sessions", () => {
+    const args = settingsToSessionArgs(mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {
+      llmProvider: "openai",
+      llmModel: "gpt-5.4-mini",
+    }));
+
+    expect(args).toContain("--llm-provider");
+    expect(args).toContain("openai");
+    expect(args).toContain("--llm-model");
+    expect(args).toContain("gpt-5.4-mini");
   });
 });

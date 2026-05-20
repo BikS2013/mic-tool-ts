@@ -45,6 +45,47 @@ async function main() {
         const loaded = hasBridge ? await window.micToolTs.loadSettings() : null;
         const shell = document.querySelector(".app-shell");
         const settingsButton = document.querySelector('[data-view-button="settings"]');
+        const timeline = document.querySelector("#timeline");
+        const monitorView = document.querySelector("#monitorView");
+        const llmProviderControl = document.querySelector("#llmProviderControl");
+        const llmModelControl = document.querySelector("#llmModelControl");
+        const longTranscriptText = "This is a long transcript line that should wrap inside the monitor pane instead of forcing the center content area to overflow horizontally. ".repeat(6) + "supercalifragilisticexpialidocious-supercalifragilisticexpialidocious";
+        const transcriptRows = Array.from({ length: 20 }, (_, index) => {
+          const row = document.createElement("article");
+          row.className = "transcript-row";
+          const time = document.createElement("div");
+          time.className = "time";
+          time.textContent = "00:" + String(index).padStart(2, "0");
+          const bubble = document.createElement("div");
+          bubble.className = index % 3 === 0 ? "bubble processed" : "bubble";
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          meta.innerHTML = "<span>Processed section</span><span>ready</span>";
+          const text = document.createElement("div");
+          text.className = "text";
+          text.textContent = longTranscriptText;
+          bubble.append(meta, text);
+          row.append(time, bubble);
+          return row;
+        });
+        timeline?.replaceChildren(...transcriptRows);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const monitorRect = monitorView?.getBoundingClientRect() ?? null;
+        const transcriptRects = Array.from(document.querySelectorAll(".transcript-row, .bubble"), (node) =>
+          node.getBoundingClientRect(),
+        );
+        const transcriptStaysInsideMonitor = monitorRect === null
+          ? false
+          : transcriptRects.every((rect) =>
+            rect.left >= monitorRect.left - 1 &&
+            rect.right <= monitorRect.right + 1
+          );
+        const timelineCanScroll = timeline === null
+          ? false
+          : timeline.scrollHeight > timeline.clientHeight;
+        const timelineNoHorizontalOverflow = timeline === null
+          ? false
+          : timeline.scrollWidth <= timeline.clientWidth + 1;
         settingsButton?.click();
         const settingsView = document.querySelector("#settingsView");
         const inspector = document.querySelector(".inspector");
@@ -69,6 +110,10 @@ async function main() {
           hasBridge,
           loadOk: loaded?.ok ?? false,
           provider: loaded?.settings?.provider ?? null,
+          llmProvider: loaded?.settings?.llmProvider ?? null,
+          llmModel: loaded?.settings?.llmModel ?? null,
+          llmProviderControlExists: llmProviderControl instanceof HTMLSelectElement,
+          llmModelControlExists: llmModelControl instanceof HTMLInputElement,
           apiKeyName: loaded?.settings?.apiKeyName ?? null,
           apiKeyStatus: loaded?.settings?.apiKeyStatus ?? null,
           storageStatus: loaded?.settings?.storageStatus ?? null,
@@ -76,6 +121,11 @@ async function main() {
           liveText: document.querySelector("#liveText")?.textContent ?? null,
           bodyScrolls: document.scrollingElement?.scrollHeight > document.scrollingElement?.clientHeight,
           shellOverflow: shell === null ? null : getComputedStyle(shell).overflow,
+          timelineOverflowX: timeline === null ? null : getComputedStyle(timeline).overflowX,
+          timelineOverflowY: timeline === null ? null : getComputedStyle(timeline).overflowY,
+          timelineCanScroll,
+          timelineNoHorizontalOverflow,
+          transcriptStaysInsideMonitor,
           settingsOverflowY: settingsStyle?.overflowY ?? null,
           settingsCanScroll: settingsView === null ? false : settingsView.scrollHeight > settingsView.clientHeight,
           inspectorOverflowY: inspectorStyle?.overflowY ?? null,
@@ -91,6 +141,13 @@ async function main() {
 
   if (
     result.bodyScrolls ||
+    !result.llmProviderControlExists ||
+    !result.llmModelControlExists ||
+    result.timelineOverflowX !== "hidden" ||
+    result.timelineOverflowY !== "auto" ||
+    !result.timelineCanScroll ||
+    !result.timelineNoHorizontalOverflow ||
+    !result.transcriptStaysInsideMonitor ||
     result.settingsOverflowY !== "auto" ||
     !result.settingsCanScroll ||
     result.inspectorOverflowY !== "auto" ||

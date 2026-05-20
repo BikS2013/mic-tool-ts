@@ -37,6 +37,8 @@ export type PersistedUiSettings = Pick<
   | "focusedInput"
   | "translationPolicy"
   | "llmEnabled"
+  | "llmProvider"
+  | "llmModel"
   | "hotkeyEnabled"
   | "hotkey"
 >;
@@ -156,6 +158,8 @@ export function persistedFromRenderer(settings: RendererSettings): PersistedUiSe
     focusedInput: settings.focusedInput,
     translationPolicy: settings.translationPolicy,
     llmEnabled: settings.llmEnabled,
+    llmProvider: settings.llmProvider,
+    llmModel: settings.llmModel,
     hotkeyEnabled: settings.hotkeyEnabled,
     hotkey: settings.hotkey,
   };
@@ -271,6 +275,12 @@ function validatePersistedUiSettings(
     focusedInput: requireBoolean(value.focusedInput, path, "settings.focusedInput"),
     translationPolicy: requireString(value.translationPolicy, path, "settings.translationPolicy"),
     llmEnabled: requireBoolean(value.llmEnabled, path, "settings.llmEnabled"),
+    llmProvider: value.llmProvider === undefined
+      ? DEFAULT_RENDERER_SETTINGS.llmProvider
+      : requireString(value.llmProvider, path, "settings.llmProvider"),
+    llmModel: value.llmModel === undefined
+      ? DEFAULT_RENDERER_SETTINGS.llmModel
+      : requireString(value.llmModel, path, "settings.llmModel"),
     hotkeyEnabled: requireBoolean(value.hotkeyEnabled, path, "settings.hotkeyEnabled"),
     hotkey: requireString(value.hotkey, path, "settings.hotkey"),
   }, path);

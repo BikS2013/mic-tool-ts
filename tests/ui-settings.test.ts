@@ -51,6 +51,10 @@ describe("Electron UI settings", () => {
       "--translation-policy",
       "to-en",
       "--no-refine",
+      "--llm-provider",
+      "azure-openai",
+      "--llm-model",
+      "gpt-5.4",
       "--language",
       "auto",
     ]);
@@ -74,5 +78,17 @@ describe("Electron UI settings", () => {
         hotkey: "CommandOrControl+Shift",
       }),
     ).toThrow("Hotkey must include a non-modifier key");
+
+    expect(() =>
+      mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {
+        llmProvider: "other",
+      }),
+    ).toThrow("Unsupported LLM provider");
+
+    expect(() =>
+      mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {
+        llmModel: "",
+      }),
+    ).toThrow("llmModel must not be empty");
   });
 });

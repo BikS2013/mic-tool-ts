@@ -1,4 +1,5 @@
 import type { SafeConfigSummary, SessionEvent } from "../core/sessionEvents.js";
+import { LLM_PROVIDERS, type LLMProvider } from "../llm/types.js";
 import { normalizeHotkeyAccelerator } from "./hotkey.js";
 
 export interface RendererSettings {
@@ -14,6 +15,8 @@ export interface RendererSettings {
   focusedInput: boolean;
   translationPolicy: string;
   llmEnabled: boolean;
+  llmProvider: string;
+  llmModel: string;
   apiKeyName: string;
   apiKeyStatus: string;
   expiryStatus: string;
@@ -60,6 +63,8 @@ export const DEFAULT_RENDERER_SETTINGS: RendererSettings = Object.freeze({
   focusedInput: false,
   translationPolicy: "opposite",
   llmEnabled: true,
+  llmProvider: "azure-openai",
+  llmModel: "gpt-5.4",
   apiKeyName: "SONIOX_API_KEY",
   apiKeyStatus: "unknown",
   expiryStatus: "not set",
@@ -86,6 +91,8 @@ export function settingsFromConfig(
     focusedInput: config.operators.input,
     translationPolicy: config.translationPolicy,
     llmEnabled: config.llmEnabled,
+    llmProvider: config.llmProvider,
+    llmModel: config.llmModel,
     apiKeyName: config.apiKeyEnvName,
     apiKeyStatus: config.apiKeyConfigured ? "configured" : "missing",
     expiryStatus: config.apiKeyExpiresAt ?? "not set",
@@ -126,6 +133,8 @@ export function normalizeRendererSettings(value: RendererSettings): RendererSett
     focusedInput,
     translationPolicy: normalizeTranslationPolicy(value.translationPolicy),
     llmEnabled: Boolean(value.llmEnabled),
+    llmProvider: normalizeLlmProvider(value.llmProvider),
+    llmModel: normalizeNonEmptyString(value.llmModel, "llmModel"),
     apiKeyName: provider === "elevenlabs" ? "ELEVENLABS_API_KEY" : "SONIOX_API_KEY",
     apiKeyStatus: normalizeStatus(value.apiKeyStatus, "unknown"),
     expiryStatus: normalizeStatus(value.expiryStatus, "not set"),
@@ -159,6 +168,10 @@ export function settingsToSessionArgs(settings: RendererSettings): string[] {
     "--translation-policy",
     normalized.translationPolicy,
     normalized.llmEnabled ? "--refine" : "--no-refine",
+    "--llm-provider",
+    normalized.llmProvider,
+    "--llm-model",
+    normalized.llmModel,
   ];
   for (const language of normalized.languages) {
     args.push("--language", language);
@@ -190,6 +203,14 @@ function normalizeTranslationPolicy(value: string): "opposite" | "to-en" | "to-e
     return normalized;
   }
   throw new Error(`Unsupported translation policy: ${value}`);
+}
+
+function normalizeLlmProvider(value: string): LLMProvider {
+  const normalized = value.trim().toLowerCase();
+  if ((LLM_PROVIDERS as readonly string[]).includes(normalized)) {
+    return normalized as LLMProvider;
+  }
+  throw new Error(`Unsupported LLM provider: ${value}`);
 }
 
 function normalizeNonEmptyString(value: string, field: string): string {

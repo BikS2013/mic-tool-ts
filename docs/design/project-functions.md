@@ -107,7 +107,7 @@ The tool MUST detect a configurable *guard phrase* in the recent finalized trans
 When LLM refinement is enabled, the tool MUST, after each turn boundary, capture the turn's verbatim text (with the guard phrase removed for the LLM input only), send it asynchronously to the configured LLM, and on success render the refined text on its own line followed by an additional blank line. Refinement is non-blocking: subsequent transcription continues immediately. If the LLM call fails (auth, network, timeout, server, malformed response), the failure MUST be logged under `--verbose` and skipped — the verbatim transcript above the blank line is the user's fallback. If the renderer has been disposed before the refinement resolves, the result MUST be dropped silently.
 
 ### FR-14 — LLM provider abstraction
-The tool MUST support the eight standard LLM provider names mandated by the project's tool conventions: `azure-openai`, `openai`, `anthropic`, `google`, `azure-ai-inference`, `ollama`, `litellm`, `openai-compat`. In v1, only `azure-openai` is fully implemented. The other seven MUST be accepted by configuration validation but MUST throw `LLMConfigurationError` at refiner construction with a message naming the env vars to set when the provider lands. Provider selection is via `--llm-provider` / `MIC_TOOL_TS_LLM_PROVIDER` (default: `azure-openai`); model/deployment selection is via `--llm-model` / `MIC_TOOL_TS_LLM_MODEL` (default: `gpt-5.4`). Refinement is toggled by `--refine` / `--no-refine` / `MIC_TOOL_TS_REFINE` (default: on).
+The tool MUST support the eight standard LLM provider names mandated by the project's tool conventions: `azure-openai`, `openai`, `anthropic`, `google`, `azure-ai-inference`, `ollama`, `litellm`, `openai-compat`. `azure-openai` and `google` are implemented. The other six MUST be accepted by configuration validation but MUST throw `LLMConfigurationError` at refiner construction with a message naming the env vars to set when the provider lands. Provider selection is via `--llm-provider` / `MIC_TOOL_TS_LLM_PROVIDER` (default: `azure-openai`); model/deployment selection is via `--llm-model` / `MIC_TOOL_TS_LLM_MODEL` (default: `gpt-5.4`). Refinement is toggled by `--refine` / `--no-refine` / `MIC_TOOL_TS_REFINE` (default: on). Google Gemini refinement MUST require `GOOGLE_API_KEY` when `--llm-provider=google` and refinement is enabled.
 
 ### FR-15 — Four-tier env-var resolution chain
 Every CLI flag MUST have a documented env-var alias. The resolver MUST consult sources in this priority order (highest first):
@@ -225,6 +225,9 @@ The UI MUST expose editable controls for the existing major runtime configuratio
 ### FR-30.1 — UI credential status
 The UI MUST never receive API-key values. It MUST display only the active provider key name, configured/missing status, expiry reminder, and source tier (`CLI flag`, `local .env`, `user .env`, `shell env`, or `not found`). Switching provider in the UI MUST refresh the credential status for that provider before the next session starts.
 
+### FR-30.2 — UI LLM provider and model configuration
+The UI MUST expose the LLM provider and LLM model/deployment used by refinement and translation. Provider selection MUST use the existing accepted provider names (`azure-openai`, `openai`, `anthropic`, `google`, `azure-ai-inference`, `ollama`, `litellm`, `openai-compat`), and model/deployment MUST be a non-empty string. These values MUST be loaded from resolved configuration, persisted as non-secret UI state, validated on update, and passed to UI-started sessions as explicit `--llm-provider` and `--llm-model` settings. The UI MUST NOT persist LLM API keys, endpoints, or secret credential material.
+
 ### FR-31 — UI event stream
 The UI MUST receive typed events for session lifecycle, transcript partials/finals, turn boundaries, refined output, protocol events, warnings, and diagnostics. Live partial text MUST update the capture bar, and final/refined outputs MUST append to the transcript timeline. The UI MUST NOT parse terminal output to derive its state.
 
@@ -236,6 +239,8 @@ The UI MUST expose a push-to-talk hotkey setting with an enable/disable control 
 
 ### FR-34 — UI section scrolling
 Every major Electron UI region MUST keep overflowing content reachable. The main view panels, transcript timeline, settings view, protocol view, logs view, sidebar, inspector, toolbar, and capture bar MUST provide local scrolling when their content exceeds the available section size vertically or horizontally. The document body MUST remain fixed to the Electron window so scrolling is contained within the relevant section.
+
+Transcript rows in the monitor view MUST flow within the visible center pane and wrap long transcript text, including long unbroken words, rather than sizing the timeline to a wider off-screen content width. The monitor timeline MUST remain vertically scrollable and auto-scroll to the newest transcript item.
 
 ## Non-Functional Requirements — Electron UI Command
 

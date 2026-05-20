@@ -48,6 +48,10 @@ export interface StateMachineResult {
   actions: ProtocolAction[];
 }
 
+export interface DrainForShutdownOptions {
+  readonly submitPending?: boolean;
+}
+
 export interface VoiceCommandStateMachineOptions {
   markers: MarkerConfig;
   initialOperators: OperatorState;
@@ -169,12 +173,22 @@ export class VoiceCommandStateMachine {
     return { visibleText, actions };
   }
 
-  drainForShutdown(): ProtocolAction[] {
+  drainForShutdown(options: DrainForShutdownOptions = {}): ProtocolAction[] {
     const rawText = normalizePayloadWhitespace(this.buffer);
     if (rawText.length === 0) return [];
     const sectionId = this.currentSectionId ?? this.nextSectionId();
     this.buffer = "";
     this.currentSectionId = null;
+    if (options.submitPending === true) {
+      return [
+        {
+          type: "section.submitted",
+          sectionId,
+          rawText,
+          operators: this.activeOperators(),
+        },
+      ];
+    }
     return [
       {
         type: "section.cancelled",

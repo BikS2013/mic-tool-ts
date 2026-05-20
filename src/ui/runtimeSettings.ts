@@ -32,7 +32,7 @@ export function loadRendererSettingsForUi(
     const config = resolveConfig([...BASE_ARGV]);
     return {
       ok: true,
-      settings: settingsFromResolvedConfig(config),
+      settings: settingsFromResolvedConfig(config, current),
     };
   } catch (strictError) {
     try {
@@ -41,7 +41,7 @@ export function loadRendererSettingsForUi(
       });
       return {
         ok: false,
-        settings: settingsFromResolvedConfig(inspectionConfig),
+        settings: settingsFromResolvedConfig(inspectionConfig, current),
         error: summarizeSettingsError(strictError),
       };
     } catch {
@@ -76,7 +76,10 @@ export function refreshCredentialStatus(
   });
 }
 
-function settingsFromResolvedConfig(config: ResolvedConfig): RendererSettings {
+function settingsFromResolvedConfig(
+  config: ResolvedConfig,
+  current: Pick<RendererSettings, "hotkeyEnabled" | "hotkey">,
+): RendererSettings {
   const protocol = loadRuntimeProtocol(config);
   const summary: SafeConfigSummary = {
     ...safeConfigSummary(config),
@@ -84,7 +87,7 @@ function settingsFromResolvedConfig(config: ResolvedConfig): RendererSettings {
     operators: protocol.initialOperators,
     translationPolicy: protocol.translationPolicy,
   };
-  return settingsFromConfig(summary);
+  return settingsFromConfig(summary, current);
 }
 
 function loadRuntimeProtocol(config: ResolvedConfig): ProtocolRuntimeConfig {

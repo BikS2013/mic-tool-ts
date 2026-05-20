@@ -50,6 +50,10 @@ export interface RunMicSessionOptions {
   readonly onEvent?: SessionEventSink;
 }
 
+interface UiAbortReason {
+  readonly submitPending?: boolean;
+}
+
 export async function runMicSession(
   argv: string[],
   opts: RunMicSessionOptions = {},
@@ -175,6 +179,8 @@ export async function runMicSession(
   const shutdown = (reason: string): void => {
     if (shuttingDown) return;
     shuttingDown = true;
+    const submitPendingOnEnd =
+      reason === "ui-stop" && shouldSubmitPendingOnUiStop(opts.abortSignal?.reason);
     emit({ type: "session.state", state: "stopping", reason });
     if (config.verbose) {
       writeDiagnostic(`[mic-tool-ts] shutting down: ${reason}`);
@@ -207,7 +213,7 @@ export async function runMicSession(
         }
       }
       try {
-        await renderer.endSession(reason);
+        await renderer.endSession(reason, { submitPending: submitPendingOnEnd });
         persistProtocolSettings(renderer, config.verbose, writeDiagnostic);
         renderer.dispose();
       } catch (err) {
@@ -343,6 +349,14 @@ export async function runMicSession(
     return handleTopLevelError(asyncError, stderr, emit, frontend);
   }
   return 0;
+}
+
+function shouldSubmitPendingOnUiStop(reason: unknown): boolean {
+  return (
+    typeof reason === "object" &&
+    reason !== null &&
+    (reason as UiAbortReason).submitPending === true
+  );
 }
 
 function createRenderer(opts: {

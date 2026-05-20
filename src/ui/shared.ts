@@ -1,4 +1,5 @@
 import type { SafeConfigSummary, SessionEvent } from "../core/sessionEvents.js";
+import { normalizeHotkeyAccelerator } from "./hotkey.js";
 
 export interface RendererSettings {
   provider: string;
@@ -18,6 +19,8 @@ export interface RendererSettings {
   expiryStatus: string;
   storageStatus: string;
   inputStatus: string;
+  hotkeyEnabled: boolean;
+  hotkey: string;
 }
 
 export interface UiSettingsError {
@@ -36,8 +39,12 @@ export interface MicToolTsPreloadApi {
   loadSettings(): Promise<UiSettingsLoadResult>;
   updateSettings(settings: Partial<RendererSettings>): Promise<RendererSettings>;
   startSession(): Promise<void>;
-  stopSession(): Promise<void>;
+  stopSession(options?: StopSessionOptions): Promise<void>;
   onSessionEvent(callback: (event: SessionEvent) => void): () => void;
+}
+
+export interface StopSessionOptions {
+  readonly submitPending?: boolean;
 }
 
 export const DEFAULT_RENDERER_SETTINGS: RendererSettings = Object.freeze({
@@ -58,9 +65,14 @@ export const DEFAULT_RENDERER_SETTINGS: RendererSettings = Object.freeze({
   expiryStatus: "not set",
   storageStatus: "resolved config",
   inputStatus: "Off",
+  hotkeyEnabled: false,
+  hotkey: "Command+'",
 });
 
-export function settingsFromConfig(config: SafeConfigSummary): RendererSettings {
+export function settingsFromConfig(
+  config: SafeConfigSummary,
+  current: Pick<RendererSettings, "hotkeyEnabled" | "hotkey"> = DEFAULT_RENDERER_SETTINGS,
+): RendererSettings {
   return {
     provider: config.sttProvider,
     model: config.model,
@@ -79,6 +91,8 @@ export function settingsFromConfig(config: SafeConfigSummary): RendererSettings 
     expiryStatus: config.apiKeyExpiresAt ?? "not set",
     storageStatus: sourceLabel(config.apiKeySource),
     inputStatus: config.operators.input ? "Ready" : "Off",
+    hotkeyEnabled: current.hotkeyEnabled,
+    hotkey: current.hotkey,
   };
 }
 
@@ -117,6 +131,8 @@ export function normalizeRendererSettings(value: RendererSettings): RendererSett
     expiryStatus: normalizeStatus(value.expiryStatus, "not set"),
     storageStatus: normalizeStatus(value.storageStatus, "resolved config"),
     inputStatus: focusedInput ? "Ready" : "Off",
+    hotkeyEnabled: Boolean(value.hotkeyEnabled),
+    hotkey: normalizeHotkeyAccelerator(value.hotkey),
   };
 }
 

@@ -30,6 +30,10 @@ export interface VoiceAgentProtocolControllerOptions {
   diagnosticWriter?: (line: string, warning: boolean) => void;
 }
 
+export interface EndSessionOptions {
+  readonly submitPending?: boolean;
+}
+
 export class VoiceAgentProtocolController {
   private readonly mode: InteractionMode;
   private readonly renderer: Renderer;
@@ -94,9 +98,11 @@ export class VoiceAgentProtocolController {
     }
   }
 
-  async endSession(reason: string): Promise<void> {
+  async endSession(reason: string, options: EndSessionOptions = {}): Promise<void> {
     if (this.sessionEnded) return;
-    for (const action of this.stateMachine.drainForShutdown()) {
+    for (const action of this.stateMachine.drainForShutdown({
+      submitPending: options.submitPending === true,
+    })) {
       this.handleAction(action);
     }
     if (this.inFlight.size > 0) {

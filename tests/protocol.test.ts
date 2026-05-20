@@ -244,6 +244,23 @@ describe("VoiceCommandStateMachine", () => {
       },
     ]);
   });
+
+  it("can submit the current section during shutdown", () => {
+    const sm = new VoiceCommandStateMachine({
+      markers: MARKERS,
+      initialOperators: enabledOperators("refine"),
+      translationPolicy: "opposite",
+    });
+    sm.processFinal("hotkey dictated text");
+    expect(sm.drainForShutdown({ submitPending: true })).toEqual([
+      {
+        type: "section.submitted",
+        sectionId: "sec_000001",
+        rawText: "hotkey dictated text",
+        operators: ["refine"],
+      },
+    ]);
+  });
 });
 
 describe("JSONL protocol controller", () => {
@@ -525,6 +542,25 @@ describe("JSONL protocol controller", () => {
     expect(renderer.final).toHaveBeenCalledWith("rough text");
     expect(renderer.turnBoundary).toHaveBeenCalledOnce();
     expect(renderer.refined).toHaveBeenCalledWith("Polished.");
+  });
+
+  it("processes pending dictation text when endSession requests submission", async () => {
+    const renderer = fakeRenderer();
+    const refiner = fakeRefiner(async () => "Polished hotkey text.");
+    const controller = new VoiceAgentProtocolController({
+      mode: "dictation",
+      renderer,
+      markers: MARKERS,
+      initialOperators: enabledOperators("refine"),
+      translationPolicy: "opposite",
+      refiner,
+    });
+
+    controller.final("rough hotkey text");
+    await controller.endSession("ui-stop", { submitPending: true });
+
+    expect(renderer.turnBoundary).toHaveBeenCalledOnce();
+    expect(renderer.refined).toHaveBeenCalledWith("Polished hotkey text.");
   });
 
   it("renders status reports in dictation mode", () => {

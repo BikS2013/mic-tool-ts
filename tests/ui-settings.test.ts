@@ -7,6 +7,10 @@ import {
 } from "../src/ui/shared.js";
 
 describe("Electron UI settings", () => {
+  it("defaults push-to-talk to Command+apostrophe", () => {
+    expect(DEFAULT_RENDERER_SETTINGS.hotkey).toBe("Command+'");
+  });
+
   it("builds explicit session args from renderer settings", () => {
     const settings = mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {
       provider: "elevenlabs",
@@ -20,7 +24,11 @@ describe("Electron UI settings", () => {
       focusedInput: true,
       translationPolicy: "to-en",
       llmEnabled: false,
+      hotkeyEnabled: true,
+      hotkey: "CmdOrCtrl+Shift+Space",
     });
+
+    expect(settings.hotkey).toBe("CommandOrControl+Shift+Space");
 
     expect(settingsToSessionArgs(settings)).toEqual([
       "--stt-provider",
@@ -60,5 +68,11 @@ describe("Electron UI settings", () => {
         languages: [],
       }),
     ).toThrow("At least one language hint is required");
+
+    expect(() =>
+      mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {
+        hotkey: "CommandOrControl+Shift",
+      }),
+    ).toThrow("Hotkey must include a non-modifier key");
   });
 });

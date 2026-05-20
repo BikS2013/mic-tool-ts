@@ -18,9 +18,14 @@ interface RendererSettings {
   expiryStatus: string;
   storageStatus: string;
   inputStatus: string;
+  hotkeyEnabled: boolean;
+  hotkey: string;
 }
 
 type SessionEvent = Record<string, unknown>;
+interface StopSessionOptions {
+  submitPending?: boolean;
+}
 
 const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
 
@@ -37,8 +42,8 @@ const api = {
     await ipcRenderer.invoke("mic-tool-ts:session:start");
   },
 
-  async stopSession(): Promise<void> {
-    await ipcRenderer.invoke("mic-tool-ts:session:stop");
+  async stopSession(options?: StopSessionOptions): Promise<void> {
+    await ipcRenderer.invoke("mic-tool-ts:session:stop", options ?? {});
   },
 
   onSessionEvent(callback: (event: SessionEvent) => void): () => void {

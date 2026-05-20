@@ -1,5 +1,13 @@
 /// <reference lib="dom" />
 
+import {
+  eventMatchesHotkey,
+  eventReleasesHotkey,
+  normalizeHotkeyAccelerator,
+  parseHotkeyAccelerator,
+  type ParsedHotkey,
+} from "../hotkey.js";
+
 export {};
 
 type SessionState = "idle" | "loading" | "running" | "stopping" | "error";
@@ -23,6 +31,8 @@ interface RendererSettings {
   expiryStatus: string;
   storageStatus: string;
   inputStatus: string;
+  hotkeyEnabled: boolean;
+  hotkey: string;
 }
 
 interface UiSettingsLoadResult {
@@ -58,7 +68,7 @@ interface MicToolTsApi {
   loadSettings(): Promise<unknown>;
   updateSettings(settings: Partial<RendererSettings>): Promise<unknown>;
   startSession(): Promise<unknown>;
-  stopSession(): Promise<unknown>;
+  stopSession(options?: { submitPending?: boolean }): Promise<unknown>;
   onSessionEvent(callback: (event: unknown) => void): void | (() => void);
 }
 
@@ -102,6 +112,8 @@ const defaultSettings: RendererSettings = {
   expiryStatus: "not set",
   storageStatus: "resolved config",
   inputStatus: "Off",
+  hotkeyEnabled: false,
+  hotkey: "Command+'",
 };
 
 const demoTranscript: TranscriptItem[] = [
@@ -162,6 +174,8 @@ const state = {
   partialId: 0,
   nextId: 1,
   demoTimer: 0,
+  hotkeyPressed: false,
+  hotkeySessionActive: false,
 };
 
 const appShell = mustQuery<HTMLElement>(".app-shell");
@@ -182,6 +196,8 @@ const modelControl = mustQuery<HTMLInputElement>("#modelControl");
 const languagesControl = mustQuery<HTMLInputElement>("#languagesControl");
 const sampleRateControl = mustQuery<HTMLSelectElement>("#sampleRateControl");
 const endpointControl = mustQuery<HTMLInputElement>("#endpointControl");
+const hotkeyEnabledControl = mustQuery<HTMLInputElement>("#hotkeyEnabledControl");
+const hotkeyControl = mustQuery<HTMLInputElement>("#hotkeyControl");
 const protocolModeControl = mustQuery<HTMLSelectElement>("#protocolModeControl");
 const refineControl = mustQuery<HTMLInputElement>("#refineControl");
 const translateControl = mustQuery<HTMLInputElement>("#translateControl");
@@ -253,6 +269,8 @@ function parseSettings(value: unknown): Partial<RendererSettings> {
   settings.expiryStatus = stringValue(record.expiryStatus);
   settings.storageStatus = stringValue(record.storageStatus);
   settings.inputStatus = stringValue(record.inputStatus);
+  settings.hotkeyEnabled = booleanValue(record.hotkeyEnabled);
+  settings.hotkey = stringValue(record.hotkey);
   return settings;
 }
 
@@ -496,6 +514,7 @@ function renderSettings(): void {
     listRow("Languages", settings.languages.join(", ")),
     listRow("Sample rate", `${settings.sampleRate} Hz`),
     listRow("Endpoint detection", settings.endpointDetection ? "on" : "off"),
+    listRow("Push-to-talk", settings.hotkeyEnabled ? settings.hotkey : "off"),
     listRow(settings.apiKeyName, settings.apiKeyStatus),
     listRow("Expiry", settings.expiryStatus),
   );
@@ -521,6 +540,8 @@ function syncControls(settings: RendererSettings): void {
   languagesControl.value = settings.languages.join(", ");
   sampleRateControl.value = String(settings.sampleRate);
   endpointControl.checked = settings.endpointDetection;
+  hotkeyEnabledControl.checked = settings.hotkeyEnabled;
+  hotkeyControl.value = settings.hotkey;
   protocolModeControl.value = settings.protocolMode;
   refineControl.checked = settings.refine;
   translateControl.checked = settings.translate;
@@ -552,6 +573,8 @@ function collectSettingsFromControls(): Partial<RendererSettings> {
     languages: parseLanguages(languagesControl.value),
     sampleRate: Number.parseInt(sampleRateControl.value, 10),
     endpointDetection: endpointControl.checked,
+    hotkeyEnabled: hotkeyEnabledControl.checked,
+    hotkey: normalizeHotkeyAccelerator(hotkeyControl.value),
     protocolMode: protocolModeControl.value,
     refine: refineControl.checked,
     translate: translateControl.checked,
@@ -575,7 +598,14 @@ function normalizeProvider(value: string): string {
 }
 
 function mergeSettingsFromControls(): void {
-  const next = collectSettingsFromControls();
+  let next: Partial<RendererSettings>;
+  try {
+    next = collectSettingsFromControls();
+  } catch (error) {
+    addEvent("Settings error", errorMessage(error));
+    renderSettings();
+    return;
+  }
   const providerChanged = next.provider !== state.settings.provider;
   if (providerChanged && next.provider === "elevenlabs") {
     next.model = "scribe_v2_realtime";
@@ -775,10 +805,14 @@ function handleEvent(event: SessionEvent): void {
       addEvent("Session stopping", "closing streams");
       return;
     case "session.stopped":
+      state.hotkeySessionActive = false;
+      state.hotkeyPressed = false;
       setSessionState("idle");
       addEvent("Session stopped", "ready");
       return;
     case "session.error":
+      state.hotkeySessionActive = false;
+      state.hotkeyPressed = false;
       setSessionState("error");
       commitTranscript("error", event.message, "error");
       addEvent("Error", event.message);
@@ -869,6 +903,7 @@ function resetProductionData(): void {
 
 async function toggleSession(): Promise<void> {
   if (state.current === "running") {
+    state.hotkeySessionActive = false;
     await stopSession();
   } else if (state.current === "idle" || state.current === "error") {
     await startSession();
@@ -892,7 +927,7 @@ async function startSession(): Promise<void> {
   }
 }
 
-async function stopSession(): Promise<void> {
+async function stopSession(options: { submitPending?: boolean } = {}): Promise<void> {
   if (window.micToolTs === undefined) {
     setSessionState("error");
     addEvent("Stop failed", "preload bridge unavailable");
@@ -900,10 +935,38 @@ async function stopSession(): Promise<void> {
   }
   setSessionState("stopping");
   try {
-    await window.micToolTs.stopSession();
+    await window.micToolTs.stopSession(options);
   } catch (error) {
     setSessionState("error");
     addEvent("Stop failed", errorMessage(error));
+  }
+}
+
+async function startHotkeySession(): Promise<void> {
+  if (!state.settings.hotkeyEnabled || state.hotkeySessionActive) return;
+  if (state.current !== "idle" && state.current !== "error") return;
+  state.hotkeySessionActive = true;
+  addEvent("Push-to-talk", "pressed");
+  await startSession();
+  if (state.current === "error") {
+    state.hotkeySessionActive = false;
+  }
+}
+
+async function stopHotkeySession(): Promise<void> {
+  if (!state.hotkeySessionActive) return;
+  state.hotkeySessionActive = false;
+  addEvent("Push-to-talk", "released");
+  await stopSession({ submitPending: true });
+}
+
+function currentParsedHotkey(): ParsedHotkey | null {
+  if (!state.settings.hotkeyEnabled) return null;
+  try {
+    return parseHotkeyAccelerator(state.settings.hotkey);
+  } catch (error) {
+    addEvent("Hotkey error", errorMessage(error));
+    return null;
   }
 }
 
@@ -946,6 +1009,29 @@ function bindControls(): void {
       if (key === undefined) return;
       toggleBooleanSetting(key);
     });
+  });
+
+  window.addEventListener("keydown", (event) => {
+    const hotkey = currentParsedHotkey();
+    if (hotkey === null || event.repeat || !eventMatchesHotkey(event, hotkey)) return;
+    event.preventDefault();
+    if (state.hotkeyPressed) return;
+    state.hotkeyPressed = true;
+    void startHotkeySession();
+  });
+
+  window.addEventListener("keyup", (event) => {
+    const hotkey = currentParsedHotkey();
+    if (hotkey === null || !state.hotkeyPressed || !eventReleasesHotkey(event, hotkey)) return;
+    event.preventDefault();
+    state.hotkeyPressed = false;
+    void stopHotkeySession();
+  });
+
+  window.addEventListener("blur", () => {
+    if (!state.hotkeyPressed) return;
+    state.hotkeyPressed = false;
+    void stopHotkeySession();
   });
 
   const unsubscribe = window.micToolTs?.onSessionEvent((rawEvent: unknown) => {

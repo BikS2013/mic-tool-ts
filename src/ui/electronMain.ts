@@ -15,6 +15,7 @@ import {
   loadRendererSettingsForUi,
   refreshCredentialStatus,
 } from "./runtimeSettings.js";
+import { savePersistedUiSettings } from "./settingsStore.js";
 import {
   DEFAULT_RENDERER_SETTINGS,
   mergeRendererSettings,
@@ -88,6 +89,7 @@ function registerIpc(): void {
       latestSettings,
       patch as Partial<RendererSettings>,
     ));
+    saveUiSettings(latestSettings);
     void configureGlobalHotkey();
     emitSessionEvent({
       type: "config.saved",
@@ -101,6 +103,10 @@ function registerIpc(): void {
   ipcMain.handle("mic-tool-ts:session:stop", async (_event, options: unknown) => {
     await stopSession(normalizeStopOptions(options));
   });
+}
+
+function saveUiSettings(settings: RendererSettings): void {
+  savePersistedUiSettings(settings, { toolName: "mic-tool-ts" });
 }
 
 async function createWindow(): Promise<void> {

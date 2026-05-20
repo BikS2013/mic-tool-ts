@@ -21,6 +21,10 @@ import {
   type UiSettingsError,
   type UiSettingsLoadResult,
 } from "./shared.js";
+import {
+  loadPersistedUiSettings,
+  type PersistedUiSettings,
+} from "./settingsStore.js";
 
 const TOOL_NAME = "mic-tool-ts";
 const BASE_ARGV = ["node", TOOL_NAME] as const;
@@ -28,11 +32,21 @@ const BASE_ARGV = ["node", TOOL_NAME] as const;
 export function loadRendererSettingsForUi(
   current: RendererSettings = DEFAULT_RENDERER_SETTINGS,
 ): UiSettingsLoadResult {
+  let persistedUiSettings: Partial<PersistedUiSettings> | null;
+  try {
+    persistedUiSettings = loadPersistedUiSettings({ toolName: TOOL_NAME });
+  } catch (err) {
+    return {
+      ok: false,
+      settings: refreshCredentialStatus(current),
+      error: summarizeSettingsError(err),
+    };
+  }
   try {
     const config = resolveConfig([...BASE_ARGV]);
     return {
       ok: true,
-      settings: settingsFromResolvedConfig(config, current),
+      settings: settingsFromResolvedConfig(config, current, persistedUiSettings),
     };
   } catch (strictError) {
     try {
@@ -41,13 +55,13 @@ export function loadRendererSettingsForUi(
       });
       return {
         ok: false,
-        settings: settingsFromResolvedConfig(inspectionConfig, current),
+        settings: settingsFromResolvedConfig(inspectionConfig, current, persistedUiSettings),
         error: summarizeSettingsError(strictError),
       };
     } catch {
       return {
         ok: false,
-        settings: refreshCredentialStatus(current),
+        settings: refreshCredentialStatus(applyPersistedUiSettings(current, persistedUiSettings)),
         error: summarizeSettingsError(strictError),
       };
     }
@@ -79,6 +93,7 @@ export function refreshCredentialStatus(
 function settingsFromResolvedConfig(
   config: ResolvedConfig,
   current: Pick<RendererSettings, "hotkeyEnabled" | "hotkey">,
+  persistedUiSettings: Partial<PersistedUiSettings> | null,
 ): RendererSettings {
   const protocol = loadRuntimeProtocol(config);
   const summary: SafeConfigSummary = {
@@ -87,12 +102,22 @@ function settingsFromResolvedConfig(
     operators: protocol.initialOperators,
     translationPolicy: protocol.translationPolicy,
   };
-  return settingsFromConfig(summary, current);
+  return refreshCredentialStatus(
+    applyPersistedUiSettings(settingsFromConfig(summary, current), persistedUiSettings),
+  );
 }
 
 function loadRuntimeProtocol(config: ResolvedConfig): ProtocolRuntimeConfig {
   const persisted = loadPersistedProtocolSettings({ toolName: TOOL_NAME });
   return applyPersistedProtocolSettings(config.protocol, persisted);
+}
+
+function applyPersistedUiSettings(
+  settings: RendererSettings,
+  persistedUiSettings: Partial<PersistedUiSettings> | null,
+): RendererSettings {
+  if (persistedUiSettings === null) return settings;
+  return mergeRendererSettings(settings, persistedUiSettings);
 }
 
 function summarizeSettingsError(error: unknown): UiSettingsError {

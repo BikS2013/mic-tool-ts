@@ -15,6 +15,7 @@ import {
   DEFAULT_RENDERER_SETTINGS,
   mergeRendererSettings,
 } from "../src/ui/shared.js";
+import { savePersistedUiSettings } from "../src/ui/settingsStore.js";
 
 const TRACKED_ENV_KEYS = [
   "HOME",
@@ -89,6 +90,82 @@ describe("UI runtime settings", () => {
     expect(result.settings.llmEnabled).toBe(false);
     expect(result.settings.focusedInput).toBe(true);
     expect(result.settings.inputStatus).toBe("Ready");
+  });
+
+  it("restores persisted UI settings on UI load", () => {
+    setCwd("SONIOX_API_KEY=sk_configured\nMIC_TOOL_TS_REFINE=false\n");
+    savePersistedUiSettings(
+      mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {
+        provider: "elevenlabs",
+        model: "scribe_v2_realtime",
+        languages: ["auto"],
+        sampleRate: 24000,
+        endpointDetection: false,
+        protocolMode: "agent-protocol",
+        refine: true,
+        translate: true,
+        clipboard: true,
+        focusedInput: true,
+        translationPolicy: "to-en",
+        llmEnabled: false,
+        hotkeyEnabled: true,
+        hotkey: "CmdOrCtrl+Shift+Space",
+      }),
+      { toolName: "mic-tool-ts", home: tmpHome ?? undefined },
+    );
+
+    const result = loadRendererSettingsForUi();
+
+    expect(result.ok).toBe(true);
+    expect(result.settings.provider).toBe("elevenlabs");
+    expect(result.settings.model).toBe("scribe_v2_realtime");
+    expect(result.settings.languages).toEqual(["auto"]);
+    expect(result.settings.sampleRate).toBe(24000);
+    expect(result.settings.endpointDetection).toBe(false);
+    expect(result.settings.protocolMode).toBe("agent-protocol");
+    expect(result.settings.refine).toBe(true);
+    expect(result.settings.translate).toBe(true);
+    expect(result.settings.clipboard).toBe(true);
+    expect(result.settings.focusedInput).toBe(true);
+    expect(result.settings.translationPolicy).toBe("to-en");
+    expect(result.settings.llmEnabled).toBe(false);
+    expect(result.settings.hotkeyEnabled).toBe(true);
+    expect(result.settings.hotkey).toBe("CommandOrControl+Shift+Space");
+    expect(result.settings.apiKeyName).toBe("ELEVENLABS_API_KEY");
+    expect(result.settings.apiKeyStatus).toBe("missing");
+    expect(result.settings.storageStatus).toBe("not found");
+  });
+
+  it("reports invalid persisted UI settings as a UI settings error", () => {
+    setCwd("SONIOX_API_KEY=sk_configured\nMIC_TOOL_TS_REFINE=false\n");
+    const statePath = join(
+      tmpHome ?? "",
+      ".tool-agents",
+      "mic-tool-ts",
+      "ui-state.json",
+    );
+    savePersistedUiSettings(
+      mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {}),
+      { toolName: "mic-tool-ts", home: tmpHome ?? undefined },
+    );
+    writeFileSync(
+      statePath,
+      JSON.stringify({
+        version: 1,
+        saved_at: "2026-05-20T00:00:00.000Z",
+        settings: {
+          ...mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {}),
+          hotkey: "CommandOrControl+Shift",
+        },
+      }),
+      "utf8",
+    );
+
+    const result = loadRendererSettingsForUi();
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("invalid_configuration");
+    expect(result.error?.message).toContain("Invalid UI settings state");
   });
 
   it("still shows configured Soniox state when strict startup fails on LLM config", () => {

@@ -31,7 +31,7 @@ Notes:
 - `mic-tool-ts` never mutates `process.env`. The chain is read-only.
 - The two `.env` files are optional. Missing files are not errors; malformed files (e.g. unterminated quote) raise `InvalidConfigurationError` so you are never silently deprived of a value you thought was loaded.
 - Run with `--verbose` to see which source supplied the active STT provider API key. The value itself is never logged.
-- Remembered runtime protocol settings are not part of this four-tier configuration chain. They are restored from `~/.tool-agents/mic-tool-ts/state.json` after config resolution, and only for protocol settings that still came from built-in defaults.
+- Remembered runtime protocol settings are not part of this four-tier configuration chain. They are restored from `~/.tool-agents/mic-tool-ts/state.json` after config resolution, and only for protocol settings that still came from built-in defaults. Electron UI preferences changed through the UI are also outside the env-var chain and are restored from `~/.tool-agents/mic-tool-ts/ui-state.json` when `mic-tool-ts ui` starts.
 
 ### Example resolution
 
@@ -290,7 +290,8 @@ A canonical setup for the recommended secrets-grade per-user store:
 ~/.tool-agents/                            # mode 0700 (only you can read)
 └── mic-tool-ts/                              # mode 0700
     ├── .env                               # mode 0600
-    └── state.json                         # mode 0600, non-secret runtime protocol state
+    ├── state.json                         # mode 0600, non-secret runtime protocol state
+    └── ui-state.json                      # mode 0600, non-secret UI settings state
 
 # .env contents (example):
 SONIOX_API_KEY=sk_real_key_here
@@ -312,7 +313,7 @@ chmod 0600 ~/.tool-agents/mic-tool-ts/.env
 # then edit the file in your preferred editor
 ```
 
-`mic-tool-ts` creates `~/.tool-agents/mic-tool-ts/state.json` when it saves remembered protocol settings. It does not create or populate `.env`; you still own secret setup and review.
+`mic-tool-ts` creates `~/.tool-agents/mic-tool-ts/state.json` when it saves remembered protocol settings, and `mic-tool-ts ui` creates `~/.tool-agents/mic-tool-ts/ui-state.json` when it saves non-secret UI settings. The UI state file may contain provider, model, language hints, sample rate, endpoint detection, protocol mode, operator defaults, translation policy, LLM enablement, and push-to-talk settings. It does not contain API-key values, transcript text, protocol events, processed output, or derived credential status. The tool does not create or populate `.env`; you still own secret setup and review.
 
 For non-secret project-specific overrides (e.g. `MIC_TOOL_TS_LANGUAGES=pt-BR,en` for a Portuguese project), use a project-local `<cwd>/.env`. Do NOT put secrets in this file if the project is under version control.
 

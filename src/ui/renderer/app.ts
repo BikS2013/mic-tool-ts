@@ -69,7 +69,7 @@ type SessionEvent =
 interface MicToolTsApi {
   loadSettings(): Promise<unknown>;
   updateSettings(settings: Partial<RendererSettings>): Promise<unknown>;
-  startSession(): Promise<unknown>;
+  startSession(options?: { hotkey?: boolean }): Promise<unknown>;
   stopSession(options?: { submitPending?: boolean }): Promise<unknown>;
   onSessionEvent(callback: (event: unknown) => void): void | (() => void);
 }
@@ -186,8 +186,6 @@ const appShell = mustQuery<HTMLElement>(".app-shell");
 const sessionSummary = mustQuery<HTMLElement>("#sessionSummary");
 const sessionStatusText = mustQuery<HTMLElement>("#sessionStatusText");
 const timeline = mustQuery<HTMLElement>("#timeline");
-const settingsList = mustQuery<HTMLElement>("#settingsList");
-const protocolList = mustQuery<HTMLElement>("#protocolList");
 const eventList = mustQuery<HTMLElement>("#eventList");
 const recentEvents = mustQuery<HTMLElement>("#recentEvents");
 const liveText = mustQuery<HTMLElement>("#liveText");
@@ -490,12 +488,6 @@ function setSessionState(nextState: SessionState): void {
   updateControlDisabledState();
 }
 
-function setSwitch(selector: string, enabled: boolean): void {
-  const element = mustQuery<HTMLElement>(selector);
-  element.classList.toggle("off", !enabled);
-  element.setAttribute("aria-checked", String(enabled));
-}
-
 function renderSettings(): void {
   const settings = state.settings;
   const providerLabel = displayProvider(settings.provider);
@@ -503,43 +495,11 @@ function renderSettings(): void {
   setText("#providerValue", providerLabel);
   setText("#modeValue", settings.protocolMode);
   setText("#inputValue", settings.inputStatus);
-  setText("#inspectorProvider", providerLabel);
-  setText("#inspectorModel", settings.model);
-  setText("#inspectorLanguages", settings.languages.join(", "));
-  setText("#inspectorMode", settings.protocolMode);
   setText("#apiKeyName", settings.apiKeyName);
   setText("#apiKeyStatus", settings.apiKeyStatus);
   setText("#expiryStatus", settings.expiryStatus);
   setText("#storageStatus", settings.storageStatus);
-  setSwitch("#endpointSwitch", settings.endpointDetection);
-  setSwitch("#refineSwitch", settings.refine);
-  setSwitch("#translateSwitch", settings.translate);
-  setSwitch("#clipboardSwitch", settings.clipboard);
-  setSwitch("#focusedInputSwitch", settings.focusedInput);
   syncControls(settings);
-
-  settingsList.replaceChildren(
-    listRow("Provider", providerLabel),
-    listRow("Model", settings.model),
-    listRow("Languages", settings.languages.join(", ")),
-    listRow("Sample rate", `${settings.sampleRate} Hz`),
-    listRow("Endpoint detection", settings.endpointDetection ? "on" : "off"),
-    listRow("Push-to-talk", settings.hotkeyEnabled ? settings.hotkey : "off"),
-    listRow(settings.apiKeyName, settings.apiKeyStatus),
-    listRow("Expiry", settings.expiryStatus),
-  );
-
-  protocolList.replaceChildren(
-    listRow("Mode", settings.protocolMode),
-    listRow("Refine", settings.refine ? "on" : "off"),
-    listRow("Translate", settings.translate ? "on" : "off"),
-    listRow("Clipboard", settings.clipboard ? "on" : "off"),
-    listRow("Focused input", settings.focusedInput ? "on" : "off"),
-    listRow("Translation policy", settings.translationPolicy),
-    listRow("LLM engine", settings.llmEnabled ? "on" : "off"),
-    listRow("LLM provider", settings.llmProvider),
-    listRow("LLM model", settings.llmModel),
-  );
 }
 
 function displayProvider(provider: string): string {
@@ -564,20 +524,6 @@ function syncControls(settings: RendererSettings): void {
   llmProviderControl.value = normalizeLlmProvider(settings.llmProvider);
   llmModelControl.value = settings.llmModel;
   updateControlDisabledState();
-}
-
-function listRow(label: string, value: string): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "list-row";
-
-  const labelNode = document.createElement("span");
-  labelNode.textContent = label;
-
-  const valueNode = document.createElement("strong");
-  valueNode.textContent = value;
-
-  row.append(labelNode, valueNode);
-  return row;
 }
 
 function collectSettingsFromControls(): Partial<RendererSettings> {
@@ -958,17 +904,20 @@ async function toggleSession(): Promise<void> {
   }
 }
 
-async function startSession(): Promise<void> {
+async function startSession(options: { hotkey?: boolean } = {}): Promise<void> {
   if (window.micToolTs === undefined) {
     setSessionState("error");
     addEvent("Start failed", "preload bridge unavailable");
     return;
   }
-  state.transcript = [];
-  renderTranscript();
-  setSessionState("loading");
+  const warmedHotkeyPress = options.hotkey === true && state.current === "running";
+  if (!warmedHotkeyPress) {
+    state.transcript = [];
+    renderTranscript();
+    setSessionState("loading");
+  }
   try {
-    await window.micToolTs.startSession();
+    await window.micToolTs.startSession(options);
   } catch (error) {
     setSessionState("error");
     addEvent("Start failed", errorMessage(error));
@@ -981,7 +930,9 @@ async function stopSession(options: { submitPending?: boolean } = {}): Promise<v
     addEvent("Stop failed", "preload bridge unavailable");
     return;
   }
-  setSessionState("stopping");
+  if (options.submitPending !== true) {
+    setSessionState("stopping");
+  }
   try {
     await window.micToolTs.stopSession(options);
   } catch (error) {
@@ -992,10 +943,9 @@ async function stopSession(options: { submitPending?: boolean } = {}): Promise<v
 
 async function startHotkeySession(): Promise<void> {
   if (!state.settings.hotkeyEnabled || state.hotkeySessionActive) return;
-  if (state.current !== "idle" && state.current !== "error") return;
   state.hotkeySessionActive = true;
   addEvent("Push-to-talk", "pressed");
-  await startSession();
+  await startSession({ hotkey: true });
   if (state.current === "error") {
     state.hotkeySessionActive = false;
   }

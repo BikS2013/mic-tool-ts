@@ -26,6 +26,9 @@ type SessionEvent = Record<string, unknown>;
 interface StopSessionOptions {
   submitPending?: boolean;
 }
+interface StartSessionOptions {
+  hotkey?: boolean;
+}
 
 const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
 
@@ -38,8 +41,8 @@ const api = {
     return ipcRenderer.invoke("mic-tool-ts:settings:update", settings);
   },
 
-  async startSession(): Promise<void> {
-    await ipcRenderer.invoke("mic-tool-ts:session:start");
+  async startSession(options?: StartSessionOptions): Promise<void> {
+    await ipcRenderer.invoke("mic-tool-ts:session:start", options ?? {});
   },
 
   async stopSession(options?: StopSessionOptions): Promise<void> {

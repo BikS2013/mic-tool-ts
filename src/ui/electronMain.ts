@@ -2,7 +2,12 @@ import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, shell }
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { runMicSession } from "../core/sessionRunner.js";
+import {
+  runMicSession,
+  type AudioGate,
+  type SubmitPendingControl,
+  type SubmitPendingListener,
+} from "../core/sessionRunner.js";
 import type { SessionEvent } from "../core/sessionEvents.js";
 import { GlobalHotkeyManager } from "./globalHotkeyManager.js";
 import {
@@ -22,6 +27,7 @@ import {
   settingsFromConfig,
   settingsToSessionArgs,
   type RendererSettings,
+  type StartSessionOptions,
   type StopSessionOptions,
   type UiSettingsLoadResult,
 } from "./shared.js";
@@ -31,14 +37,45 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;
 let sessionAbort: AbortController | null = null;
 let sessionRunning = false;
+let sessionOwner: "manual" | "hotkey" | null = null;
 let latestSettings: RendererSettings = { ...DEFAULT_RENDERER_SETTINGS };
 let hotkeyPressed = false;
 let hotkeySessionActive = false;
+let hotkeySessionControl: HotkeySessionControl | null = null;
+let restartWarmSessionAfterStop = false;
 let globalHotkeyManager: GlobalHotkeyManager | null = null;
 
 interface UiStopReason {
   readonly source: "manual" | "hotkey";
   readonly submitPending: boolean;
+}
+
+class HotkeySessionControl implements AudioGate, SubmitPendingControl {
+  private gateOpen = false;
+  private readonly listeners = new Set<SubmitPendingListener>();
+
+  isOpen(): boolean {
+    return this.gateOpen;
+  }
+
+  open(): void {
+    this.gateOpen = true;
+  }
+
+  close(): void {
+    this.gateOpen = false;
+  }
+
+  subscribe(listener: SubmitPendingListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  async submitPending(): Promise<void> {
+    await Promise.all(Array.from(this.listeners, (listener) => listener()));
+  }
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -56,7 +93,8 @@ if (!gotLock) {
     createGlobalHotkeyManager();
     createMenu();
     await createWindow();
-    void configureGlobalHotkey();
+    await configureGlobalHotkey();
+    void reconcileHotkeyWarmSession();
   }).catch((err: unknown) => {
     process.stderr.write(`${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
     app.exit(1);
@@ -91,14 +129,20 @@ function registerIpc(): void {
     ));
     saveUiSettings(latestSettings);
     void configureGlobalHotkey();
+    void reconcileHotkeyWarmSession({ restartExistingHotkeySession: true });
     emitSessionEvent({
       type: "config.saved",
       message: "settings updated",
     });
     return latestSettings;
   });
-  ipcMain.handle("mic-tool-ts:session:start", async () => {
-    await startSession();
+  ipcMain.handle("mic-tool-ts:session:start", async (_event, options: unknown) => {
+    const startOptions = normalizeStartOptions(options);
+    if (startOptions.hotkey === true) {
+      await startHotkeySession();
+      return;
+    }
+    await startSession({ owner: "manual" });
   });
   ipcMain.handle("mic-tool-ts:session:stop", async (_event, options: unknown) => {
     await stopSession(normalizeStopOptions(options));
@@ -200,9 +244,15 @@ function loadSettingsForRenderer(): UiSettingsLoadResult {
   return result;
 }
 
-async function startSession(): Promise<void> {
+interface StartSessionInternalOptions {
+  readonly owner: "manual" | "hotkey";
+  readonly hotkeyControl?: HotkeySessionControl;
+}
+
+async function startSession(options: StartSessionInternalOptions): Promise<void> {
   if (sessionRunning) return;
   sessionRunning = true;
+  sessionOwner = options.owner;
   sessionAbort = new AbortController();
   const argv = ["node", "mic-tool-ts", ...settingsToSessionArgs(latestSettings)];
 
@@ -211,29 +261,83 @@ async function startSession(): Promise<void> {
     handleProcessSignals: false,
     abortSignal: sessionAbort.signal,
     onEvent: emitSessionEvent,
+    audioGate: options.hotkeyControl,
+    submitPendingControl: options.hotkeyControl,
   }).then((code) => {
     sessionRunning = false;
     sessionAbort = null;
+    sessionOwner = null;
     hotkeyPressed = false;
     hotkeySessionActive = false;
+    hotkeySessionControl = null;
     if (code !== 0) {
       emitSessionEvent({
         type: "diagnostic.warning",
         message: `[mic-tool-ts] UI session exited with code ${code}`,
       });
     }
+    if (restartWarmSessionAfterStop) {
+      restartWarmSessionAfterStop = false;
+      void reconcileHotkeyWarmSession();
+    }
   }).catch((err: unknown) => {
     sessionRunning = false;
     sessionAbort = null;
+    sessionOwner = null;
     hotkeyPressed = false;
     hotkeySessionActive = false;
+    hotkeySessionControl = null;
     emitSessionEvent({
       type: "session.error",
       code: "UNKNOWN",
       message: err instanceof Error ? err.message : String(err),
       exitCode: 1,
     });
+    if (restartWarmSessionAfterStop) {
+      restartWarmSessionAfterStop = false;
+      void reconcileHotkeyWarmSession();
+    }
   });
+}
+
+async function reconcileHotkeyWarmSession(
+  options: { restartExistingHotkeySession?: boolean } = {},
+): Promise<void> {
+  if (!latestSettings.hotkeyEnabled) {
+    await stopHotkeyWarmSession();
+    return;
+  }
+  if (sessionRunning) {
+    if (sessionOwner === "hotkey" && options.restartExistingHotkeySession === true) {
+      restartWarmSessionAfterStop = true;
+      await stopHotkeyWarmSession();
+    }
+    return;
+  }
+  await startHotkeyWarmSession();
+}
+
+async function startHotkeyWarmSession(): Promise<void> {
+  if (!latestSettings.hotkeyEnabled || sessionRunning) return;
+  hotkeySessionControl = new HotkeySessionControl();
+  hotkeySessionControl.close();
+  hotkeySessionActive = true;
+  emitSessionEvent({
+    type: "diagnostic.info",
+    message: "[mic-tool-ts] push-to-talk warmed",
+  });
+  await startSession({
+    owner: "hotkey",
+    hotkeyControl: hotkeySessionControl,
+  });
+}
+
+async function stopHotkeyWarmSession(): Promise<void> {
+  hotkeyPressed = false;
+  hotkeySessionControl?.close();
+  if (sessionOwner !== "hotkey") return;
+  hotkeySessionActive = false;
+  await stopSession();
 }
 
 function handlePushToTalkInput(
@@ -273,19 +377,29 @@ function handlePushToTalkInput(
 async function startHotkeySession(): Promise<void> {
   if (hotkeyPressed) return;
   hotkeyPressed = true;
-  if (sessionRunning) return;
-  hotkeySessionActive = true;
+  if (sessionRunning && sessionOwner === "hotkey" && hotkeySessionControl !== null) {
+    hotkeySessionControl.open();
+  } else if (sessionRunning) {
+    return;
+  } else {
+    hotkeySessionControl = new HotkeySessionControl();
+    hotkeySessionControl.open();
+    hotkeySessionActive = true;
+    await startSession({
+      owner: "hotkey",
+      hotkeyControl: hotkeySessionControl,
+    });
+  }
   emitSessionEvent({
     type: "diagnostic.info",
     message: "[mic-tool-ts] push-to-talk pressed",
   });
-  await startSession();
 }
 
 async function stopHotkeySession(): Promise<void> {
   hotkeyPressed = false;
-  if (!hotkeySessionActive) return;
-  hotkeySessionActive = false;
+  if (!hotkeySessionActive || sessionOwner !== "hotkey" || hotkeySessionControl === null) return;
+  hotkeySessionControl.close();
   emitSessionEvent({
     type: "diagnostic.info",
     message: "[mic-tool-ts] push-to-talk released",
@@ -306,10 +420,16 @@ function toHotkeyEvent(input: Electron.Input): HotkeyKeyboardEventLike {
 }
 
 async function stopSession(options: StopSessionOptions = {}): Promise<void> {
+  if (options.submitPending === true) {
+    if (sessionOwner === "hotkey" && hotkeySessionControl !== null) {
+      await hotkeySessionControl.submitPending();
+    }
+    return;
+  }
   if (sessionAbort === null) return;
   const reason: UiStopReason = {
-    source: options.submitPending === true ? "hotkey" : "manual",
-    submitPending: options.submitPending === true,
+    source: "manual",
+    submitPending: false,
   };
   sessionAbort.abort(reason);
 }
@@ -328,6 +448,15 @@ function normalizeStopOptions(value: unknown): StopSessionOptions {
   }
   return {
     submitPending: (value as StopSessionOptions).submitPending === true,
+  };
+}
+
+function normalizeStartOptions(value: unknown): StartSessionOptions {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {};
+  }
+  return {
+    hotkey: (value as StartSessionOptions).hotkey === true,
   };
 }
 
@@ -352,7 +481,7 @@ function createMenu(): void {
           label: "Start Listening",
           accelerator: "CommandOrControl+R",
           click: () => {
-            void startSession();
+            void startSession({ owner: "manual" });
           },
         },
         {

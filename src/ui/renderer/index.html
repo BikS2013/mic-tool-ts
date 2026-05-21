@@ -76,7 +76,6 @@
         <div class="content-topline">
           <div class="segmented" role="tablist" aria-label="Monitor views">
             <button class="selected" type="button" data-view-button="monitor">Transcript</button>
-            <button type="button" data-view-button="protocol">Sections</button>
             <button type="button" data-view-button="logs">Events</button>
           </div>
           <span class="demo-pill" id="demoPill"></span>
@@ -127,7 +126,6 @@
               <input id="hotkeyControl" data-setting-control type="text" autocomplete="off" spellcheck="false">
             </label>
           </form>
-          <div class="compact-list summary-list" id="settingsList"></div>
         </section>
 
         <section class="view-panel" id="protocolView" aria-label="Protocol overview">
@@ -186,7 +184,6 @@
               <input id="llmModelControl" data-setting-control type="text" autocomplete="off" spellcheck="false">
             </label>
           </form>
-          <div class="compact-list summary-list" id="protocolList"></div>
         </section>
 
         <section class="view-panel" id="logsView" aria-label="Session event log">
@@ -195,23 +192,6 @@
       </main>
 
       <aside class="inspector" aria-label="Inspector">
-        <section class="setting-group">
-          <h2>Transcription</h2>
-          <div class="setting-row"><span>Provider</span><strong class="select-like" id="inspectorProvider">--</strong></div>
-          <div class="setting-row"><span>Model</span><strong class="value" id="inspectorModel">--</strong></div>
-          <div class="setting-row"><span>Languages</span><strong class="value" id="inspectorLanguages">--</strong></div>
-          <div class="setting-row"><span>Endpoint detection</span><button class="switch" id="endpointSwitch" type="button" role="switch" aria-checked="true" data-setting-toggle="endpointDetection"><span class="knob"></span></button></div>
-        </section>
-
-        <section class="setting-group">
-          <h2>Protocol</h2>
-          <div class="setting-row"><span>Mode</span><strong class="select-like" id="inspectorMode">--</strong></div>
-          <div class="setting-row"><span>Refine</span><button class="switch off" id="refineSwitch" type="button" role="switch" aria-checked="false" data-setting-toggle="refine"><span class="knob"></span></button></div>
-          <div class="setting-row"><span>Translate</span><button class="switch off" id="translateSwitch" type="button" role="switch" aria-checked="false" data-setting-toggle="translate"><span class="knob"></span></button></div>
-          <div class="setting-row"><span>Clipboard</span><button class="switch off" id="clipboardSwitch" type="button" role="switch" aria-checked="false" data-setting-toggle="clipboard"><span class="knob"></span></button></div>
-          <div class="setting-row"><span>Focused input</span><button class="switch off" id="focusedInputSwitch" type="button" role="switch" aria-checked="false" data-setting-toggle="focusedInput"><span class="knob"></span></button></div>
-        </section>
-
         <section class="setting-group">
           <h2>Credentials</h2>
           <div class="setting-row"><span id="apiKeyName">API key</span><strong class="value" id="apiKeyStatus">unknown</strong></div>

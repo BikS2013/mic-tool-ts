@@ -48,10 +48,22 @@ export interface RunMicSessionOptions {
   readonly handleProcessSignals?: boolean;
   readonly abortSignal?: AbortSignal;
   readonly onEvent?: SessionEventSink;
+  readonly audioGate?: AudioGate;
+  readonly submitPendingControl?: SubmitPendingControl;
 }
 
 interface UiAbortReason {
   readonly submitPending?: boolean;
+}
+
+export interface AudioGate {
+  isOpen(): boolean;
+}
+
+export type SubmitPendingListener = () => void | Promise<void>;
+
+export interface SubmitPendingControl {
+  subscribe(listener: SubmitPendingListener): () => void;
 }
 
 export async function runMicSession(
@@ -166,6 +178,8 @@ export async function runMicSession(
   let transcriberStarted = false;
   let micStarted = false;
   let mic: MicSource | undefined;
+  let unsubscribeSubmitPending: (() => void) | undefined;
+  let submitPendingQueue = Promise.resolve();
   let shutdownResolve: (() => void) | undefined;
   const shutdownPromise = new Promise<void>((resolve) => {
     shutdownResolve = resolve;
@@ -242,6 +256,20 @@ export async function runMicSession(
     shutdown("transcriber-error");
   });
 
+  const submitPending = async (): Promise<void> => {
+    if (shuttingDown || !transcriberStarted) return;
+    try {
+      if (config.verbose) {
+        writeDiagnostic("[mic-tool-ts] committing pending push-to-talk utterance");
+      }
+      await transcriber.commit();
+      await renderer.submitPending();
+    } catch (err) {
+      recordAsyncError(err);
+      shutdown("submit-pending-error");
+    }
+  };
+
   try {
     await transcriber.start();
     transcriberStarted = true;
@@ -293,13 +321,19 @@ export async function runMicSession(
     return handleTopLevelError(err, stderr, emit, frontend);
   }
 
-  mic.audio.on("data", (chunk: Buffer) => transcriber.pushAudio(chunk));
+  mic.audio.on("data", (chunk: Buffer) => {
+    transcriber.pushAudio(audioChunkForGate(chunk, opts.audioGate));
+  });
   mic.audio.on("error", (err: Error) => {
     recordAsyncError(err);
     shutdown("mic-error");
   });
   mic.audio.on("end", () => {
     shutdown("mic-end");
+  });
+  unsubscribeSubmitPending = opts.submitPendingControl?.subscribe(() => {
+    submitPendingQueue = submitPendingQueue.then(submitPending, submitPending);
+    return submitPendingQueue;
   });
 
   const onSigint = (): void => {
@@ -338,6 +372,7 @@ export async function runMicSession(
   try {
     await shutdownPromise;
   } finally {
+    unsubscribeSubmitPending?.();
     if (handleProcessSignals) {
       process.off("SIGINT", onSigint);
       process.off("SIGTERM", onSigterm);
@@ -349,6 +384,11 @@ export async function runMicSession(
     return handleTopLevelError(asyncError, stderr, emit, frontend);
   }
   return 0;
+}
+
+function audioChunkForGate(chunk: Buffer, gate: AudioGate | undefined): Buffer {
+  if (gate === undefined || gate.isOpen()) return chunk;
+  return Buffer.alloc(chunk.length);
 }
 
 function shouldSubmitPendingOnUiStop(reason: unknown): boolean {

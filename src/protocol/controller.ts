@@ -120,6 +120,16 @@ export class VoiceAgentProtocolController {
     this.sessionEnded = true;
   }
 
+  async submitPending(): Promise<void> {
+    if (this.sessionEnded || this.disposed) return;
+    for (const action of this.stateMachine.drainForShutdown({ submitPending: true })) {
+      this.handleAction(action);
+    }
+    if (this.inFlight.size > 0) {
+      await Promise.allSettled(Array.from(this.inFlight));
+    }
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

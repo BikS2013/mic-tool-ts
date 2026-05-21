@@ -216,6 +216,30 @@ export class SonioxTranscriber implements Transcriber {
     }
   }
 
+  async commit(): Promise<void> {
+    const session = this.session;
+    if (session === undefined) return;
+    if (session.state !== "connected" && session.state !== "finishing") return;
+
+    if (this.opts.verbose) {
+      process.stderr.write("[mic-tool-ts] soniox: finalize()\n");
+    }
+    try {
+      session.finalize();
+    } catch (err) {
+      const mapped = this.mapSdkError(err);
+      if (this.opts.verbose) {
+        process.stderr.write(
+          `[mic-tool-ts] soniox: finalize() failed (${mapped.message})\n`,
+        );
+      }
+      throw mapped;
+    }
+
+    // Give final tokens a short window to arrive before callers submit pending text.
+    await delay(FINALIZE_DRAIN_MS);
+  }
+
   async stop(): Promise<void> {
     if (this.shuttingDown) {
       // Idempotent: a second caller awaits the same in-flight shutdown.
@@ -244,18 +268,11 @@ export class SonioxTranscriber implements Transcriber {
       return;
     }
 
-    // Ask the server to flush pending non-final tokens as finals first.
-    if (this.opts.verbose) {
-      process.stderr.write("[mic-tool-ts] soniox: finalize()\n");
-    }
     try {
-      session.finalize();
+      await this.commit();
     } catch {
-      /* fire-and-forget; finish() below will report any persistent issue */
+      /* finish() below will report any persistent issue */
     }
-
-    // Brief drain window for the finals to arrive before EOS.
-    await delay(FINALIZE_DRAIN_MS);
 
     if (this.opts.verbose) {
       process.stderr.write("[mic-tool-ts] soniox: finish()\n");

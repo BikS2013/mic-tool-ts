@@ -225,7 +225,9 @@ describe("ElevenLabsTranscriber — audio and events", () => {
     ws.open();
     await startP;
 
-    await t.stop();
+    const stopPromise = t.stop();
+    await vi.advanceTimersByTimeAsync(250);
+    await stopPromise;
 
     expect(JSON.parse(ws.sent[0]!)).toEqual({
       message_type: "input_audio_chunk",

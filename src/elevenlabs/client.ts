@@ -19,6 +19,7 @@ import type { Transcriber, TranscriberOptions } from "../transcription/types.js"
 
 const CONNECT_TIMEOUT_MS = 5000;
 const CLOSE_TIMEOUT_MS = 1500;
+const COMMIT_DRAIN_MS = 250;
 
 type State = "idle" | "connecting" | "connected" | "closing" | "closed";
 
@@ -158,6 +159,28 @@ export class ElevenLabsTranscriber implements Transcriber {
     }
   }
 
+  async commit(): Promise<void> {
+    const ws = this.ws;
+    if (ws === undefined || this.state !== "connected" || ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    try {
+      ws.send(
+        JSON.stringify({
+          message_type: "input_audio_chunk",
+          audio_base_64: "",
+          sample_rate: this.opts.sampleRate,
+          commit: true,
+        }),
+      );
+    } catch (err) {
+      throw mapConnectionError(err);
+    }
+
+    await delay(COMMIT_DRAIN_MS);
+  }
+
   async stop(): Promise<void> {
     if (this.shuttingDown) return;
     this.shuttingDown = true;
@@ -168,7 +191,6 @@ export class ElevenLabsTranscriber implements Transcriber {
       return;
     }
 
-    this.state = "closing";
     if (ws.readyState === WebSocket.OPEN) {
       const closePromise = new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
@@ -189,17 +211,11 @@ export class ElevenLabsTranscriber implements Transcriber {
       });
 
       try {
-        ws.send(
-          JSON.stringify({
-            message_type: "input_audio_chunk",
-            audio_base_64: "",
-            sample_rate: this.opts.sampleRate,
-            commit: true,
-          }),
-        );
+        await this.commit();
       } catch {
         /* best effort */
       }
+      this.state = "closing";
       try {
         ws.close(1000, "mic-tool-ts shutdown");
       } catch {
@@ -340,6 +356,10 @@ function rawDataToString(data: RawData): string {
     return Buffer.concat(data).toString("utf8");
   }
   return Buffer.from(data).toString("utf8");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function mapConnectionError(err: unknown): MicToolError {

@@ -10,6 +10,8 @@ export interface Transcriber {
   start(): Promise<void>;
   /** Forward a chunk of PCM s16le mono audio to the live session. */
   pushAudio(chunk: Buffer): void;
+  /** Commit the current utterance without closing the live session. */
+  commit(): Promise<void>;
   /** Gracefully finalize and close the session. Idempotent. */
   stop(): Promise<void>;
   /** Register a partial-transcript callback. */

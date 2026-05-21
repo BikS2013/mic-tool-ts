@@ -47,6 +47,7 @@ class FakeMicSource {
 class FakeTranscriber {
   start = vi.fn<() => Promise<void>>(async () => {});
   stop = vi.fn<() => Promise<void>>(async () => {});
+  commit = vi.fn<() => Promise<void>>(async () => {});
   pushAudio = vi.fn<(chunk: Buffer) => void>();
   _partialCb?: (text: string) => void;
   _finalCb?: (text: string) => void;
@@ -123,6 +124,7 @@ vi.mock("../src/protocol/settingsStore.js", () => ({
 
 // Import main AFTER mocks are set up.
 import { main } from "../src/main.js";
+import { runMicSession, type SubmitPendingListener } from "../src/core/sessionRunner.js";
 import {
   HelpOrVersionShown,
   type ResolvedConfig,
@@ -200,6 +202,21 @@ const GOOD_ARGV = ["node", "mic-tool-ts", "--api-key", "test-api-key"];
 
 function setupGoodConfig(): void {
   resolveConfigImpl = () => GOOD_CONFIG;
+}
+
+class FakeSubmitPendingControl {
+  private readonly listeners = new Set<SubmitPendingListener>();
+
+  subscribe(listener: SubmitPendingListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  async submit(): Promise<void> {
+    await Promise.all(Array.from(this.listeners, (listener) => listener()));
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -288,6 +305,64 @@ describe("main() — happy path", () => {
     expect(fakeTranscriber.pushAudio).toHaveBeenCalledWith(chunk);
 
     fakeMic.audio.push(null);
+    await vi.runAllTimersAsync();
+    await mainPromise;
+  });
+
+  it("sends silence while the audio gate is closed and real audio when open", async () => {
+    let gateOpen = false;
+    const mainPromise = runMicSession(GOOD_ARGV, {
+      frontend: "ui",
+      handleProcessSignals: false,
+      audioGate: {
+        isOpen: () => gateOpen,
+      },
+    });
+    await vi.runAllTimersAsync();
+
+    const hiddenChunk = Buffer.from([1, 2, 3, 4]);
+    fakeMic.audio.write(hiddenChunk);
+    expect(fakeTranscriber.pushAudio).toHaveBeenLastCalledWith(Buffer.alloc(hiddenChunk.length));
+
+    gateOpen = true;
+    const liveChunk = Buffer.from([5, 6, 7, 8]);
+    fakeMic.audio.write(liveChunk);
+    expect(fakeTranscriber.pushAudio).toHaveBeenLastCalledWith(liveChunk);
+
+    fakeMic.audio.push(null);
+    await vi.runAllTimersAsync();
+    await mainPromise;
+  });
+
+  it("commits and submits pending text without stopping a warmed session", async () => {
+    const events: unknown[] = [];
+    const submitPendingControl = new FakeSubmitPendingControl();
+    const abort = new AbortController();
+    const mainPromise = runMicSession(GOOD_ARGV, {
+      frontend: "ui",
+      handleProcessSignals: false,
+      abortSignal: abort.signal,
+      submitPendingControl,
+      onEvent: (event) => events.push(event),
+    });
+    await vi.runAllTimersAsync();
+
+    fakeTranscriber._finalCb?.("hotkey dictated text");
+    await submitPendingControl.submit();
+    await vi.runAllTimersAsync();
+
+    expect(fakeTranscriber.commit).toHaveBeenCalledOnce();
+    expect(fakeTranscriber.stop).not.toHaveBeenCalled();
+    expect(fakeMic.stop).not.toHaveBeenCalled();
+    expect(events.some((event) =>
+      typeof event === "object" &&
+      event !== null &&
+      (event as { type?: unknown }).type === "protocol.event" &&
+      ((event as { event?: { type?: unknown; raw_text?: unknown } }).event?.type === "section.submitted") &&
+      ((event as { event?: { raw_text?: unknown } }).event?.raw_text === "hotkey dictated text")
+    )).toBe(true);
+
+    abort.abort({ submitPending: false });
     await vi.runAllTimersAsync();
     await mainPromise;
   });

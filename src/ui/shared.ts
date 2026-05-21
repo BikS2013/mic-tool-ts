@@ -41,9 +41,13 @@ export interface UiSettingsLoadResult {
 export interface MicToolTsPreloadApi {
   loadSettings(): Promise<UiSettingsLoadResult>;
   updateSettings(settings: Partial<RendererSettings>): Promise<RendererSettings>;
-  startSession(): Promise<void>;
+  startSession(options?: StartSessionOptions): Promise<void>;
   stopSession(options?: StopSessionOptions): Promise<void>;
   onSessionEvent(callback: (event: SessionEvent) => void): () => void;
+}
+
+export interface StartSessionOptions {
+  readonly hotkey?: boolean;
 }
 
 export interface StopSessionOptions {

@@ -90,22 +90,39 @@ async function main() {
         const settingsView = document.querySelector("#settingsView");
         const inspector = document.querySelector(".inspector");
         const extraSettingsRows = Array.from({ length: 30 }, (_, index) => {
-          const row = document.createElement("div");
-          row.className = "list-row";
-          row.innerHTML = "<span>Overflow row " + index + "</span><strong>value</strong>";
+          const row = document.createElement("label");
+          row.className = "field-row";
+          const label = document.createElement("span");
+          label.textContent = "Overflow setting " + index;
+          const input = document.createElement("input");
+          input.value = "value";
+          row.append(label, input);
           return row;
         });
-        document.querySelector("#settingsList")?.append(...extraSettingsRows);
+        document.querySelector("#settingsForm")?.append(...extraSettingsRows);
+        const recentEvents = document.querySelector("#recentEvents");
         const extraInspectorRows = Array.from({ length: 30 }, (_, index) => {
           const row = document.createElement("div");
           row.className = "event-row";
-          row.innerHTML = "<span>Inspector overflow " + index + "</span><strong>now</strong>";
+          row.innerHTML = "<span>Inspector reset event with a long status label " + index + "</span><strong>12:59:59 PM</strong>";
           return row;
         });
-        document.querySelector("#recentEvents")?.append(...extraInspectorRows);
+        recentEvents?.append(...extraInspectorRows);
         await new Promise((resolve) => requestAnimationFrame(resolve));
         const settingsStyle = settingsView === null ? null : getComputedStyle(settingsView);
         const inspectorStyle = inspector === null ? null : getComputedStyle(inspector);
+        const recentEventsStyle = recentEvents === null ? null : getComputedStyle(recentEvents);
+        const captureBarStyle = getComputedStyle(document.querySelector(".capture-bar"));
+        const recentEventRects = Array.from(document.querySelectorAll("#recentEvents .event-row, #recentEvents .event-row span, #recentEvents .event-row strong"), (node) =>
+          node.getBoundingClientRect(),
+        );
+        const inspectorRect = inspector?.getBoundingClientRect() ?? null;
+        const inspectorEventsStayInside = inspectorRect === null
+          ? false
+          : recentEventRects.every((rect) =>
+            rect.left >= inspectorRect.left - 1 &&
+            rect.right <= inspectorRect.right + 1
+          );
         return {
           hasBridge,
           loadOk: loaded?.ok ?? false,
@@ -119,6 +136,10 @@ async function main() {
           storageStatus: loaded?.settings?.storageStatus ?? null,
           sessionSummary: document.querySelector("#sessionSummary")?.textContent ?? null,
           liveText: document.querySelector("#liveText")?.textContent ?? null,
+          topSectionsTabRemoved: Array.from(document.querySelectorAll(".segmented button"), (button) => button.textContent?.trim()).includes("Sections") === false,
+          settingsSummaryRemoved: document.querySelector("#settingsList") === null,
+          protocolSummaryRemoved: document.querySelector("#protocolList") === null,
+          inspectorSettingsRemoved: document.querySelector("#inspectorProvider, #inspectorMode, #endpointSwitch, #refineSwitch, #translateSwitch, #clipboardSwitch, #focusedInputSwitch") === null,
           bodyScrolls: document.scrollingElement?.scrollHeight > document.scrollingElement?.clientHeight,
           shellOverflow: shell === null ? null : getComputedStyle(shell).overflow,
           timelineOverflowX: timeline === null ? null : getComputedStyle(timeline).overflowX,
@@ -129,7 +150,12 @@ async function main() {
           settingsOverflowY: settingsStyle?.overflowY ?? null,
           settingsCanScroll: settingsView === null ? false : settingsView.scrollHeight > settingsView.clientHeight,
           inspectorOverflowY: inspectorStyle?.overflowY ?? null,
-          inspectorCanScroll: inspector === null ? false : inspector.scrollHeight > inspector.clientHeight
+          inspectorCanScroll: inspector === null ? false : inspector.scrollHeight > inspector.clientHeight,
+          recentEventsOverflowX: recentEventsStyle?.overflowX ?? null,
+          recentEventsNoHorizontalOverflow: recentEvents === null ? false : recentEvents.scrollWidth <= recentEvents.clientWidth + 1,
+          inspectorEventsStayInside,
+          inspectorGridRow: inspectorStyle?.gridRowStart + " / " + inspectorStyle?.gridRowEnd,
+          captureGridColumn: captureBarStyle.gridColumnStart + " / " + captureBarStyle.gridColumnEnd
         };
       })()
     `),
@@ -148,10 +174,19 @@ async function main() {
     !result.timelineCanScroll ||
     !result.timelineNoHorizontalOverflow ||
     !result.transcriptStaysInsideMonitor ||
+    !result.topSectionsTabRemoved ||
+    !result.settingsSummaryRemoved ||
+    !result.protocolSummaryRemoved ||
+    !result.inspectorSettingsRemoved ||
     result.settingsOverflowY !== "auto" ||
     !result.settingsCanScroll ||
     result.inspectorOverflowY !== "auto" ||
-    !result.inspectorCanScroll
+    !result.inspectorCanScroll ||
+    result.recentEventsOverflowX !== "hidden" ||
+    !result.recentEventsNoHorizontalOverflow ||
+    !result.inspectorEventsStayInside ||
+    result.inspectorGridRow !== "2 / auto" ||
+    result.captureGridColumn !== "2 / 4"
   ) {
     throw new Error(`UI scrolling verification failed: ${JSON.stringify(result, null, 2)}`);
   }

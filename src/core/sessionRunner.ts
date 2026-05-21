@@ -20,6 +20,7 @@ import {
   savePersistedProtocolSettings,
 } from "../protocol/settingsStore.js";
 import type {
+  OperatorKey,
   ProtocolEvent,
   ProtocolRuntimeConfig,
   ProtocolWriter,
@@ -50,6 +51,7 @@ export interface RunMicSessionOptions {
   readonly onEvent?: SessionEventSink;
   readonly audioGate?: AudioGate;
   readonly submitPendingControl?: SubmitPendingControl;
+  readonly protocolFeatureToggleControl?: ProtocolFeatureToggleControl;
 }
 
 interface UiAbortReason {
@@ -64,6 +66,12 @@ export type SubmitPendingListener = () => void | Promise<void>;
 
 export interface SubmitPendingControl {
   subscribe(listener: SubmitPendingListener): () => void;
+}
+
+export type ProtocolFeatureToggleListener = (key: OperatorKey) => void;
+
+export interface ProtocolFeatureToggleControl {
+  subscribeProtocolFeatureToggle(listener: ProtocolFeatureToggleListener): () => void;
 }
 
 export async function runMicSession(
@@ -171,6 +179,10 @@ export async function runMicSession(
     diagnosticWriter: (line, warning) => writeDiagnostic(line, warning),
   });
   renderer.startSession();
+  const unsubscribeProtocolFeatureToggle = opts.protocolFeatureToggleControl
+    ?.subscribeProtocolFeatureToggle((key) => {
+      renderer.toggleOperator(key);
+    });
 
   let asyncError: Error | null = null;
   let shuttingDown = false;
@@ -373,6 +385,7 @@ export async function runMicSession(
     await shutdownPromise;
   } finally {
     unsubscribeSubmitPending?.();
+    unsubscribeProtocolFeatureToggle?.();
     if (handleProcessSignals) {
       process.off("SIGINT", onSigint);
       process.off("SIGTERM", onSigterm);

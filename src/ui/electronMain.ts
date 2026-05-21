@@ -5,10 +5,13 @@ import { fileURLToPath } from "node:url";
 import {
   runMicSession,
   type AudioGate,
+  type ProtocolFeatureToggleControl,
+  type ProtocolFeatureToggleListener,
   type SubmitPendingControl,
   type SubmitPendingListener,
 } from "../core/sessionRunner.js";
 import type { SessionEvent } from "../core/sessionEvents.js";
+import type { OperatorKey, OperatorState } from "../protocol/types.js";
 import { GlobalHotkeyManager } from "./globalHotkeyManager.js";
 import {
   eventMatchesHotkey,
@@ -31,6 +34,7 @@ import {
   type StopSessionOptions,
   type UiSettingsLoadResult,
 } from "./shared.js";
+import { TranscriptionOverlayManager } from "./transcriptionOverlay.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WARM_SESSION_RECYCLE_MS = 5 * 60 * 1000;
@@ -47,6 +51,8 @@ let restartWarmSessionAfterStop = false;
 let globalHotkeyManager: GlobalHotkeyManager | null = null;
 let warmSessionRecycleTimer: NodeJS.Timeout | undefined;
 let warmSessionRecycleInFlight = false;
+let transcriptionOverlay: TranscriptionOverlayManager | null = null;
+let latestProtocolFeatures: OperatorState = protocolFeaturesFromSettings(latestSettings);
 
 interface UiStopReason {
   readonly source: "manual" | "hotkey";
@@ -81,6 +87,37 @@ class HotkeySessionControl implements AudioGate, SubmitPendingControl {
   }
 }
 
+class RuntimeProtocolFeatureControl implements ProtocolFeatureToggleControl {
+  private readonly protocolFeatureListeners = new Set<ProtocolFeatureToggleListener>();
+  private readonly pendingProtocolFeatureToggles: OperatorKey[] = [];
+
+  subscribeProtocolFeatureToggle(listener: ProtocolFeatureToggleListener): () => void {
+    this.protocolFeatureListeners.add(listener);
+    while (this.pendingProtocolFeatureToggles.length > 0) {
+      listener(this.pendingProtocolFeatureToggles.shift() as OperatorKey);
+    }
+    return () => {
+      this.protocolFeatureListeners.delete(listener);
+    };
+  }
+
+  toggleProtocolFeature(key: OperatorKey): void {
+    if (this.protocolFeatureListeners.size === 0) {
+      this.pendingProtocolFeatureToggles.push(key);
+      return;
+    }
+    for (const listener of this.protocolFeatureListeners) {
+      listener(key);
+    }
+  }
+
+  clearPending(): void {
+    this.pendingProtocolFeatureToggles.length = 0;
+  }
+}
+
+const runtimeProtocolFeatureControl = new RuntimeProtocolFeatureControl();
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
@@ -96,6 +133,7 @@ if (!gotLock) {
     createGlobalHotkeyManager();
     createMenu();
     await createWindow();
+    createTranscriptionOverlay();
     await configureGlobalHotkey();
     void reconcileHotkeyWarmSession();
   }).catch((err: unknown) => {
@@ -106,19 +144,25 @@ if (!gotLock) {
 
 app.on("window-all-closed", () => {
   clearWarmSessionRecycleTimer();
+  transcriptionOverlay?.destroy();
+  transcriptionOverlay = null;
   void stopSession();
   if (process.platform !== "darwin") app.quit();
 });
 
 app.on("before-quit", () => {
   clearWarmSessionRecycleTimer();
+  transcriptionOverlay?.destroy();
+  transcriptionOverlay = null;
   globalHotkeyManager?.stop();
   void stopSession();
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    void createWindow();
+  if (mainWindow === null) {
+    void createWindow().then(() => {
+      createTranscriptionOverlay();
+    });
   }
 });
 
@@ -128,13 +172,19 @@ function registerIpc(): void {
     if (typeof patch !== "object" || patch === null || Array.isArray(patch)) {
       throw new Error("Settings update payload must be an object.");
     }
+    const settingsPatch = patch as Partial<RendererSettings>;
+    const previousProtocolFeatures = latestProtocolFeatures;
     latestSettings = refreshCredentialStatus(mergeRendererSettings(
       latestSettings,
-      patch as Partial<RendererSettings>,
+      settingsPatch,
     ));
+    latestProtocolFeatures = protocolFeaturesFromSettings(latestSettings);
     saveUiSettings(latestSettings);
-    void configureGlobalHotkey();
-    void reconcileHotkeyWarmSession({ restartExistingHotkeySession: true });
+    applyRuntimeProtocolFeatureChanges(previousProtocolFeatures, latestProtocolFeatures);
+    if (!isProtocolSwitchOnlyPatch(settingsPatch)) {
+      void configureGlobalHotkey();
+      void reconcileHotkeyWarmSession({ restartExistingHotkeySession: true });
+    }
     emitSessionEvent({
       type: "config.saved",
       message: "settings updated",
@@ -151,6 +201,9 @@ function registerIpc(): void {
   });
   ipcMain.handle("mic-tool-ts:session:stop", async (_event, options: unknown) => {
     await stopSession(normalizeStopOptions(options));
+  });
+  ipcMain.handle("mic-tool-ts:protocol:toggle", (_event, key: unknown) => {
+    toggleProtocolFeature(normalizeOperatorKey(key));
   });
 }
 
@@ -212,15 +265,26 @@ async function createWindow(): Promise<void> {
   });
   mainWindow.on("closed", () => {
     mainWindow = null;
+    transcriptionOverlay?.destroy();
+    transcriptionOverlay = null;
   });
 
   await mainWindow.loadFile(rendererPath);
+}
+
+function createTranscriptionOverlay(): void {
+  if (transcriptionOverlay !== null) return;
+  transcriptionOverlay = new TranscriptionOverlayManager({
+    preloadPath: join(__dirname, "preload.cjs"),
+    rendererPath: join(__dirname, "renderer", "overlay.html"),
+  });
 }
 
 function createGlobalHotkeyManager(): void {
   globalHotkeyManager = new GlobalHotkeyManager({
     onPress: () => startHotkeySession(),
     onRelease: () => stopHotkeySession(),
+    onProtocolToggle: (key) => toggleProtocolFeature(key),
     onWarning: (message) => emitSessionEvent({
       type: "diagnostic.warning",
       message,
@@ -240,6 +304,7 @@ async function configureGlobalHotkey(): Promise<void> {
 function loadSettingsForRenderer(): UiSettingsLoadResult {
   const result = loadRendererSettingsForUi(latestSettings);
   latestSettings = result.settings;
+  latestProtocolFeatures = protocolFeaturesFromSettings(latestSettings);
   if (!result.ok && result.error !== undefined) {
     emitSessionEvent({
       type: "diagnostic.warning",
@@ -268,6 +333,7 @@ async function startSession(options: StartSessionInternalOptions): Promise<void>
     onEvent: emitSessionEvent,
     audioGate: options.hotkeyControl,
     submitPendingControl: options.hotkeyControl,
+    protocolFeatureToggleControl: runtimeProtocolFeatureControl,
   }).then((code) => {
     sessionRunning = false;
     sessionAbort = null;
@@ -275,6 +341,7 @@ async function startSession(options: StartSessionInternalOptions): Promise<void>
     hotkeyPressed = false;
     hotkeySessionActive = false;
     hotkeySessionControl = null;
+    runtimeProtocolFeatureControl.clearPending();
     emitCaptureState("idle", "session stopped");
     if (code !== 0) {
       emitSessionEvent({
@@ -293,6 +360,7 @@ async function startSession(options: StartSessionInternalOptions): Promise<void>
     hotkeyPressed = false;
     hotkeySessionActive = false;
     hotkeySessionControl = null;
+    runtimeProtocolFeatureControl.clearPending();
     emitCaptureState("idle", "session error");
     emitSessionEvent({
       type: "session.error",
@@ -496,9 +564,20 @@ async function stopSession(options: StopSessionOptions = {}): Promise<void> {
 function emitSessionEvent(event: SessionEvent): void {
   if (event.type === "config.loaded") {
     latestSettings = settingsFromConfig(event.config, latestSettings);
+    latestProtocolFeatures = { ...event.config.operators };
     void configureGlobalHotkey();
   }
-  mainWindow?.webContents.send("mic-tool-ts:session:event", event);
+  if (event.type === "protocol.event" && event.event.type === "state.changed") {
+    latestSettings = mergeRendererSettings(
+      latestSettings,
+      protocolFeatureSettingsPatch(event.event.key, event.event.value),
+    );
+    latestProtocolFeatures = {
+      ...latestProtocolFeatures,
+      [event.event.key]: event.event.value,
+    };
+  }
+  deliverSessionEvent(event);
   if (
     event.type === "session.state" &&
     event.state === "listening" &&
@@ -514,11 +593,83 @@ function emitCaptureState(state: "idle" | "warm" | "recording", reason: string):
   } else {
     clearWarmSessionRecycleTimer();
   }
-  mainWindow?.webContents.send("mic-tool-ts:session:event", {
+  deliverSessionEvent({
     type: "capture.state",
     state,
     reason,
   } satisfies SessionEvent);
+}
+
+function deliverSessionEvent(event: SessionEvent): void {
+  mainWindow?.webContents.send("mic-tool-ts:session:event", event);
+  transcriptionOverlay?.handleSessionEvent(event, {
+    hotkeyOwned: sessionOwner === "hotkey",
+    hotkey: latestSettings.hotkey,
+    protocolFeatures: latestProtocolFeatures,
+  });
+}
+
+function toggleProtocolFeature(key: OperatorKey): void {
+  if (!sessionRunning) return;
+  runtimeProtocolFeatureControl.toggleProtocolFeature(key);
+}
+
+function applyRuntimeProtocolFeatureChanges(
+  previous: OperatorState,
+  next: OperatorState,
+): void {
+  for (const key of OPERATOR_KEYS) {
+    if (previous[key] === next[key]) continue;
+    if (!sessionRunning) continue;
+    runtimeProtocolFeatureControl.toggleProtocolFeature(key);
+  }
+}
+
+const OPERATOR_KEYS: readonly OperatorKey[] = ["refine", "translate", "clipboard", "input"];
+
+function isProtocolSwitchOnlyPatch(patch: Partial<RendererSettings>): boolean {
+  const keys = Object.keys(patch);
+  return keys.length > 0 && keys.every((key) =>
+    key === "refine" ||
+    key === "translate" ||
+    key === "clipboard" ||
+    key === "focusedInput" ||
+    key === "inputStatus"
+  );
+}
+
+function protocolFeatureSettingsPatch(
+  key: OperatorKey,
+  value: boolean,
+): Partial<RendererSettings> {
+  if (key === "input") {
+    return {
+      focusedInput: value,
+      inputStatus: value ? "Ready" : "Off",
+    };
+  }
+  return { [key]: value } as Partial<RendererSettings>;
+}
+
+function normalizeOperatorKey(value: unknown): OperatorKey {
+  if (
+    value === "refine" ||
+    value === "translate" ||
+    value === "clipboard" ||
+    value === "input"
+  ) {
+    return value;
+  }
+  throw new Error(`Unsupported protocol feature: ${String(value)}`);
+}
+
+function protocolFeaturesFromSettings(settings: RendererSettings): OperatorState {
+  return {
+    refine: settings.refine,
+    translate: settings.translate,
+    clipboard: settings.clipboard,
+    input: settings.focusedInput,
+  };
 }
 
 function normalizeStopOptions(value: unknown): StopSessionOptions {

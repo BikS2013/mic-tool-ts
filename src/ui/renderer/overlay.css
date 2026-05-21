@@ -1,0 +1,321 @@
+:root {
+  color-scheme: light dark;
+  --overlay-text: rgba(18, 20, 24, 0.94);
+  --overlay-muted: rgba(18, 20, 24, 0.62);
+  --overlay-hairline: rgba(24, 28, 34, 0.15);
+  --overlay-surface: rgba(252, 253, 255, 0.82);
+  --overlay-strong: rgba(255, 255, 255, 0.94);
+  --overlay-control: rgba(111, 116, 126, 0.13);
+  --overlay-recording: #d70015;
+  --overlay-success: #248a3d;
+  --overlay-warning: #c66a00;
+  --overlay-error: #d70015;
+  --overlay-shadow: 0 24px 70px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(255, 255, 255, 0.72) inset;
+  --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-stack);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --overlay-text: rgba(246, 247, 249, 0.95);
+    --overlay-muted: rgba(246, 247, 249, 0.64);
+    --overlay-hairline: rgba(255, 255, 255, 0.14);
+    --overlay-surface: rgba(27, 29, 34, 0.82);
+    --overlay-strong: rgba(45, 48, 55, 0.94);
+    --overlay-control: rgba(235, 238, 244, 0.12);
+    --overlay-recording: #ff453a;
+    --overlay-success: #30d158;
+    --overlay-warning: #ff9f0a;
+    --overlay-error: #ff453a;
+    --overlay-shadow: 0 28px 84px rgba(0, 0, 0, 0.48), 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--font-stack);
+  letter-spacing: 0;
+}
+
+body {
+  display: grid;
+  place-items: center;
+}
+
+.overlay-shell {
+  width: 100vw;
+  height: 100vh;
+  padding: 8px;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: translateY(8px) scale(0.985);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.overlay-shell[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.overlay-bar {
+  width: min(100%, 924px);
+  height: 112px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  overflow: hidden;
+  border: 1px solid var(--overlay-hairline);
+  border-radius: 18px;
+  color: var(--overlay-text);
+  background: linear-gradient(180deg, var(--overlay-strong), var(--overlay-surface));
+  box-shadow: var(--overlay-shadow);
+  backdrop-filter: blur(34px) saturate(1.25);
+  -webkit-backdrop-filter: blur(34px) saturate(1.25);
+}
+
+.meter {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 999px;
+  background: var(--overlay-control);
+  color: var(--overlay-muted);
+}
+
+.meter span {
+  width: 4px;
+  height: 12px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.82;
+}
+
+.meter span:nth-child(2) {
+  height: 20px;
+}
+
+.meter span:nth-child(3) {
+  height: 28px;
+}
+
+.meter span:nth-child(4) {
+  height: 16px;
+}
+
+.overlay-shell[data-tone="recording"] .meter {
+  color: var(--overlay-recording);
+}
+
+.overlay-shell[data-tone="success"] .meter {
+  color: var(--overlay-success);
+}
+
+.overlay-shell[data-tone="warning"] .meter {
+  color: var(--overlay-warning);
+}
+
+.overlay-shell[data-tone="error"] .meter {
+  color: var(--overlay-error);
+}
+
+.overlay-shell[data-tone="recording"] .meter span {
+  animation: meter 820ms ease-in-out infinite;
+}
+
+.overlay-shell[data-tone="recording"] .meter span:nth-child(2) {
+  animation-delay: 90ms;
+}
+
+.overlay-shell[data-tone="recording"] .meter span:nth-child(3) {
+  animation-delay: 170ms;
+}
+
+.overlay-shell[data-tone="recording"] .meter span:nth-child(4) {
+  animation-delay: 250ms;
+}
+
+.copy {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.meta {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--overlay-muted);
+  font-size: 11px;
+  line-height: 1.1;
+  font-weight: 700;
+}
+
+.meta span {
+  color: var(--overlay-muted);
+}
+
+.meta strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--overlay-text);
+  font-size: 12px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+p {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--overlay-text);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.28;
+  font-weight: 560;
+}
+
+.feature-strip {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.feature {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 8px;
+  background: var(--overlay-control);
+  color: var(--overlay-muted);
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.feature::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.45;
+}
+
+.feature[data-enabled="true"] {
+  color: var(--overlay-success);
+}
+
+.feature[data-enabled="true"]::before {
+  opacity: 1;
+}
+
+kbd {
+  min-width: 78px;
+  max-width: 160px;
+  padding: 7px 10px;
+  overflow: hidden;
+  border: 1px solid var(--overlay-hairline);
+  border-radius: 9px;
+  background: var(--overlay-control);
+  color: var(--overlay-muted);
+  font-family: var(--font-stack);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+kbd[hidden] {
+  display: none;
+}
+
+@keyframes meter {
+  0%,
+  100% {
+    transform: scaleY(0.72);
+  }
+
+  50% {
+    transform: scaleY(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-shell {
+    transition: none;
+    transform: none;
+  }
+
+  .overlay-shell[data-tone="recording"] .meter span {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .overlay-bar {
+    background: var(--overlay-strong);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .overlay-bar {
+    grid-template-columns: 38px minmax(0, 1fr);
+    height: 112px;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .meter {
+    width: 36px;
+    height: 36px;
+  }
+
+  kbd {
+    display: none;
+  }
+
+  p {
+    font-size: 14px;
+  }
+
+  .feature-strip {
+    gap: 4px;
+  }
+
+  .feature {
+    padding: 3px 5px;
+    font-size: 9px;
+  }
+}

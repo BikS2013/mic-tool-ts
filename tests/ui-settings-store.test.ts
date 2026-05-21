@@ -159,7 +159,7 @@ describe("UI settings store", () => {
           translationPolicy: "opposite",
           llmEnabled: true,
           hotkeyEnabled: false,
-          hotkey: "Command+'",
+          hotkey: "Control+`",
         },
       }),
       "utf8",

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    >
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>mic-tool-ts Overlay</title>
+    <link rel="stylesheet" href="./overlay.css">
+  </head>
+  <body>
+    <main class="overlay-shell" data-phase="hidden" data-tone="neutral">
+      <section class="overlay-bar" aria-live="polite" aria-atomic="true">
+        <div class="meter" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="copy">
+          <div class="meta">
+            <span id="overlayLabel">IDLE</span>
+            <strong id="overlayDetail">Idle</strong>
+          </div>
+          <p id="overlayText"></p>
+          <div id="overlayFeatures" class="feature-strip" aria-label="Protocol features"></div>
+        </div>
+        <kbd id="overlayHotkey"></kbd>
+      </section>
+    </main>
+    <script type="module" src="./overlay.js"></script>
+  </body>
+</html>

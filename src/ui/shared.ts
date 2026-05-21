@@ -1,5 +1,7 @@
 import type { SafeConfigSummary, SessionEvent } from "../core/sessionEvents.js";
 import { LLM_PROVIDERS, type LLMProvider } from "../llm/types.js";
+import type { OperatorKey } from "../protocol/types.js";
+import type { OverlaySnapshot } from "./transcriptionOverlayState.js";
 import { normalizeHotkeyAccelerator } from "./hotkey.js";
 
 export interface RendererSettings {
@@ -43,7 +45,9 @@ export interface MicToolTsPreloadApi {
   updateSettings(settings: Partial<RendererSettings>): Promise<RendererSettings>;
   startSession(options?: StartSessionOptions): Promise<void>;
   stopSession(options?: StopSessionOptions): Promise<void>;
+  toggleProtocolFeature(key: OperatorKey): Promise<void>;
   onSessionEvent(callback: (event: SessionEvent) => void): () => void;
+  onOverlaySnapshot(callback: (snapshot: OverlaySnapshot) => void): () => void;
 }
 
 export interface StartSessionOptions {
@@ -75,7 +79,7 @@ export const DEFAULT_RENDERER_SETTINGS: RendererSettings = Object.freeze({
   storageStatus: "resolved config",
   inputStatus: "Off",
   hotkeyEnabled: false,
-  hotkey: "Command+'",
+  hotkey: "Control+`",
 });
 
 export function settingsFromConfig(

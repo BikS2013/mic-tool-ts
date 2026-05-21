@@ -669,6 +669,12 @@ select {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.protocol-switch-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
 .inspector .event-row {
   width: 100%;
   max-width: 100%;
@@ -717,7 +723,8 @@ select {
 
 .field-row input:disabled,
 .field-row select:disabled,
-.check-row input:disabled {
+.check-row input:disabled,
+.protocol-switch-row input:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }

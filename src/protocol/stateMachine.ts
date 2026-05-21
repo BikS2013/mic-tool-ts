@@ -94,6 +94,26 @@ export class VoiceCommandStateMachine {
     return this.markerDefinitions;
   }
 
+  toggleOperator(operator: OperatorKey): Extract<ProtocolAction, { type: "state.changed" }> {
+    return this.setOperator(operator, !this.operatorState[operator]);
+  }
+
+  setOperator(
+    operator: OperatorKey,
+    enabled: boolean,
+  ): Extract<ProtocolAction, { type: "state.changed" }> {
+    this.operatorState = {
+      ...this.operatorState,
+      [operator]: enabled,
+    };
+    return {
+      type: "state.changed",
+      key: operator,
+      value: enabled,
+      targetPolicy: operator === "translate" ? this.translationPolicy : undefined,
+    };
+  }
+
   processFinal(text: string): StateMachineResult {
     const visibleText = stripMarkersForDisplay(text, this.markerDefinitions);
     this.appendToBuffer(text);
@@ -250,17 +270,7 @@ export class VoiceCommandStateMachine {
       };
     }
 
-    const enabled = value === undefined ? true : value === "on";
-    this.operatorState = {
-      ...this.operatorState,
-      [operator]: enabled,
-    };
-    return {
-      type: "state.changed",
-      key: operator,
-      value: enabled,
-      targetPolicy: operator === "translate" ? this.translationPolicy : undefined,
-    };
+    return this.setOperator(operator, value === undefined ? true : value === "on");
   }
 
   private activeOperators(): OperatorKey[] {

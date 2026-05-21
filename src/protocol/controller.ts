@@ -130,6 +130,11 @@ export class VoiceAgentProtocolController {
     }
   }
 
+  toggleOperator(key: OperatorKey): void {
+    if (this.sessionEnded || this.disposed) return;
+    this.handleAction(this.stateMachine.toggleOperator(key));
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

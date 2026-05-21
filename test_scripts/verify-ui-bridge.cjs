@@ -15,6 +15,7 @@ async function main() {
   ipcMain.handle("mic-tool-ts:settings:update", (_event, patch) => patch);
   ipcMain.handle("mic-tool-ts:session:start", () => undefined);
   ipcMain.handle("mic-tool-ts:session:stop", () => undefined);
+  ipcMain.handle("mic-tool-ts:protocol:toggle", () => undefined);
 
   await app.whenReady();
 
@@ -76,6 +77,8 @@ async function main() {
         const clearTranscriptButton = document.querySelector("#clearTranscript");
         const llmProviderControl = document.querySelector("#llmProviderControl");
         const llmModelControl = document.querySelector("#llmModelControl");
+        const providerControl = document.querySelector("#providerControl");
+        const translationPolicyControl = document.querySelector("#translationPolicyControl");
         await new Promise((resolve) => requestAnimationFrame(resolve));
         const groupedTurnRowsBeforeClear = document.querySelectorAll(".transcript-turn").length;
         const groupedBubbleTextsBeforeClear = Array.from(
@@ -198,7 +201,10 @@ async function main() {
           topSectionsTabRemoved: Array.from(document.querySelectorAll(".segmented button"), (button) => button.textContent?.trim()).includes("Sections") === false,
           settingsSummaryRemoved: document.querySelector("#settingsList") === null,
           protocolSummaryRemoved: document.querySelector("#protocolList") === null,
-          inspectorSettingsRemoved: document.querySelector("#inspectorProvider, #inspectorMode, #endpointSwitch, #refineSwitch, #translateSwitch, #clipboardSwitch, #focusedInputSwitch") === null,
+          inspectorNonProtocolSettingsRemoved: document.querySelector("#inspectorProvider, #inspectorMode, #endpointSwitch, #inspectorTranslationPolicy, #inspectorLlmProvider, #inspectorLlmModel") === null,
+          inspectorProtocolSwitchCount: document.querySelectorAll(".inspector [data-protocol-switch]").length,
+          protocolSwitchesEnabledInWarm: Array.from(document.querySelectorAll("[data-protocol-switch]")).every((control) => !control.disabled),
+          nonProtocolSettingsDisabledInWarm: providerControl?.disabled === true && translationPolicyControl?.disabled === true,
           bodyScrolls: document.scrollingElement?.scrollHeight > document.scrollingElement?.clientHeight,
           shellOverflow: shell === null ? null : getComputedStyle(shell).overflow,
           timelineOverflowX: timeline === null ? null : getComputedStyle(timeline).overflowX,
@@ -253,7 +259,10 @@ async function main() {
     !result.topSectionsTabRemoved ||
     !result.settingsSummaryRemoved ||
     !result.protocolSummaryRemoved ||
-    !result.inspectorSettingsRemoved ||
+    !result.inspectorNonProtocolSettingsRemoved ||
+    result.inspectorProtocolSwitchCount !== 4 ||
+    !result.protocolSwitchesEnabledInWarm ||
+    !result.nonProtocolSettingsDisabledInWarm ||
     result.settingsOverflowY !== "auto" ||
     !result.settingsCanScroll ||
     result.inspectorOverflowY !== "auto" ||

@@ -143,19 +143,19 @@
             </label>
             <label class="check-row">
               <span>Refine sections</span>
-              <input id="refineControl" data-setting-control type="checkbox">
+              <input id="refineControl" data-protocol-switch="refine" type="checkbox">
             </label>
             <label class="check-row">
               <span>Translate sections</span>
-              <input id="translateControl" data-setting-control type="checkbox">
+              <input id="translateControl" data-protocol-switch="translate" type="checkbox">
             </label>
             <label class="check-row">
               <span>Clipboard</span>
-              <input id="clipboardControl" data-setting-control type="checkbox">
+              <input id="clipboardControl" data-protocol-switch="clipboard" type="checkbox">
             </label>
             <label class="check-row">
               <span>Focused input</span>
-              <input id="focusedInputControl" data-setting-control type="checkbox">
+              <input id="focusedInputControl" data-protocol-switch="input" type="checkbox">
             </label>
             <label class="field-row">
               <span>Translation policy</span>
@@ -195,6 +195,26 @@
       </main>
 
       <aside class="inspector" aria-label="Inspector">
+        <section class="setting-group">
+          <h2>Protocol</h2>
+          <label class="setting-row protocol-switch-row">
+            <span>Refine sections</span>
+            <input id="inspectorRefineControl" data-protocol-switch="refine" type="checkbox">
+          </label>
+          <label class="setting-row protocol-switch-row">
+            <span>Translate sections</span>
+            <input id="inspectorTranslateControl" data-protocol-switch="translate" type="checkbox">
+          </label>
+          <label class="setting-row protocol-switch-row">
+            <span>Clipboard</span>
+            <input id="inspectorClipboardControl" data-protocol-switch="clipboard" type="checkbox">
+          </label>
+          <label class="setting-row protocol-switch-row">
+            <span>Focused input</span>
+            <input id="inspectorFocusedInputControl" data-protocol-switch="input" type="checkbox">
+          </label>
+        </section>
+
         <section class="setting-group">
           <h2>Credentials</h2>
           <div class="setting-row"><span id="apiKeyName">API key</span><strong class="value" id="apiKeyStatus">unknown</strong></div>

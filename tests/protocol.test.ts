@@ -142,6 +142,38 @@ describe("VoiceCommandStateMachine", () => {
     });
   });
 
+  it("toggles operators through runtime controls", () => {
+    const sm = new VoiceCommandStateMachine({
+      markers: MARKERS,
+      initialOperators: {
+        refine: true,
+        translate: false,
+        clipboard: false,
+        input: false,
+      },
+      translationPolicy: "opposite",
+    });
+
+    expect(sm.toggleOperator("refine")).toEqual({
+      type: "state.changed",
+      key: "refine",
+      value: false,
+      targetPolicy: undefined,
+    });
+    expect(sm.toggleOperator("translate")).toEqual({
+      type: "state.changed",
+      key: "translate",
+      value: true,
+      targetPolicy: "opposite",
+    });
+    expect(sm.state).toEqual({
+      refine: false,
+      translate: true,
+      clipboard: false,
+      input: false,
+    });
+  });
+
   it("reports operator status without changing state", () => {
     const sm = new VoiceCommandStateMachine({
       markers: MARKERS,
@@ -265,6 +297,29 @@ describe("VoiceCommandStateMachine", () => {
 });
 
 describe("JSONL protocol controller", () => {
+  it("emits state.changed when runtime hotkeys toggle operators", async () => {
+    const out = new PassThrough();
+    const writer = new JsonlProtocolWriter({ out });
+    const controller = new VoiceAgentProtocolController({
+      mode: "agent-protocol",
+      renderer: fakeRenderer(),
+      writer,
+      markers: MARKERS,
+      initialOperators: OFF,
+      translationPolicy: "opposite",
+    });
+
+    controller.startSession();
+    controller.toggleOperator("clipboard");
+    await controller.endSession("test");
+
+    expect(parseJsonl(out)).toMatchObject([
+      { type: "session.started", seq: 1 },
+      { type: "state.changed", seq: 2, key: "clipboard", value: true },
+      { type: "session.ended", seq: 3 },
+    ]);
+  });
+
   it("emits valid JSONL with monotonic seq values and no renderer carriage returns in agent mode", async () => {
     const out = new PassThrough();
     const renderer = fakeRenderer();

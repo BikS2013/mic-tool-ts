@@ -4,6 +4,7 @@ import {
   type HotkeyKeyboardEventLike,
   type ParsedHotkey,
 } from "./hotkey.js";
+import type { OperatorKey } from "../protocol/types.js";
 
 interface NativeKeyboardEvent {
   readonly altKey: boolean;
@@ -38,6 +39,7 @@ export interface GlobalHotkeySettings {
 export interface GlobalHotkeyManagerOptions {
   readonly onPress: () => void | Promise<void>;
   readonly onRelease: () => void | Promise<void>;
+  readonly onProtocolToggle?: (key: OperatorKey) => void | Promise<void>;
   readonly onWarning: (message: string) => void;
   readonly loadHookModule?: () => Promise<NativeHookModule>;
   readonly globalShortcut?: GlobalShortcutAdapter;
@@ -47,6 +49,7 @@ export interface GlobalHotkeyManagerOptions {
 export class GlobalHotkeyManager {
   private readonly onPress: () => void | Promise<void>;
   private readonly onRelease: () => void | Promise<void>;
+  private readonly onProtocolToggle: ((key: OperatorKey) => void | Promise<void>) | null;
   private readonly onWarning: (message: string) => void;
   private readonly loadHookModule: () => Promise<NativeHookModule>;
   private readonly globalShortcut: GlobalShortcutAdapter | null;
@@ -56,11 +59,13 @@ export class GlobalHotkeyManager {
   private hotkey: ParsedHotkey | null = null;
   private started = false;
   private pressed = false;
+  private readonly secondaryKeysDown = new Set<number>();
   private registeredShortcut: string | null = null;
 
   constructor(options: GlobalHotkeyManagerOptions) {
     this.onPress = options.onPress;
     this.onRelease = options.onRelease;
+    this.onProtocolToggle = options.onProtocolToggle ?? null;
     this.onWarning = options.onWarning;
     this.loadHookModule = options.loadHookModule ?? loadUiohookModule;
     this.globalShortcut = options.globalShortcut ?? null;
@@ -141,16 +146,19 @@ export class GlobalHotkeyManager {
     this.keys = null;
     this.started = false;
     this.pressed = false;
+    this.secondaryKeysDown.clear();
   }
 
   private readonly handleKeyDown = (event: NativeKeyboardEvent): void => {
     if (this.hotkey === null || this.keys === null) return;
+    if (this.pressed && this.handleSecondaryKeyDown(event)) return;
     if (!nativeEventMatchesHotkey(event, this.hotkey, this.keys, this.isMac)) return;
     this.press();
   };
 
   private readonly handleKeyUp = (event: NativeKeyboardEvent): void => {
     if (this.hotkey === null || this.keys === null || !this.pressed) return;
+    this.secondaryKeysDown.delete(event.keycode);
     if (!nativeEventReleasesHotkey(event, this.hotkey, this.keys, this.isMac)) return;
     void this.release();
   };
@@ -168,7 +176,18 @@ export class GlobalHotkeyManager {
 
   private async release(): Promise<void> {
     this.pressed = false;
+    this.secondaryKeysDown.clear();
     await this.onRelease();
+  }
+
+  private handleSecondaryKeyDown(event: NativeKeyboardEvent): boolean {
+    if (this.onProtocolToggle === null || this.keys === null) return false;
+    const key = nativeProtocolFeatureKey(event.keycode, this.keys);
+    if (key === null) return false;
+    if (this.secondaryKeysDown.has(event.keycode)) return true;
+    this.secondaryKeysDown.add(event.keycode);
+    void this.onProtocolToggle(key);
+    return true;
   }
 
   private readonly handleGlobalShortcut = (): void => {
@@ -262,6 +281,24 @@ export function nativeKeycodeForHotkeyKey(
     throw new Error(`System-wide hotkey does not support key: ${key}`);
   }
   return keycode;
+}
+
+export function nativeProtocolFeatureKey(
+  keycode: number,
+  keys: Record<string, number>,
+): OperatorKey | null {
+  const entries: Array<readonly [OperatorKey, readonly string[]]> = [
+    ["refine", ["R", "KeyR"]],
+    ["translate", ["T", "KeyT"]],
+    ["clipboard", ["C", "KeyC"]],
+    ["input", ["I", "KeyI"]],
+  ];
+  for (const [operator, names] of entries) {
+    for (const name of names) {
+      if (keys[name] === keycode) return operator;
+    }
+  }
+  return null;
 }
 
 function toKeyboardEventLike(event: NativeKeyboardEvent): HotkeyKeyboardEventLike {

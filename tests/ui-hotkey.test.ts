@@ -7,15 +7,15 @@ import {
 } from "../src/ui/hotkey.js";
 
 describe("UI hotkey parsing", () => {
-  it("uses Command+apostrophe as the default-friendly canonical form", () => {
-    expect(parseHotkeyAccelerator("Command+'")).toMatchObject({
-      accelerator: "Command+'",
-      meta: true,
-      key: "'",
+  it("uses Control+backquote as the default-friendly canonical form", () => {
+    expect(parseHotkeyAccelerator("Control+`")).toMatchObject({
+      accelerator: "Control+`",
+      control: true,
+      key: "`",
     });
-    expect(parseHotkeyAccelerator("Command-'").accelerator).toBe("Command+'");
-    expect(parseHotkeyAccelerator("Command+Quote").accelerator).toBe("Command+'");
-    expect(parseHotkeyAccelerator("Command+Apostrophe").accelerator).toBe("Command+'");
+    expect(parseHotkeyAccelerator("Ctrl-`").accelerator).toBe("Control+`");
+    expect(parseHotkeyAccelerator("Control+Grave").accelerator).toBe("Control+`");
+    expect(parseHotkeyAccelerator("Control+Backquote").accelerator).toBe("Control+`");
   });
 
   it("normalizes accelerator aliases", () => {

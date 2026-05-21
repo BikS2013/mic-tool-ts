@@ -3,6 +3,7 @@
 import {
   eventMatchesHotkey,
   eventReleasesHotkey,
+  hotkeyModifiersMatch,
   normalizeHotkeyAccelerator,
   parseHotkeyAccelerator,
   type ParsedHotkey,
@@ -13,6 +14,7 @@ export {};
 type SessionState = "idle" | "loading" | "running" | "warm" | "recording" | "stopping" | "error";
 type CaptureState = "idle" | "warm" | "recording";
 type ViewName = "monitor" | "settings" | "protocol" | "logs";
+type OperatorKey = "refine" | "translate" | "clipboard" | "input";
 
 interface RendererSettings {
   provider: string;
@@ -60,7 +62,13 @@ type SessionEvent =
   | { type: "transcript.final"; text: string; language?: string; source?: string }
   | { type: "transcript.refined"; text: string; target?: string }
   | { type: "transcript.turnBoundary" }
-  | { type: "protocol.event"; message: string; status?: string; eventType?: string }
+  | {
+      type: "protocol.event";
+      message: string;
+      status?: string;
+      eventType?: string;
+      protocolEvent?: { type: string; key?: OperatorKey; value?: boolean };
+    }
   | { type: "protocol.status"; message: string; status?: string; eventType?: string }
   | { type: "diagnostic.warning"; message: string }
   | { type: "diagnostic.info"; message: string }
@@ -73,7 +81,9 @@ interface MicToolTsApi {
   updateSettings(settings: Partial<RendererSettings>): Promise<unknown>;
   startSession(options?: { hotkey?: boolean }): Promise<unknown>;
   stopSession(options?: { submitPending?: boolean }): Promise<unknown>;
+  toggleProtocolFeature(key: OperatorKey): Promise<unknown>;
   onSessionEvent(callback: (event: unknown) => void): void | (() => void);
+  onOverlaySnapshot(callback: (snapshot: unknown) => void): void | (() => void);
 }
 
 declare global {
@@ -135,7 +145,7 @@ const defaultSettings: RendererSettings = {
   storageStatus: "resolved config",
   inputStatus: "Off",
   hotkeyEnabled: false,
-  hotkey: "Command+'",
+  hotkey: "Control+`",
 };
 
 const demoTranscript: TranscriptTurn[] = [
@@ -230,6 +240,10 @@ const refineControl = mustQuery<HTMLInputElement>("#refineControl");
 const translateControl = mustQuery<HTMLInputElement>("#translateControl");
 const clipboardControl = mustQuery<HTMLInputElement>("#clipboardControl");
 const focusedInputControl = mustQuery<HTMLInputElement>("#focusedInputControl");
+const inspectorRefineControl = mustQuery<HTMLInputElement>("#inspectorRefineControl");
+const inspectorTranslateControl = mustQuery<HTMLInputElement>("#inspectorTranslateControl");
+const inspectorClipboardControl = mustQuery<HTMLInputElement>("#inspectorClipboardControl");
+const inspectorFocusedInputControl = mustQuery<HTMLInputElement>("#inspectorFocusedInputControl");
 const translationPolicyControl = mustQuery<HTMLSelectElement>("#translationPolicyControl");
 const llmEnabledControl = mustQuery<HTMLInputElement>("#llmEnabledControl");
 const llmProviderControl = mustQuery<HTMLSelectElement>("#llmProviderControl");
@@ -274,6 +288,18 @@ function stringArrayValue(value: unknown): string[] | undefined {
     (entry): entry is string => typeof entry === "string" && entry.length > 0,
   );
   return strings.length > 0 ? strings : undefined;
+}
+
+function parseOperatorKey(value: unknown): OperatorKey | undefined {
+  if (
+    value === "refine" ||
+    value === "translate" ||
+    value === "clipboard" ||
+    value === "input"
+  ) {
+    return value;
+  }
+  return undefined;
 }
 
 function parseSettings(value: unknown): Partial<RendererSettings> {
@@ -457,7 +483,25 @@ function parseEvent(value: unknown): SessionEvent | null {
         text: stringValue(record.text) ?? "",
         target: stringValue(record.target),
       };
-    case "protocol.event":
+    case "protocol.event": {
+      const protocolEvent = asRecord(record.event);
+      const eventType = stringValue(protocolEvent?.type);
+      const key = parseOperatorKey(protocolEvent?.key);
+      const value = booleanValue(protocolEvent?.value);
+      return {
+        type,
+        message: stringValue(record.message) ?? eventType ?? type,
+        status: stringValue(record.status),
+        eventType,
+        protocolEvent: eventType === undefined
+          ? undefined
+          : {
+              type: eventType,
+              key,
+              value,
+            },
+      };
+    }
     case "protocol.status": {
       const protocolEvent = asRecord(record.event);
       const eventType = stringValue(protocolEvent?.type);
@@ -563,6 +607,10 @@ function syncControls(settings: RendererSettings): void {
   translateControl.checked = settings.translate;
   clipboardControl.checked = settings.clipboard;
   focusedInputControl.checked = settings.focusedInput;
+  inspectorRefineControl.checked = settings.refine;
+  inspectorTranslateControl.checked = settings.translate;
+  inspectorClipboardControl.checked = settings.clipboard;
+  inspectorFocusedInputControl.checked = settings.focusedInput;
   translationPolicyControl.value = settings.translationPolicy;
   llmEnabledControl.checked = settings.llmEnabled;
   llmProviderControl.value = normalizeLlmProvider(settings.llmProvider);
@@ -672,16 +720,17 @@ async function persistSettings(patch: Partial<RendererSettings>): Promise<void> 
 }
 
 function updateControlDisabledState(): void {
-  const disabled =
+  const activeSession =
     state.current === "running" ||
     state.current === "warm" ||
-    state.current === "recording" ||
-    state.current === "loading" ||
-    state.current === "stopping";
+    state.current === "recording";
+  const transitioning = state.current === "loading" || state.current === "stopping";
   document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>(
-    "[data-setting-control], [data-setting-toggle]",
+    "[data-setting-control], [data-setting-toggle], [data-protocol-switch]",
   ).forEach((control) => {
-    control.disabled = disabled;
+    const liveProtocolSwitch = control instanceof HTMLInputElement &&
+      control.dataset.protocolSwitch !== undefined;
+    control.disabled = transitioning || (activeSession && !liveProtocolSwitch);
   });
 }
 
@@ -942,6 +991,21 @@ function clearTranscript(addLog = true): void {
   }
 }
 
+function applyProtocolStateChange(key: OperatorKey, value: boolean): void {
+  mergeSettings(protocolSwitchPatch(key, value));
+  renderSettings();
+}
+
+function protocolSwitchPatch(key: OperatorKey, value: boolean): Partial<RendererSettings> {
+  if (key === "input") {
+    return {
+      focusedInput: value,
+      inputStatus: value ? "Ready" : "Off",
+    };
+  }
+  return { [key]: value } as Partial<RendererSettings>;
+}
+
 function handleEvent(event: SessionEvent): void {
   switch (event.type) {
     case "session.ready":
@@ -1008,6 +1072,14 @@ function handleEvent(event: SessionEvent): void {
       return;
     case "protocol.event":
     case "protocol.status":
+      if (
+        event.type === "protocol.event" &&
+        event.protocolEvent?.type === "state.changed" &&
+        event.protocolEvent.key !== undefined &&
+        event.protocolEvent.value !== undefined
+      ) {
+        applyProtocolStateChange(event.protocolEvent.key, event.protocolEvent.value);
+      }
       addEvent("Protocol", event.status ?? event.eventType ?? event.message);
       return;
     case "diagnostic.warning":
@@ -1151,6 +1223,40 @@ function currentParsedHotkey(): ParsedHotkey | null {
   }
 }
 
+function protocolFeatureKeyForEvent(event: KeyboardEvent, hotkey: ParsedHotkey): OperatorKey | null {
+  const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+  if (!hotkeyModifiersMatch(event, hotkey, isMac)) return null;
+  if (eventMatchesHotkey(event, hotkey)) return null;
+  if (hotkey.key === "R" || hotkey.key === "T" || hotkey.key === "C" || hotkey.key === "I") {
+    const pressed = event.code.startsWith("Key") ? event.code.slice(3) : event.key.toUpperCase();
+    if (pressed === hotkey.key) return null;
+  }
+  switch (event.code) {
+    case "KeyR":
+      return "refine";
+    case "KeyT":
+      return "translate";
+    case "KeyC":
+      return "clipboard";
+    case "KeyI":
+      return "input";
+    default:
+      return null;
+  }
+}
+
+async function toggleProtocolFeature(key: OperatorKey): Promise<void> {
+  if (window.micToolTs === undefined) {
+    addEvent("Protocol hotkey failed", "preload bridge unavailable");
+    return;
+  }
+  try {
+    await window.micToolTs.toggleProtocolFeature(key);
+  } catch (error) {
+    addEvent("Protocol hotkey failed", errorMessage(error));
+  }
+}
+
 function runDemoSession(): void {
   window.clearInterval(state.demoTimer);
   let index = 0;
@@ -1188,6 +1294,21 @@ function bindControls(): void {
     });
   });
 
+  document.querySelectorAll<HTMLInputElement>("[data-protocol-switch]").forEach((control) => {
+    control.addEventListener("change", () => {
+      const key = parseOperatorKey(control.dataset.protocolSwitch);
+      if (key === undefined) {
+        addEvent("Settings error", `Unsupported protocol switch: ${String(control.dataset.protocolSwitch)}`);
+        renderSettings();
+        return;
+      }
+      const next = protocolSwitchPatch(key, control.checked);
+      mergeSettings(next);
+      renderSettings();
+      void persistSettings(next);
+    });
+  });
+
   document.querySelectorAll<HTMLButtonElement>("[data-setting-toggle]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.dataset.settingToggle;
@@ -1198,7 +1319,16 @@ function bindControls(): void {
 
   window.addEventListener("keydown", (event) => {
     const hotkey = currentParsedHotkey();
-    if (hotkey === null || event.repeat || !eventMatchesHotkey(event, hotkey)) return;
+    if (hotkey === null || event.repeat) return;
+    if (state.hotkeyPressed) {
+      const featureKey = protocolFeatureKeyForEvent(event, hotkey);
+      if (featureKey !== null) {
+        event.preventDefault();
+        void toggleProtocolFeature(featureKey);
+        return;
+      }
+    }
+    if (!eventMatchesHotkey(event, hotkey)) return;
     event.preventDefault();
     if (state.hotkeyPressed) return;
     state.hotkeyPressed = true;

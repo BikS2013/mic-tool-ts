@@ -23,6 +23,8 @@ interface RendererSettings {
 }
 
 type SessionEvent = Record<string, unknown>;
+type OverlaySnapshot = Record<string, unknown>;
+type OperatorKey = "refine" | "translate" | "clipboard" | "input";
 interface StopSessionOptions {
   submitPending?: boolean;
 }
@@ -49,6 +51,10 @@ const api = {
     await ipcRenderer.invoke("mic-tool-ts:session:stop", options ?? {});
   },
 
+  async toggleProtocolFeature(key: OperatorKey): Promise<void> {
+    await ipcRenderer.invoke("mic-tool-ts:protocol:toggle", key);
+  },
+
   onSessionEvent(callback: (event: SessionEvent) => void): () => void {
     const listener = (_event: IpcRendererEvent, payload: SessionEvent): void => {
       callback(payload);
@@ -56,6 +62,16 @@ const api = {
     ipcRenderer.on("mic-tool-ts:session:event", listener);
     return () => {
       ipcRenderer.off("mic-tool-ts:session:event", listener);
+    };
+  },
+
+  onOverlaySnapshot(callback: (snapshot: OverlaySnapshot) => void): () => void {
+    const listener = (_event: IpcRendererEvent, payload: OverlaySnapshot): void => {
+      callback(payload);
+    };
+    ipcRenderer.on("mic-tool-ts:overlay:snapshot", listener);
+    return () => {
+      ipcRenderer.off("mic-tool-ts:overlay:snapshot", listener);
     };
   },
 };

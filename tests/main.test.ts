@@ -124,7 +124,11 @@ vi.mock("../src/protocol/settingsStore.js", () => ({
 
 // Import main AFTER mocks are set up.
 import { main } from "../src/main.js";
-import { runMicSession, type SubmitPendingListener } from "../src/core/sessionRunner.js";
+import {
+  runMicSession,
+  type ProtocolFeatureToggleListener,
+  type SubmitPendingListener,
+} from "../src/core/sessionRunner.js";
 import {
   HelpOrVersionShown,
   type ResolvedConfig,
@@ -216,6 +220,23 @@ class FakeSubmitPendingControl {
 
   async submit(): Promise<void> {
     await Promise.all(Array.from(this.listeners, (listener) => listener()));
+  }
+}
+
+class FakeProtocolFeatureToggleControl {
+  private readonly listeners = new Set<ProtocolFeatureToggleListener>();
+
+  subscribeProtocolFeatureToggle(listener: ProtocolFeatureToggleListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  toggle(key: "refine" | "translate" | "clipboard" | "input"): void {
+    for (const listener of this.listeners) {
+      listener(key);
+    }
   }
 }
 
@@ -360,6 +381,36 @@ describe("main() — happy path", () => {
       (event as { type?: unknown }).type === "protocol.event" &&
       ((event as { event?: { type?: unknown; raw_text?: unknown } }).event?.type === "section.submitted") &&
       ((event as { event?: { raw_text?: unknown } }).event?.raw_text === "hotkey dictated text")
+    )).toBe(true);
+
+    abort.abort({ submitPending: false });
+    await vi.runAllTimersAsync();
+    await mainPromise;
+  });
+
+  it("applies runtime protocol feature toggles during an active UI session", async () => {
+    const events: unknown[] = [];
+    const protocolFeatureToggleControl = new FakeProtocolFeatureToggleControl();
+    const abort = new AbortController();
+    const mainPromise = runMicSession(GOOD_ARGV, {
+      frontend: "ui",
+      handleProcessSignals: false,
+      abortSignal: abort.signal,
+      protocolFeatureToggleControl,
+      onEvent: (event) => events.push(event),
+    });
+    await vi.runAllTimersAsync();
+
+    protocolFeatureToggleControl.toggle("clipboard");
+    await vi.runAllTimersAsync();
+
+    expect(events.some((event) =>
+      typeof event === "object" &&
+      event !== null &&
+      (event as { type?: unknown }).type === "protocol.event" &&
+      ((event as { event?: { type?: unknown; key?: unknown; value?: unknown } }).event?.type === "state.changed") &&
+      ((event as { event?: { key?: unknown } }).event?.key === "clipboard") &&
+      ((event as { event?: { value?: unknown } }).event?.value === true)
     )).toBe(true);
 
     abort.abort({ submitPending: false });

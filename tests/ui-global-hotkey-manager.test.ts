@@ -6,6 +6,10 @@ import { GlobalHotkeyManager } from "../src/ui/globalHotkeyManager.js";
 const KEYS = Object.freeze({
   Backquote: 41,
   Quote: 40,
+  R: 19,
+  T: 20,
+  C: 46,
+  I: 23,
   Shift: 42,
   ShiftRight: 54,
   Alt: 56,
@@ -63,7 +67,7 @@ function nativeEvent(
 }
 
 describe("GlobalHotkeyManager", () => {
-  it("starts on global Command+apostrophe down and stops on release", async () => {
+  it("starts on global Control+backquote down and stops on release", async () => {
     const hook = new FakeHook();
     const globalShortcut = new FakeGlobalShortcut();
     const onPress = vi.fn();
@@ -80,13 +84,13 @@ describe("GlobalHotkeyManager", () => {
       }),
     });
 
-    await manager.configure({ enabled: true, hotkey: "Command+'" });
-    globalShortcut.trigger("Command+Quote");
-    hook.emit("keydown", nativeEvent(KEYS.Quote, { metaKey: true }));
-    hook.emit("keyup", nativeEvent(KEYS.Quote, { metaKey: true }));
+    await manager.configure({ enabled: true, hotkey: "Control+`" });
+    globalShortcut.trigger("Control+Backquote");
+    hook.emit("keydown", nativeEvent(KEYS.Backquote, { ctrlKey: true }));
+    hook.emit("keyup", nativeEvent(KEYS.Backquote, { ctrlKey: true }));
 
     expect(hook.started).toBe(true);
-    expect(globalShortcut.register).toHaveBeenCalledWith("Command+Quote", expect.any(Function));
+    expect(globalShortcut.register).toHaveBeenCalledWith("Control+Backquote", expect.any(Function));
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(onRelease).toHaveBeenCalledTimes(1);
   });
@@ -105,9 +109,9 @@ describe("GlobalHotkeyManager", () => {
       }),
     });
 
-    await manager.configure({ enabled: true, hotkey: "Command+'" });
-    hook.emit("keydown", nativeEvent(KEYS.Quote, { metaKey: true }));
-    await manager.configure({ enabled: false, hotkey: "Command+'" });
+    await manager.configure({ enabled: true, hotkey: "Control+`" });
+    hook.emit("keydown", nativeEvent(KEYS.Backquote, { ctrlKey: true }));
+    await manager.configure({ enabled: false, hotkey: "Control+`" });
 
     expect(onRelease).toHaveBeenCalledOnce();
     expect(hook.stopped).toBe(true);
@@ -124,7 +128,7 @@ describe("GlobalHotkeyManager", () => {
       },
     });
 
-    await manager.configure({ enabled: true, hotkey: "Command+'" });
+    await manager.configure({ enabled: true, hotkey: "Control+`" });
 
     expect(warning).toHaveBeenCalledWith(expect.stringContaining("permission denied"));
   });
@@ -144,9 +148,9 @@ describe("GlobalHotkeyManager", () => {
       },
     });
 
-    await manager.configure({ enabled: true, hotkey: "Command+'" });
-    globalShortcut.trigger("Command+Quote");
-    globalShortcut.trigger("Command+Quote");
+    await manager.configure({ enabled: true, hotkey: "Control+`" });
+    globalShortcut.trigger("Control+Backquote");
+    globalShortcut.trigger("Control+Backquote");
 
     expect(warning).toHaveBeenCalledWith(expect.stringContaining("Input Monitoring permission denied"));
     expect(onPress).toHaveBeenCalledOnce();
@@ -169,9 +173,40 @@ describe("GlobalHotkeyManager", () => {
       }),
     });
 
-    await manager.configure({ enabled: true, hotkey: "Command+'" });
+    await manager.configure({ enabled: true, hotkey: "Control+`" });
 
     expect(warning).toHaveBeenCalledWith(expect.stringContaining("could not be reserved"));
     expect(hook.started).toBe(true);
+  });
+
+  it("toggles protocol features with secondary keys while pressed", async () => {
+    const hook = new FakeHook();
+    const onProtocolToggle = vi.fn();
+    const manager = new GlobalHotkeyManager({
+      onPress: vi.fn(),
+      onRelease: vi.fn(),
+      onProtocolToggle,
+      onWarning: vi.fn(),
+      isMac: true,
+      loadHookModule: async () => ({
+        uIOhook: hook,
+        UiohookKey: KEYS,
+      }),
+    });
+
+    await manager.configure({ enabled: true, hotkey: "Control+`" });
+    hook.emit("keydown", nativeEvent(KEYS.Backquote, { ctrlKey: true }));
+    hook.emit("keydown", nativeEvent(KEYS.R, { ctrlKey: true }));
+    hook.emit("keydown", nativeEvent(KEYS.R, { ctrlKey: true }));
+    hook.emit("keyup", nativeEvent(KEYS.R, { ctrlKey: true }));
+    hook.emit("keydown", nativeEvent(KEYS.T, { ctrlKey: true }));
+    hook.emit("keydown", nativeEvent(KEYS.C, { ctrlKey: true }));
+    hook.emit("keydown", nativeEvent(KEYS.I, { ctrlKey: true }));
+
+    expect(onProtocolToggle).toHaveBeenCalledTimes(4);
+    expect(onProtocolToggle).toHaveBeenNthCalledWith(1, "refine");
+    expect(onProtocolToggle).toHaveBeenNthCalledWith(2, "translate");
+    expect(onProtocolToggle).toHaveBeenNthCalledWith(3, "clipboard");
+    expect(onProtocolToggle).toHaveBeenNthCalledWith(4, "input");
   });
 });

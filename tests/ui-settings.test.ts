@@ -7,8 +7,8 @@ import {
 } from "../src/ui/shared.js";
 
 describe("Electron UI settings", () => {
-  it("defaults push-to-talk to Command+apostrophe", () => {
-    expect(DEFAULT_RENDERER_SETTINGS.hotkey).toBe("Command+'");
+  it("defaults push-to-talk to Control+backquote", () => {
+    expect(DEFAULT_RENDERER_SETTINGS.hotkey).toBe("Control+`");
   });
 
   it("builds explicit session args from renderer settings", () => {

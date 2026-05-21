@@ -38,6 +38,32 @@ async function main() {
   await win.loadFile(join(distUi, "renderer", "index.html"));
   await new Promise((resolveReady) => setTimeout(resolveReady, 500));
 
+  const sessionEvents = [
+    { type: "transcript.final", text: "Open the settings file", source: "el" },
+    { type: "transcript.final", text: "and verify the API key.", source: "el" },
+    { type: "transcript.turnBoundary" },
+    { type: "transcript.refined", text: "Open the configuration file and verify the API key.", target: "refined" },
+    { type: "transcript.refined", text: "Ανοίξτε το αρχείο ρυθμίσεων και ελέγξτε το κλειδί API.", target: "translated" },
+    { type: "transcript.partial", text: "starting the next turn...", language: "streaming" },
+    { type: "capture.state", state: "recording", reason: "push-to-talk pressed" },
+  ];
+  for (const event of sessionEvents) {
+    win.webContents.send("mic-tool-ts:session:event", event);
+  }
+  await new Promise((resolveReady) => setTimeout(resolveReady, 100));
+
+  const recordingResult = await win.webContents.executeJavaScript(`({
+    statusText: document.querySelector("#sessionStatusText")?.textContent ?? null,
+    toggleText: document.querySelector("#sessionToggle")?.textContent ?? null,
+    shellState: document.querySelector(".app-shell")?.getAttribute("data-state") ?? null
+  })`);
+  win.webContents.send("mic-tool-ts:session:event", {
+    type: "capture.state",
+    state: "warm",
+    reason: "push-to-talk released",
+  });
+  await new Promise((resolveReady) => setTimeout(resolveReady, 100));
+
   const result = await Promise.race([
     win.webContents.executeJavaScript(`
       (async () => {
@@ -47,8 +73,29 @@ async function main() {
         const settingsButton = document.querySelector('[data-view-button="settings"]');
         const timeline = document.querySelector("#timeline");
         const monitorView = document.querySelector("#monitorView");
+        const clearTranscriptButton = document.querySelector("#clearTranscript");
         const llmProviderControl = document.querySelector("#llmProviderControl");
         const llmModelControl = document.querySelector("#llmModelControl");
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const groupedTurnRowsBeforeClear = document.querySelectorAll(".transcript-turn").length;
+        const groupedBubbleTextsBeforeClear = Array.from(
+          document.querySelectorAll(".transcript-turn:first-of-type .bubble .text"),
+          (node) => node.textContent ?? "",
+        );
+        const groupedStatusesBeforeClear = Array.from(
+          document.querySelectorAll(".transcript-turn:first-of-type .bubble .meta span:last-child"),
+          (node) => node.textContent ?? "",
+        );
+        const transcriptCountBeforeClear = document.querySelector("#transcriptCount")?.textContent ?? null;
+        const liveTextBeforeClear = document.querySelector("#liveText")?.textContent ?? null;
+        const warmStatusText = document.querySelector("#sessionStatusText")?.textContent ?? null;
+        const warmToggleText = document.querySelector("#sessionToggle")?.textContent ?? null;
+        const warmShellState = shell?.getAttribute("data-state") ?? null;
+        clearTranscriptButton?.click();
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const clearEmptiedTimeline = timeline?.childElementCount === 0;
+        const clearResetLiveText = document.querySelector("#liveText")?.textContent === "Waiting for audio...";
+        const clearResetTranscriptCount = document.querySelector("#transcriptCount")?.textContent === "0";
         const longTranscriptText = "This is a long transcript line that should wrap inside the monitor pane instead of forcing the center content area to overflow horizontally. ".repeat(6) + "supercalifragilisticexpialidocious-supercalifragilisticexpialidocious";
         const transcriptRows = Array.from({ length: 20 }, (_, index) => {
           const row = document.createElement("article");
@@ -131,6 +178,18 @@ async function main() {
           llmModel: loaded?.settings?.llmModel ?? null,
           llmProviderControlExists: llmProviderControl instanceof HTMLSelectElement,
           llmModelControlExists: llmModelControl instanceof HTMLInputElement,
+          clearTranscriptButtonExists: clearTranscriptButton instanceof HTMLButtonElement,
+          groupedTurnRowsBeforeClear,
+          groupedBubbleTextsBeforeClear,
+          groupedStatusesBeforeClear,
+          transcriptCountBeforeClear,
+          liveTextBeforeClear,
+          warmStatusText,
+          warmToggleText,
+          warmShellState,
+          clearEmptiedTimeline,
+          clearResetLiveText,
+          clearResetTranscriptCount,
           apiKeyName: loaded?.settings?.apiKeyName ?? null,
           apiKeyStatus: loaded?.settings?.apiKeyStatus ?? null,
           storageStatus: loaded?.settings?.storageStatus ?? null,
@@ -169,6 +228,23 @@ async function main() {
     result.bodyScrolls ||
     !result.llmProviderControlExists ||
     !result.llmModelControlExists ||
+    !result.clearTranscriptButtonExists ||
+    recordingResult.statusText !== "Recording" ||
+    recordingResult.toggleText !== "Stop Recording" ||
+    recordingResult.shellState !== "recording" ||
+    result.groupedTurnRowsBeforeClear !== 1 ||
+    result.groupedBubbleTextsBeforeClear.length !== 3 ||
+    result.groupedBubbleTextsBeforeClear[0] !== "Open the settings file and verify the API key." ||
+    result.groupedStatusesBeforeClear[1] !== "refined" ||
+    result.groupedStatusesBeforeClear[2] !== "translated" ||
+    result.transcriptCountBeforeClear !== "3" ||
+    result.liveTextBeforeClear !== "starting the next turn..." ||
+    result.warmStatusText !== "Warm / Ready" ||
+    result.warmToggleText !== "Stop Warm Session" ||
+    result.warmShellState !== "warm" ||
+    !result.clearEmptiedTimeline ||
+    !result.clearResetLiveText ||
+    !result.clearResetTranscriptCount ||
     result.timelineOverflowX !== "hidden" ||
     result.timelineOverflowY !== "auto" ||
     !result.timelineCanScroll ||

@@ -10,7 +10,8 @@ import {
 
 export {};
 
-type SessionState = "idle" | "loading" | "running" | "stopping" | "error";
+type SessionState = "idle" | "loading" | "running" | "warm" | "recording" | "stopping" | "error";
+type CaptureState = "idle" | "warm" | "recording";
 type ViewName = "monitor" | "settings" | "protocol" | "logs";
 
 interface RendererSettings {
@@ -54,6 +55,7 @@ type SessionEvent =
   | { type: "session.stopping" }
   | { type: "session.stopped" }
   | { type: "session.error"; message: string }
+  | { type: "capture.state"; state: CaptureState; reason?: string }
   | { type: "transcript.partial"; text: string; language?: string }
   | { type: "transcript.final"; text: string; language?: string; source?: string }
   | { type: "transcript.refined"; text: string; target?: string }
@@ -80,9 +82,25 @@ declare global {
   }
 }
 
-interface TranscriptItem {
+type TranscriptBubbleKind = "raw" | "processed" | "error";
+
+interface TranscriptBubble {
   id: number;
-  kind: "final" | "processed" | "partial" | "error";
+  kind: TranscriptBubbleKind;
+  label: string;
+  status: string;
+  text: string;
+}
+
+interface TranscriptTurn {
+  id: number;
+  time: string;
+  sealed: boolean;
+  bubbles: TranscriptBubble[];
+}
+
+interface PartialTranscript {
+  id: number;
   time: string;
   label: string;
   status: string;
@@ -120,38 +138,41 @@ const defaultSettings: RendererSettings = {
   hotkey: "Command+'",
 };
 
-const demoTranscript: TranscriptItem[] = [
+const demoTranscript: TranscriptTurn[] = [
   {
     id: 1,
-    kind: "final",
     time: "22:58:10",
-    label: "Final transcript",
-    status: "el",
-    text: "Open the settings file and check whether the Soniox API key is active.",
-  },
-  {
-    id: 2,
-    kind: "processed",
-    time: "22:58:13",
-    label: "Processed section",
-    status: "input sent",
-    text: "Open the configuration file and verify that the Soniox API key is still valid.",
-  },
-  {
-    id: 3,
-    kind: "final",
-    time: "22:58:18",
-    label: "Final transcript",
-    status: "en",
-    text: "Now switch the provider to ElevenLabs, but keep endpoint detection enabled.",
+    sealed: true,
+    bubbles: [
+      {
+        id: 2,
+        kind: "raw",
+        label: "Dictated text",
+        status: "el",
+        text: "Open the settings file and check whether the Soniox API key is active.",
+      },
+      {
+        id: 3,
+        kind: "processed",
+        label: "Processed output",
+        status: "input sent",
+        text: "Open the configuration file and verify that the Soniox API key is still valid.",
+      },
+    ],
   },
   {
     id: 4,
-    kind: "partial",
-    time: "Live",
-    label: "Partial transcript",
-    status: "streaming",
-    text: "and show me the current command status before sending...",
+    time: "22:58:18",
+    sealed: false,
+    bubbles: [
+      {
+        id: 5,
+        kind: "raw",
+        label: "Dictated text",
+        status: "en",
+        text: "Now switch the provider to ElevenLabs, but keep endpoint detection enabled.",
+      },
+    ],
   },
 ];
 
@@ -173,7 +194,10 @@ const state = {
   view: "monitor" as ViewName,
   demoMode: false,
   settings: { ...defaultSettings },
-  transcript: [] as TranscriptItem[],
+  capture: "idle" as CaptureState,
+  transcript: [] as TranscriptTurn[],
+  partial: null as PartialTranscript | null,
+  clearedSinceRaw: false,
   events: [] as LogItem[],
   partialId: 0,
   nextId: 1,
@@ -190,6 +214,7 @@ const eventList = mustQuery<HTMLElement>("#eventList");
 const recentEvents = mustQuery<HTMLElement>("#recentEvents");
 const liveText = mustQuery<HTMLElement>("#liveText");
 const sessionToggle = mustQuery<HTMLButtonElement>("#sessionToggle");
+const clearTranscriptButton = mustQuery<HTMLButtonElement>("#clearTranscript");
 const transcriptCount = mustQuery<HTMLElement>("#transcriptCount");
 const eventCount = mustQuery<HTMLElement>("#eventCount");
 const demoPill = mustQuery<HTMLElement>("#demoPill");
@@ -400,6 +425,17 @@ function parseEvent(value: unknown): SessionEvent | null {
     case "session.stopped":
     case "transcript.turnBoundary":
       return { type };
+    case "capture.state": {
+      const stateValue = stringValue(record.state);
+      if (stateValue !== "idle" && stateValue !== "warm" && stateValue !== "recording") {
+        return null;
+      }
+      return {
+        type,
+        state: stateValue,
+        reason: stringValue(record.reason),
+      };
+    }
     case "session.error":
       return { type, message: stringValue(record.message) ?? "Session error" };
     case "transcript.partial":
@@ -476,14 +512,22 @@ function setSessionState(nextState: SessionState): void {
     idle: "Idle",
     loading: "Loading",
     running: "Listening",
+    warm: "Warm / Ready",
+    recording: "Recording",
     stopping: "Stopping",
     error: "Needs attention",
   };
   sessionStatusText.textContent = labelByState[nextState];
-  sessionToggle.textContent =
-    nextState === "running" || nextState === "stopping"
-      ? "Stop Listening"
-      : "Start Listening";
+  const toggleLabelByState: Record<SessionState, string> = {
+    idle: "Start Listening",
+    loading: "Start Listening",
+    running: "Stop Listening",
+    warm: "Stop Warm Session",
+    recording: "Stop Recording",
+    stopping: "Stop Listening",
+    error: "Start Listening",
+  };
+  sessionToggle.textContent = toggleLabelByState[nextState];
   sessionToggle.disabled = nextState === "loading" || nextState === "stopping";
   updateControlDisabledState();
 }
@@ -628,7 +672,12 @@ async function persistSettings(patch: Partial<RendererSettings>): Promise<void> 
 }
 
 function updateControlDisabledState(): void {
-  const disabled = state.current === "running" || state.current === "loading" || state.current === "stopping";
+  const disabled =
+    state.current === "running" ||
+    state.current === "warm" ||
+    state.current === "recording" ||
+    state.current === "loading" ||
+    state.current === "stopping";
   document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>(
     "[data-setting-control], [data-setting-toggle]",
   ).forEach((control) => {
@@ -637,25 +686,56 @@ function updateControlDisabledState(): void {
 }
 
 function renderTranscript(): void {
-  timeline.replaceChildren(...state.transcript.map(transcriptRow));
+  const rows = state.transcript.map(transcriptTurnRow);
+  if (state.partial !== null) {
+    rows.push(partialTranscriptRow(state.partial));
+  }
+  timeline.replaceChildren(...rows);
   transcriptCount.textContent = String(
-    state.transcript.filter((item) => item.kind !== "partial").length,
+    state.transcript.reduce((count, turn) => count + turn.bubbles.length, 0),
   );
-  const partial = state.transcript.find((item) => item.kind === "partial");
-  liveText.textContent = partial?.text ?? "Waiting for audio...";
+  liveText.textContent = state.partial?.text ?? "Waiting for audio...";
   timeline.scrollTop = timeline.scrollHeight;
 }
 
-function transcriptRow(item: TranscriptItem): HTMLElement {
+function transcriptTurnRow(turn: TranscriptTurn): HTMLElement {
   const row = document.createElement("article");
-  row.className = "transcript-row";
+  row.className = "transcript-row transcript-turn";
 
   const time = document.createElement("div");
   time.className = "time";
-  time.textContent = item.time;
+  time.textContent = turn.time;
 
+  const stack = document.createElement("div");
+  stack.className = "bubble-stack";
+  stack.append(...turn.bubbles.map((bubble) => transcriptBubble(bubble)));
+
+  row.append(time, stack);
+  return row;
+}
+
+function partialTranscriptRow(partial: PartialTranscript): HTMLElement {
+  const row = document.createElement("article");
+  row.className = "transcript-row transcript-partial";
+
+  const time = document.createElement("div");
+  time.className = "time";
+  time.textContent = partial.time;
+
+  row.append(time, transcriptBubble({
+    id: partial.id,
+    kind: "raw",
+    label: partial.label,
+    status: partial.status,
+    text: partial.text,
+  }, "partial"));
+  return row;
+}
+
+function transcriptBubble(item: TranscriptBubble, extraClass = ""): HTMLElement {
   const bubble = document.createElement("div");
-  bubble.className = `bubble ${item.kind === "final" ? "" : item.kind}`.trim();
+  const kindClass = item.kind === "raw" ? "" : item.kind;
+  bubble.className = ["bubble", kindClass, extraClass].filter(Boolean).join(" ");
 
   const meta = document.createElement("div");
   meta.className = "meta";
@@ -672,8 +752,7 @@ function transcriptRow(item: TranscriptItem): HTMLElement {
 
   meta.append(label, status);
   bubble.append(meta, text);
-  row.append(time, bubble);
-  return row;
+  return bubble;
 }
 
 function renderEvents(): void {
@@ -736,43 +815,131 @@ function setActiveView(view: ViewName): void {
 }
 
 function updatePartial(text: string, language?: string): void {
-  const existing = state.transcript.find((item) => item.kind === "partial");
-  if (existing !== undefined) {
-    existing.text = text;
-    existing.status = language ?? "streaming";
-    existing.time = "Live";
+  if (state.partial !== null) {
+    state.partial.text = text;
+    state.partial.status = language ?? "streaming";
+    state.partial.time = "Live";
   } else {
     state.partialId = state.nextId;
     state.nextId += 1;
-    state.transcript.push({
+    state.partial = {
       id: state.partialId,
-      kind: "partial",
       time: "Live",
       label: "Partial transcript",
       status: language ?? "streaming",
       text,
-    });
+    };
   }
   renderTranscript();
 }
 
 function commitTranscript(kind: "final" | "processed" | "error", text: string, status: string): void {
-  state.transcript = state.transcript.filter((item) => item.kind !== "partial");
-  state.transcript.push({
+  state.partial = null;
+  if (kind === "final") {
+    appendRawTranscript(text, status);
+  } else if (kind === "processed") {
+    appendProcessedTranscript(text, status);
+  } else {
+    appendErrorTranscript(text, status);
+  }
+  renderTranscript();
+}
+
+function appendRawTranscript(text: string, status: string): void {
+  const turn = openTranscriptTurn();
+  state.clearedSinceRaw = false;
+  const rawBubble = turn.bubbles.find((bubble) => bubble.kind === "raw");
+  if (rawBubble !== undefined) {
+    rawBubble.text = appendTranscriptText(rawBubble.text, text);
+    rawBubble.status = status;
+    return;
+  }
+  turn.bubbles.push({
     id: state.nextId,
-    kind,
-    time: shortTime(),
-    label:
-      kind === "processed"
-        ? "Processed section"
-        : kind === "error"
-          ? "Session issue"
-          : "Final transcript",
+    kind: "raw",
+    label: "Dictated text",
     status,
     text,
   });
   state.nextId += 1;
+}
+
+function appendProcessedTranscript(text: string, status: string): void {
+  if (state.clearedSinceRaw && state.transcript.length === 0) return;
+  const turn = latestTranscriptTurn();
+  turn.bubbles.push({
+    id: state.nextId,
+    kind: "processed",
+    label: "Processed output",
+    status,
+    text,
+  });
+  state.nextId += 1;
+}
+
+function appendErrorTranscript(text: string, status: string): void {
+  const turn = latestTranscriptTurn();
+  turn.sealed = true;
+  turn.bubbles.push({
+    id: state.nextId,
+    kind: "error",
+    label: "Session issue",
+    status,
+    text,
+  });
+  state.nextId += 1;
+}
+
+function openTranscriptTurn(): TranscriptTurn {
+  const latest = state.transcript.at(-1);
+  if (latest !== undefined && !latest.sealed) return latest;
+  return createTranscriptTurn(false);
+}
+
+function latestTranscriptTurn(): TranscriptTurn {
+  const latest = state.transcript.at(-1);
+  if (latest !== undefined) return latest;
+  return createTranscriptTurn(true);
+}
+
+function createTranscriptTurn(sealed: boolean): TranscriptTurn {
+  const turn = {
+    id: state.nextId,
+    time: shortTime(),
+    sealed,
+    bubbles: [],
+  };
+  state.nextId += 1;
+  state.transcript.push(turn);
+  return turn;
+}
+
+function sealCurrentTranscriptTurn(): void {
+  const latest = state.transcript.at(-1);
+  if (latest !== undefined) {
+    latest.sealed = true;
+  }
+}
+
+function appendTranscriptText(current: string, next: string): string {
+  const normalizedCurrent = current.trim();
+  const normalizedNext = next.trim();
+  if (normalizedCurrent.length === 0) return normalizedNext;
+  if (normalizedNext.length === 0 || normalizedCurrent.endsWith(normalizedNext)) {
+    return normalizedCurrent;
+  }
+  return `${normalizedCurrent} ${normalizedNext}`;
+}
+
+function clearTranscript(addLog = true): void {
+  state.transcript = [];
+  state.partial = null;
+  state.partialId = 0;
+  state.clearedSinceRaw = true;
   renderTranscript();
+  if (addLog) {
+    addEvent("Transcript cleared", "display reset");
+  }
 }
 
 function handleEvent(event: SessionEvent): void {
@@ -801,15 +968,28 @@ function handleEvent(event: SessionEvent): void {
     case "session.stopped":
       state.hotkeySessionActive = false;
       state.hotkeyPressed = false;
+      state.capture = "idle";
       setSessionState("idle");
       addEvent("Session stopped", "ready");
       return;
     case "session.error":
       state.hotkeySessionActive = false;
       state.hotkeyPressed = false;
+      state.capture = "idle";
       setSessionState("error");
       commitTranscript("error", event.message, "error");
       addEvent("Error", event.message);
+      return;
+    case "capture.state":
+      state.capture = event.state;
+      if (event.state === "warm") {
+        setSessionState("warm");
+      } else if (event.state === "recording") {
+        setSessionState("recording");
+      } else if (state.current === "warm" || state.current === "recording") {
+        setSessionState("idle");
+      }
+      addEvent("Capture", event.reason ?? event.state);
       return;
     case "transcript.partial":
       updatePartial(event.text, event.language);
@@ -822,6 +1002,8 @@ function handleEvent(event: SessionEvent): void {
       addEvent("Processed section", event.target ?? "ready");
       return;
     case "transcript.turnBoundary":
+      sealCurrentTranscriptTurn();
+      renderTranscript();
       addEvent("Turn boundary", "committed");
       return;
     case "protocol.event":
@@ -888,6 +1070,8 @@ function errorMessage(error: unknown): string {
 
 function resetProductionData(): void {
   state.transcript = [];
+  state.partial = null;
+  state.clearedSinceRaw = false;
   state.events = [];
   state.partialId = 0;
   state.nextId = 1;
@@ -896,7 +1080,7 @@ function resetProductionData(): void {
 }
 
 async function toggleSession(): Promise<void> {
-  if (state.current === "running") {
+  if (state.current === "running" || state.current === "warm" || state.current === "recording") {
     state.hotkeySessionActive = false;
     await stopSession();
   } else if (state.current === "idle" || state.current === "error") {
@@ -912,8 +1096,7 @@ async function startSession(options: { hotkey?: boolean } = {}): Promise<void> {
   }
   const warmedHotkeyPress = options.hotkey === true && state.current === "running";
   if (!warmedHotkeyPress) {
-    state.transcript = [];
-    renderTranscript();
+    clearTranscript(false);
     setSessionState("loading");
   }
   try {
@@ -984,6 +1167,10 @@ function runDemoSession(): void {
 function bindControls(): void {
   sessionToggle.addEventListener("click", () => {
     void toggleSession();
+  });
+
+  clearTranscriptButton.addEventListener("click", () => {
+    clearTranscript();
   });
 
   document.querySelectorAll<HTMLElement>("[data-view-button]").forEach((button) => {

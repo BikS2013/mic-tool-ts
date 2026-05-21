@@ -10,6 +10,8 @@ export type SessionState =
   | "stopped"
   | "error";
 
+export type CaptureState = "idle" | "warm" | "recording";
+
 export interface SafeConfigSummary {
   readonly sttProvider: ResolvedConfig["sttProvider"];
   readonly apiKeyEnvName: ResolvedConfig["apiKeyEnvName"];
@@ -55,6 +57,11 @@ export type SessionEvent =
   | {
       readonly type: "config.saved";
       readonly message?: string;
+    }
+  | {
+      readonly type: "capture.state";
+      readonly state: CaptureState;
+      readonly reason?: string;
     }
   | {
       readonly type: "transcript.partial";

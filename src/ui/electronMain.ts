@@ -33,6 +33,7 @@ import {
 } from "./shared.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const WARM_SESSION_RECYCLE_MS = 5 * 60 * 1000;
 
 let mainWindow: BrowserWindow | null = null;
 let sessionAbort: AbortController | null = null;
@@ -44,6 +45,8 @@ let hotkeySessionActive = false;
 let hotkeySessionControl: HotkeySessionControl | null = null;
 let restartWarmSessionAfterStop = false;
 let globalHotkeyManager: GlobalHotkeyManager | null = null;
+let warmSessionRecycleTimer: NodeJS.Timeout | undefined;
+let warmSessionRecycleInFlight = false;
 
 interface UiStopReason {
   readonly source: "manual" | "hotkey";
@@ -102,11 +105,13 @@ if (!gotLock) {
 }
 
 app.on("window-all-closed", () => {
+  clearWarmSessionRecycleTimer();
   void stopSession();
   if (process.platform !== "darwin") app.quit();
 });
 
 app.on("before-quit", () => {
+  clearWarmSessionRecycleTimer();
   globalHotkeyManager?.stop();
   void stopSession();
 });
@@ -270,6 +275,7 @@ async function startSession(options: StartSessionInternalOptions): Promise<void>
     hotkeyPressed = false;
     hotkeySessionActive = false;
     hotkeySessionControl = null;
+    emitCaptureState("idle", "session stopped");
     if (code !== 0) {
       emitSessionEvent({
         type: "diagnostic.warning",
@@ -287,6 +293,7 @@ async function startSession(options: StartSessionInternalOptions): Promise<void>
     hotkeyPressed = false;
     hotkeySessionActive = false;
     hotkeySessionControl = null;
+    emitCaptureState("idle", "session error");
     emitSessionEvent({
       type: "session.error",
       code: "UNKNOWN",
@@ -337,7 +344,57 @@ async function stopHotkeyWarmSession(): Promise<void> {
   hotkeySessionControl?.close();
   if (sessionOwner !== "hotkey") return;
   hotkeySessionActive = false;
+  emitCaptureState("idle", "warm session stopped");
   await stopSession();
+}
+
+function scheduleWarmSessionRecycle(): void {
+  clearWarmSessionRecycleTimer();
+  if (
+    !latestSettings.hotkeyEnabled ||
+    !sessionRunning ||
+    sessionOwner !== "hotkey" ||
+    hotkeyPressed ||
+    hotkeySessionControl === null
+  ) {
+    return;
+  }
+  warmSessionRecycleTimer = setTimeout(() => {
+    warmSessionRecycleTimer = undefined;
+    void recycleWarmSession();
+  }, WARM_SESSION_RECYCLE_MS);
+  warmSessionRecycleTimer.unref?.();
+}
+
+function clearWarmSessionRecycleTimer(): void {
+  if (warmSessionRecycleTimer === undefined) return;
+  clearTimeout(warmSessionRecycleTimer);
+  warmSessionRecycleTimer = undefined;
+}
+
+async function recycleWarmSession(): Promise<void> {
+  if (warmSessionRecycleInFlight) return;
+  if (
+    !latestSettings.hotkeyEnabled ||
+    !sessionRunning ||
+    sessionOwner !== "hotkey" ||
+    hotkeyPressed ||
+    hotkeySessionControl === null
+  ) {
+    return;
+  }
+  warmSessionRecycleInFlight = true;
+  restartWarmSessionAfterStop = true;
+  emitSessionEvent({
+    type: "diagnostic.info",
+    message: "[mic-tool-ts] recycling warm push-to-talk session",
+  });
+  emitCaptureState("idle", "warm session recycling");
+  try {
+    await stopHotkeyWarmSession();
+  } finally {
+    warmSessionRecycleInFlight = false;
+  }
 }
 
 function handlePushToTalkInput(
@@ -390,6 +447,7 @@ async function startHotkeySession(): Promise<void> {
       hotkeyControl: hotkeySessionControl,
     });
   }
+  emitCaptureState("recording", "push-to-talk pressed");
   emitSessionEvent({
     type: "diagnostic.info",
     message: "[mic-tool-ts] push-to-talk pressed",
@@ -400,6 +458,7 @@ async function stopHotkeySession(): Promise<void> {
   hotkeyPressed = false;
   if (!hotkeySessionActive || sessionOwner !== "hotkey" || hotkeySessionControl === null) return;
   hotkeySessionControl.close();
+  emitCaptureState("warm", "push-to-talk released");
   emitSessionEvent({
     type: "diagnostic.info",
     message: "[mic-tool-ts] push-to-talk released",
@@ -440,6 +499,26 @@ function emitSessionEvent(event: SessionEvent): void {
     void configureGlobalHotkey();
   }
   mainWindow?.webContents.send("mic-tool-ts:session:event", event);
+  if (
+    event.type === "session.state" &&
+    event.state === "listening" &&
+    sessionOwner === "hotkey"
+  ) {
+    emitCaptureState(hotkeyPressed ? "recording" : "warm", "hotkey session listening");
+  }
+}
+
+function emitCaptureState(state: "idle" | "warm" | "recording", reason: string): void {
+  if (state === "warm") {
+    scheduleWarmSessionRecycle();
+  } else {
+    clearWarmSessionRecycleTimer();
+  }
+  mainWindow?.webContents.send("mic-tool-ts:session:event", {
+    type: "capture.state",
+    state,
+    reason,
+  } satisfies SessionEvent);
 }
 
 function normalizeStopOptions(value: unknown): StopSessionOptions {

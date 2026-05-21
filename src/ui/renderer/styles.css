@@ -179,6 +179,7 @@ select {
 .toolbar-group,
 .status-chip,
 .segmented,
+.monitor-actions,
 .capture-actions {
   flex: 0 0 auto;
   display: flex;
@@ -247,6 +248,17 @@ select {
   background: var(--green);
   box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.14);
   animation: pulse 2.4s ease-in-out infinite;
+}
+
+.app-shell[data-state="warm"] .status-light {
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgba(255, 159, 10, 0.14);
+}
+
+.app-shell[data-state="recording"] .status-light {
+  background: var(--red);
+  box-shadow: 0 0 0 4px rgba(215, 0, 21, 0.14);
+  animation: pulse 1.6s ease-in-out infinite;
 }
 
 .app-shell[data-state="error"] .status-light {
@@ -373,6 +385,10 @@ select {
   gap: 12px;
 }
 
+.monitor-actions {
+  gap: 8px;
+}
+
 .segmented {
   width: max-content;
   max-width: 100%;
@@ -463,6 +479,14 @@ select {
   align-items: start;
 }
 
+.bubble-stack {
+  width: 100%;
+  max-width: 760px;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
 .time {
   padding-top: 4px;
   color: var(--subtle);
@@ -480,6 +504,10 @@ select {
   border-radius: 12px;
   background: var(--content-strong);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.42) inset;
+}
+
+.bubble-stack .bubble {
+  max-width: 100%;
 }
 
 .bubble.processed {
@@ -724,7 +752,8 @@ select {
   opacity: 0.58;
 }
 
-.app-shell[data-state="running"] .meter-bar {
+.app-shell[data-state="running"] .meter-bar,
+.app-shell[data-state="recording"] .meter-bar {
   animation: meter 860ms ease-in-out infinite;
 }
 
@@ -788,9 +817,15 @@ select {
   box-shadow: 0 9px 22px rgba(10, 132, 255, 0.22);
 }
 
-.app-shell[data-state="running"] .start-button {
+.app-shell[data-state="running"] .start-button,
+.app-shell[data-state="recording"] .start-button {
   background: var(--red);
   box-shadow: 0 9px 22px rgba(215, 0, 21, 0.20);
+}
+
+.app-shell[data-state="warm"] .start-button {
+  background: var(--orange);
+  box-shadow: 0 9px 22px rgba(198, 106, 0, 0.18);
 }
 
 @keyframes pulse {
@@ -928,8 +963,13 @@ select {
   }
 
   .segmented,
+  .monitor-actions,
   .segmented button {
     width: 100%;
+  }
+
+  .monitor-actions {
+    justify-content: space-between;
   }
 
   .transcript-row {

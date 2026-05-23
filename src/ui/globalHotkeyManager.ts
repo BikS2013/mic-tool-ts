@@ -31,14 +31,20 @@ interface GlobalShortcutAdapter {
   unregister(accelerator: string): void;
 }
 
+export type GlobalHotkeyEventSource =
+  | "native-hook"
+  | "global-shortcut"
+  | "global-shortcut-toggle"
+  | "settings-disabled";
+
 export interface GlobalHotkeySettings {
   readonly enabled: boolean;
   readonly hotkey: string;
 }
 
 export interface GlobalHotkeyManagerOptions {
-  readonly onPress: () => void | Promise<void>;
-  readonly onRelease: () => void | Promise<void>;
+  readonly onPress: (source: GlobalHotkeyEventSource) => void | Promise<void>;
+  readonly onRelease: (source: GlobalHotkeyEventSource) => void | Promise<void>;
   readonly onProtocolToggle?: (key: OperatorKey) => void | Promise<void>;
   readonly onWarning: (message: string) => void;
   readonly loadHookModule?: () => Promise<NativeHookModule>;
@@ -47,8 +53,8 @@ export interface GlobalHotkeyManagerOptions {
 }
 
 export class GlobalHotkeyManager {
-  private readonly onPress: () => void | Promise<void>;
-  private readonly onRelease: () => void | Promise<void>;
+  private readonly onPress: (source: GlobalHotkeyEventSource) => void | Promise<void>;
+  private readonly onRelease: (source: GlobalHotkeyEventSource) => void | Promise<void>;
   private readonly onProtocolToggle: ((key: OperatorKey) => void | Promise<void>) | null;
   private readonly onWarning: (message: string) => void;
   private readonly loadHookModule: () => Promise<NativeHookModule>;
@@ -79,7 +85,7 @@ export class GlobalHotkeyManager {
   async configure(settings: GlobalHotkeySettings): Promise<void> {
     if (!settings.enabled) {
       this.hotkey = null;
-      await this.releaseIfPressed();
+      await this.releaseIfPressed("settings-disabled");
       this.unregisterGlobalShortcut();
       this.stop();
       return;
@@ -153,31 +159,31 @@ export class GlobalHotkeyManager {
     if (this.hotkey === null || this.keys === null) return;
     if (this.pressed && this.handleSecondaryKeyDown(event)) return;
     if (!nativeEventMatchesHotkey(event, this.hotkey, this.keys, this.isMac)) return;
-    this.press();
+    this.press("native-hook");
   };
 
   private readonly handleKeyUp = (event: NativeKeyboardEvent): void => {
     if (this.hotkey === null || this.keys === null || !this.pressed) return;
     this.secondaryKeysDown.delete(event.keycode);
     if (!nativeEventReleasesHotkey(event, this.hotkey, this.keys, this.isMac)) return;
-    void this.release();
+    void this.release("native-hook");
   };
 
-  private async releaseIfPressed(): Promise<void> {
+  private async releaseIfPressed(source: GlobalHotkeyEventSource): Promise<void> {
     if (!this.pressed) return;
-    await this.release();
+    await this.release(source);
   }
 
-  private press(): void {
+  private press(source: GlobalHotkeyEventSource): void {
     if (this.pressed) return;
     this.pressed = true;
-    void this.onPress();
+    void this.onPress(source);
   }
 
-  private async release(): Promise<void> {
+  private async release(source: GlobalHotkeyEventSource): Promise<void> {
     this.pressed = false;
     this.secondaryKeysDown.clear();
-    await this.onRelease();
+    await this.onRelease(source);
   }
 
   private handleSecondaryKeyDown(event: NativeKeyboardEvent): boolean {
@@ -192,14 +198,14 @@ export class GlobalHotkeyManager {
 
   private readonly handleGlobalShortcut = (): void => {
     if (this.started) {
-      this.press();
+      this.press("global-shortcut");
       return;
     }
     if (this.pressed) {
-      void this.release();
+      void this.release("global-shortcut-toggle");
       return;
     }
-    this.press();
+    this.press("global-shortcut-toggle");
   };
 
   private registerGlobalShortcut(hotkey: ParsedHotkey): void {

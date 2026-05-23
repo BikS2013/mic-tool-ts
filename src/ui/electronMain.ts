@@ -2,6 +2,8 @@ import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, shell }
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { loadEnvChain } from "../config/envChain.js";
+import { parseBoolean } from "../config/parsers.js";
 import {
   runMicSession,
   type AudioGate,
@@ -12,7 +14,7 @@ import {
 } from "../core/sessionRunner.js";
 import type { SessionEvent } from "../core/sessionEvents.js";
 import type { OperatorKey, OperatorState } from "../protocol/types.js";
-import { GlobalHotkeyManager } from "./globalHotkeyManager.js";
+import { GlobalHotkeyManager, type GlobalHotkeyEventSource } from "./globalHotkeyManager.js";
 import {
   eventMatchesHotkey,
   eventReleasesHotkey,
@@ -38,6 +40,11 @@ import { TranscriptionOverlayManager } from "./transcriptionOverlay.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WARM_SESSION_RECYCLE_MS = 5 * 60 * 1000;
+type UiHotkeyEventSource =
+  | GlobalHotkeyEventSource
+  | "focused-window"
+  | "renderer-ipc"
+  | "app-blur";
 
 let mainWindow: BrowserWindow | null = null;
 let sessionAbort: AbortController | null = null;
@@ -53,6 +60,7 @@ let warmSessionRecycleTimer: NodeJS.Timeout | undefined;
 let warmSessionRecycleInFlight = false;
 let transcriptionOverlay: TranscriptionOverlayManager | null = null;
 let latestProtocolFeatures: OperatorState = protocolFeaturesFromSettings(latestSettings);
+let uiVerboseDiagnostics = readUiVerboseDiagnostics();
 
 interface UiStopReason {
   readonly source: "manual" | "hotkey";
@@ -194,7 +202,7 @@ function registerIpc(): void {
   ipcMain.handle("mic-tool-ts:session:start", async (_event, options: unknown) => {
     const startOptions = normalizeStartOptions(options);
     if (startOptions.hotkey === true) {
-      await startHotkeySession();
+      await startHotkeySession("renderer-ipc");
       return;
     }
     await startSession({ owner: "manual" });
@@ -260,8 +268,7 @@ async function createWindow(): Promise<void> {
   mainWindow.on("blur", () => {
     if (globalHotkeyManager?.isRunning === true) return;
     if (!hotkeyPressed) return;
-    hotkeyPressed = false;
-    void stopHotkeySession();
+    void stopHotkeySession("app-blur");
   });
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -277,13 +284,14 @@ function createTranscriptionOverlay(): void {
   transcriptionOverlay = new TranscriptionOverlayManager({
     preloadPath: join(__dirname, "preload.cjs"),
     rendererPath: join(__dirname, "renderer", "overlay.html"),
+    onDiagnostic: emitVerboseUiDiagnostic,
   });
 }
 
 function createGlobalHotkeyManager(): void {
   globalHotkeyManager = new GlobalHotkeyManager({
-    onPress: () => startHotkeySession(),
-    onRelease: () => stopHotkeySession(),
+    onPress: (source) => startHotkeySession(source),
+    onRelease: (source) => stopHotkeySession(source),
     onProtocolToggle: (key) => toggleProtocolFeature(key),
     onWarning: (message) => emitSessionEvent({
       type: "diagnostic.warning",
@@ -487,19 +495,24 @@ function handlePushToTalkInput(
       return false;
     }
     if (hotkeyPressed) return true;
-    void startHotkeySession();
+    void startHotkeySession("focused-window");
     return true;
   }
 
   if (!hotkeyPressed || !eventReleasesHotkey(input, hotkey, process.platform === "darwin")) {
     return false;
   }
-  hotkeyPressed = false;
-  void stopHotkeySession();
+  void stopHotkeySession("focused-window");
   return true;
 }
 
-async function startHotkeySession(): Promise<void> {
+async function startHotkeySession(source: UiHotkeyEventSource): Promise<void> {
+  emitVerboseUiDiagnostic(
+    `hotkey.press source=${source} hotkeyPressedBefore=${String(hotkeyPressed)} ` +
+      `sessionRunning=${String(sessionRunning)} sessionOwner=${sessionOwner ?? "none"} ` +
+      `hotkeySessionActive=${String(hotkeySessionActive)} ` +
+      `gateOpen=${String(hotkeySessionControl?.isOpen() ?? false)}`,
+  );
   if (hotkeyPressed) return;
   hotkeyPressed = true;
   if (sessionRunning && sessionOwner === "hotkey" && hotkeySessionControl !== null) {
@@ -522,7 +535,13 @@ async function startHotkeySession(): Promise<void> {
   });
 }
 
-async function stopHotkeySession(): Promise<void> {
+async function stopHotkeySession(source: UiHotkeyEventSource): Promise<void> {
+  emitVerboseUiDiagnostic(
+    `hotkey.release source=${source} hotkeyPressedBefore=${String(hotkeyPressed)} ` +
+      `sessionRunning=${String(sessionRunning)} sessionOwner=${sessionOwner ?? "none"} ` +
+      `hotkeySessionActive=${String(hotkeySessionActive)} ` +
+      `gateOpen=${String(hotkeySessionControl?.isOpen() ?? false)}`,
+  );
   hotkeyPressed = false;
   if (!hotkeySessionActive || sessionOwner !== "hotkey" || hotkeySessionControl === null) return;
   hotkeySessionControl.close();
@@ -563,6 +582,7 @@ async function stopSession(options: StopSessionOptions = {}): Promise<void> {
 
 function emitSessionEvent(event: SessionEvent): void {
   if (event.type === "config.loaded") {
+    uiVerboseDiagnostics = event.config.verbose;
     latestSettings = settingsFromConfig(event.config, latestSettings);
     latestProtocolFeatures = { ...event.config.operators };
     void configureGlobalHotkey();
@@ -588,6 +608,13 @@ function emitSessionEvent(event: SessionEvent): void {
 }
 
 function emitCaptureState(state: "idle" | "warm" | "recording", reason: string): void {
+  emitVerboseUiDiagnostic(
+    `capture.state state=${state} reason=${quoteDiagnosticValue(reason)} ` +
+      `sessionOwner=${sessionOwner ?? "none"} hotkeyPressed=${String(hotkeyPressed)} ` +
+      `hotkeySessionActive=${String(hotkeySessionActive)} ` +
+      `gateOpen=${String(hotkeySessionControl?.isOpen() ?? false)} ` +
+      `warmRecycleTimerActive=${String(warmSessionRecycleTimer !== undefined)}`,
+  );
   if (state === "warm") {
     scheduleWarmSessionRecycle();
   } else {
@@ -607,6 +634,31 @@ function deliverSessionEvent(event: SessionEvent): void {
     hotkey: latestSettings.hotkey,
     protocolFeatures: latestProtocolFeatures,
   });
+}
+
+function emitVerboseUiDiagnostic(detail: string): void {
+  if (!uiVerboseDiagnostics) return;
+  const message = `[mic-tool-ts] ui diagnostic: ${detail}`;
+  process.stderr.write(`${message}\n`);
+  mainWindow?.webContents.send("mic-tool-ts:session:event", {
+    type: "diagnostic.info",
+    message,
+  } satisfies SessionEvent);
+}
+
+function readUiVerboseDiagnostics(): boolean {
+  try {
+    const value = loadEnvChain({ toolName: "mic-tool-ts" }).value("MIC_TOOL_TS_VERBOSE");
+    return value === undefined
+      ? false
+      : parseBoolean(value, "--verbose", "MIC_TOOL_TS_VERBOSE");
+  } catch {
+    return false;
+  }
+}
+
+function quoteDiagnosticValue(value: string): string {
+  return JSON.stringify(value);
 }
 
 function toggleProtocolFeature(key: OperatorKey): void {

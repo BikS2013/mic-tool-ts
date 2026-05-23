@@ -241,6 +241,27 @@ export function overlaySnapshot(state: OverlayState): OverlaySnapshot {
   };
 }
 
+export function overlayDiagnosticSummary(
+  event: SessionEvent,
+  context: OverlayEventContext,
+  snapshot: OverlaySnapshot,
+  action: OverlayAction,
+): string {
+  const parts = [
+    "overlay",
+    `event=${sessionEventLabel(event)}`,
+    `hotkeyOwned=${String(context.hotkeyOwned)}`,
+    `action=${action.kind}`,
+    `visible=${String(snapshot.visible)}`,
+    `phase=${snapshot.phase}`,
+    `textPresent=${String(snapshot.text.trim().length > 0)}`,
+  ];
+  if (action.kind === "schedule-hide") {
+    parts.push(`delayMs=${String(action.delayMs)}`);
+  }
+  return parts.join(" ");
+}
+
 export function calculateOverlayBounds(
   workArea: WorkAreaLike,
   options: OverlayBoundsOptions = {},
@@ -320,4 +341,19 @@ function visibleText(text: string | undefined, fallback = WAITING_TEXT): string 
   const normalizedFallback = fallback.trim();
   if (normalized.length > 0) return normalized;
   return normalizedFallback.length > 0 ? normalizedFallback : WAITING_TEXT;
+}
+
+function sessionEventLabel(event: SessionEvent): string {
+  switch (event.type) {
+    case "capture.state":
+      return `${event.type}:${event.state}`;
+    case "session.state":
+      return `${event.type}:${event.state}`;
+    case "session.error":
+      return `${event.type}:${event.code}`;
+    case "protocol.event":
+      return `${event.type}:${event.event.type}`;
+    default:
+      return event.type;
+  }
 }

@@ -1585,6 +1585,10 @@ The hotkey-owned session now carries a narrow runtime protocol-toggle channel in
 
 While the dictation hotkey is held, secondary keys toggle protocol operators: `R` toggles refine, `T` toggles translate, `C` toggles clipboard copy, and `I` toggles focused input. `src/ui/globalHotkeyManager.ts` detects these keys through the native system-wide hook when it is running and debounces held secondary keys until keyup. `src/ui/renderer/app.ts` implements the same mapping for the focused-window fallback through the preload method `toggleProtocolFeature()`. Electron main updates overlay context from `config.loaded` and `protocol.event` state changes, then sends snapshots with the latest feature booleans.
 
+Status: diagnostics added 2026-05-21. Refined request: `docs/reference/refined-request-overlay-hide-diagnostics.md`. Implementation plan: `docs/design/plan-023-overlay-hide-diagnostics.md`.
+
+To investigate reports that the overlay may disappear while the user still considers dictation active, the UI now emits privacy-safe verbose diagnostics for the hotkey/capture/overlay lifecycle. When verbose mode is enabled through the existing `MIC_TOOL_TS_VERBOSE` configuration path, Electron main reports hotkey press/release source (`native-hook`, `global-shortcut`, `focused-window`, `renderer-ipc`, `settings-disabled`, or `app-blur`), session ownership, `hotkeyPressed`, warm-session activity, and audio-gate state. `emitCaptureState()` reports every `warm`, `recording`, and `idle` transition with its reason and warm recycle timer state. `TranscriptionOverlayManager` reports each non-noop overlay action, including `show`, `schedule-hide`, `hide`, the resulting phase, visibility, text-presence boolean, and scheduled hide delay. These diagnostics are sent to stderr and to the main UI event stream only; they are not routed back into the overlay, and they never include transcript text, processed output, provider endpoints, or API keys.
+
 ---
 
 ## 25. Sidepanel Protocol Switches

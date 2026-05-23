@@ -4,6 +4,7 @@ import type { SessionEvent } from "../core/sessionEvents.js";
 import {
   calculateOverlayBounds,
   initialOverlayState,
+  overlayDiagnosticSummary,
   overlaySnapshot,
   reduceOverlayEvent,
   type OverlayAction,
@@ -16,12 +17,14 @@ interface TranscriptionOverlayManagerOptions {
   readonly preloadPath: string;
   readonly rendererPath: string;
   readonly devTools?: boolean;
+  readonly onDiagnostic?: (message: string) => void;
 }
 
 export class TranscriptionOverlayManager {
   private readonly preloadPath: string;
   private readonly rendererPath: string;
   private readonly devTools: boolean;
+  private readonly onDiagnostic: ((message: string) => void) | undefined;
   private window: BrowserWindow | null = null;
   private windowLoad: Promise<BrowserWindow> | null = null;
   private hideTimer: NodeJS.Timeout | undefined;
@@ -32,6 +35,7 @@ export class TranscriptionOverlayManager {
     this.preloadPath = options.preloadPath;
     this.rendererPath = options.rendererPath;
     this.devTools = options.devTools ?? true;
+    this.onDiagnostic = options.onDiagnostic;
     screen.on("display-metrics-changed", this.repositionIfVisible);
     screen.on("display-added", this.repositionIfVisible);
     screen.on("display-removed", this.repositionIfVisible);
@@ -40,6 +44,14 @@ export class TranscriptionOverlayManager {
   handleSessionEvent(event: SessionEvent, context: OverlayEventContext): void {
     const transition = reduceOverlayEvent(this.state, event, context);
     this.state = transition.state;
+    if (transition.action.kind !== "none") {
+      this.onDiagnostic?.(overlayDiagnosticSummary(
+        event,
+        context,
+        transition.snapshot,
+        transition.action,
+      ));
+    }
     this.applyAction(transition.snapshot, transition.action);
   }
 

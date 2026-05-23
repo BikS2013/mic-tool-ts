@@ -262,6 +262,8 @@ While a UI push-to-talk hotkey is held, the user MUST be able to toggle protocol
 
 The right inspector sidepanel MUST expose only the four protocol operator switches: `refine`, `translate`, `clipboard`, and `input`. These switches MUST remain enabled during warmed, recording, and manual listening states while non-protocol settings remain disabled. Switch changes during an active session MUST update the active protocol controller through typed runtime state changes before the next section submission, and the Protocol view switches, inspector switches, overlay indicators, and protocol events MUST stay synchronized.
 
+When verbose diagnostics are enabled through the existing `MIC_TOOL_TS_VERBOSE` configuration path, UI push-to-talk MUST emit privacy-safe diagnostic info for hotkey press/release sources, capture state transitions, and overlay actions. These diagnostics MUST identify whether overlay hiding follows a release, warm/idle capture transition, stop/error, or scheduled hide action. They MUST NOT include transcript text, processed output, provider endpoints, API keys, or secret values.
+
 ## Non-Functional Requirements — Electron UI Command
 
 ### NFR-13 — Electron security boundary

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateOverlayBounds,
   initialOverlayState,
+  overlayDiagnosticSummary,
   reduceOverlayEvent,
 } from "../src/ui/transcriptionOverlayState.js";
 
@@ -236,6 +237,36 @@ describe("transcription overlay state", () => {
     expect(idle.action).toEqual({ kind: "hide" });
     expect(idle.snapshot.visible).toBe(false);
     expect(idle.snapshot.text).toBe("");
+  });
+
+  it("summarizes overlay diagnostics without transcript content", () => {
+    const recording = reduceOverlayEvent(initialOverlayState(), {
+      type: "capture.state",
+      state: "recording",
+    }, {
+      hotkeyOwned: true,
+      hotkey: DEFAULT_HOTKEY,
+    });
+    const final = reduceOverlayEvent(recording.state, {
+      type: "transcript.final",
+      text: "private dictated text",
+    }, {
+      hotkeyOwned: true,
+      hotkey: DEFAULT_HOTKEY,
+    });
+
+    const summary = overlayDiagnosticSummary({
+      type: "transcript.final",
+      text: "private dictated text",
+    }, {
+      hotkeyOwned: true,
+      hotkey: DEFAULT_HOTKEY,
+    }, final.snapshot, final.action);
+
+    expect(summary).toContain("event=transcript.final");
+    expect(summary).toContain("action=show");
+    expect(summary).toContain("textPresent=true");
+    expect(summary).not.toContain("private dictated text");
   });
 
   it("places the overlay at bottom center within the active work area", () => {

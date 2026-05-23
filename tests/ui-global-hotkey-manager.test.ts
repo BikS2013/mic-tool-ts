@@ -92,7 +92,9 @@ describe("GlobalHotkeyManager", () => {
     expect(hook.started).toBe(true);
     expect(globalShortcut.register).toHaveBeenCalledWith("Control+Backquote", expect.any(Function));
     expect(onPress).toHaveBeenCalledTimes(1);
+    expect(onPress).toHaveBeenCalledWith("global-shortcut");
     expect(onRelease).toHaveBeenCalledTimes(1);
+    expect(onRelease).toHaveBeenCalledWith("native-hook");
   });
 
   it("releases an active hotkey session when disabled", async () => {
@@ -114,6 +116,7 @@ describe("GlobalHotkeyManager", () => {
     await manager.configure({ enabled: false, hotkey: "Control+`" });
 
     expect(onRelease).toHaveBeenCalledOnce();
+    expect(onRelease).toHaveBeenCalledWith("settings-disabled");
     expect(hook.stopped).toBe(true);
   });
 
@@ -154,7 +157,9 @@ describe("GlobalHotkeyManager", () => {
 
     expect(warning).toHaveBeenCalledWith(expect.stringContaining("Input Monitoring permission denied"));
     expect(onPress).toHaveBeenCalledOnce();
+    expect(onPress).toHaveBeenCalledWith("global-shortcut-toggle");
     expect(onRelease).toHaveBeenCalledOnce();
+    expect(onRelease).toHaveBeenCalledWith("global-shortcut-toggle");
   });
 
   it("warns when the system-wide shortcut cannot be reserved", async () => {

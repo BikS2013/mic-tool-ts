@@ -1,6 +1,6 @@
-# mic-tool-ts — Configuration Guide
+# untype — Configuration Guide
 
-This document is the authoritative reference for every configuration parameter `mic-tool-ts` accepts: where each value can come from, how the resolver picks between sources, how to obtain each value, and where the user is recommended to store it. It satisfies the project-wide `<configuration-guide>` rule from `~/.claude/CLAUDE.md`.
+This document is the authoritative reference for every configuration parameter `untype` accepts: where each value can come from, how the resolver picks between sources, how to obtain each value, and where the user is recommended to store it. It satisfies the project-wide `<configuration-guide>` rule from `~/.claude/CLAUDE.md`.
 
 See also:
 - `docs/design/project-design.md` §14 — implementation specification of the four-tier chain.
@@ -11,7 +11,7 @@ See also:
 
 ## 1. Configuration sources and their priority
 
-`mic-tool-ts` resolves every configurable value by walking four sources in this order — the first source that yields a non-whitespace value wins:
+`untype` resolves every configurable value by walking four sources in this order — the first source that yields a non-whitespace value wins:
 
 ```
 +----------------------+   highest priority
@@ -20,7 +20,7 @@ See also:
 | 2. <cwd>/.env        |   project-local; checked into git? NEVER for secrets.
 +----------------------+
 | 3. ~/.tool-agents/   |   per-user, secrets-grade.
-|    mic-tool-ts/.env     |   Folder mode 0700, file mode 0600.
+|    untype/.env     |   Folder mode 0700, file mode 0600.
 +----------------------+
 | 4. process.env       |   shell environment (export VAR=...)
 +----------------------+   lowest priority
@@ -28,22 +28,22 @@ See also:
 
 Notes:
 - Whitespace-only values are treated as missing. A `.env` file containing `SONIOX_API_KEY=   ` does NOT satisfy the resolver — it will fall through to the next tier.
-- `mic-tool-ts` never mutates `process.env`. The chain is read-only.
+- `untype` never mutates `process.env`. The chain is read-only.
 - The two `.env` files are optional. Missing files are not errors; malformed files (e.g. unterminated quote) raise `InvalidConfigurationError` so you are never silently deprived of a value you thought was loaded.
 - Run with `--verbose` to see which source supplied the active STT provider API key. The value itself is never logged.
-- Remembered runtime protocol settings are not part of this four-tier configuration chain. They are restored from `~/.tool-agents/mic-tool-ts/state.json` after config resolution, and only for protocol settings that still came from built-in defaults. Electron UI preferences changed through the UI are also outside the env-var chain and are restored from `~/.tool-agents/mic-tool-ts/ui-state.json` when `mic-tool-ts ui` starts.
+- Remembered runtime protocol settings are not part of this four-tier configuration chain. They are restored from `~/.tool-agents/untype/state.json` after config resolution, and only for protocol settings that still came from built-in defaults. Electron UI preferences changed through the UI are also outside the env-var chain and are restored from `~/.tool-agents/untype/ui-state.json` when `untype ui` starts.
 
 ### Example resolution
 
 You set:
 
 ```
-# in ~/.tool-agents/mic-tool-ts/.env
+# in ~/.tool-agents/untype/.env
 SONIOX_API_KEY=sk_user_default
-MIC_TOOL_TS_LANGUAGES=el,en
+UNTYPE_LANGUAGES=el,en
 
 # in ./.env (project-local)
-MIC_TOOL_TS_LANGUAGES=en
+UNTYPE_LANGUAGES=en
 
 # in your shell
 export SONIOX_API_KEY=sk_shell_value
@@ -52,7 +52,7 @@ export SONIOX_API_KEY=sk_shell_value
 And invoke:
 
 ```
-mic-tool-ts --language pt
+untype --language pt
 ```
 
 The resolver yields:
@@ -68,37 +68,37 @@ The resolver yields:
 
 The table below is the complete contract. The "Default" column shows the value used when neither a flag nor any env-var tier supplies a value.
 
-For `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, and `--translation-policy`, the built-in default may be replaced by remembered runtime state from `~/.tool-agents/mic-tool-ts/state.json`. Explicit CLI or env values still take priority over remembered state.
+For `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, and `--translation-policy`, the built-in default may be replaced by remembered runtime state from `~/.tool-agents/untype/state.json`. Explicit CLI or env values still take priority over remembered state.
 
 | CLI flag                            | Env var                                | Default                                              | Required? |
 |-------------------------------------|----------------------------------------|------------------------------------------------------|-----------|
 | `--api-key <value>`                 | `SONIOX_API_KEY`                       | _none_                                               | **yes**   |
 | `--api-key-expires-at <YYYY-MM-DD>` | `SONIOX_API_KEY_EXPIRES_AT`            | _unset_                                              | no        |
-| `--stt-provider <name>`             | `MIC_TOOL_TS_STT_PROVIDER`                | `soniox`                                             | no        |
+| `--stt-provider <name>`             | `UNTYPE_STT_PROVIDER`                | `soniox`                                             | no        |
 | `--elevenlabs-api-key <value>`      | `ELEVENLABS_API_KEY`                     | _none_                                               | yes, when `--stt-provider=elevenlabs` |
 | `--elevenlabs-api-key-expires-at <YYYY-MM-DD>` | `ELEVENLABS_API_KEY_EXPIRES_AT` | _unset_                                              | no        |
-| `--model <name>`                    | `MIC_TOOL_TS_MODEL`                       | provider-specific                                    | no        |
-| `--endpoint <wss-url>`              | `MIC_TOOL_TS_ENDPOINT`                    | provider-specific                                    | no        |
-| `--language <code>` (repeatable)    | `MIC_TOOL_TS_LANGUAGES` (CSV)             | provider-specific                                    | no        |
-| `--sample-rate <hz>`                | `MIC_TOOL_TS_SAMPLE_RATE`                 | `16000`                                              | no        |
-| `--endpoint-detection` / `--no-endpoint-detection` | `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION`   | `true`                                               | no        |
-| `--output-mode <mode>`              | `MIC_TOOL_TS_OUTPUT_MODE`                 | `overwrite`                                          | no        |
-| `--guard-phrase <phrase>`           | `MIC_TOOL_TS_GUARD_PHRASE`                | `τέλος εντολής`                                      | no        |
-| `--interaction-mode <mode>`         | `MIC_TOOL_TS_INTERACTION_MODE`            | `dictation`                                          | no        |
-| `--command-phrase <phrase>`         | `MIC_TOOL_TS_COMMAND_PHRASE`              | `command`                                            | no        |
-| `--section-end-phrase <phrase>`     | `MIC_TOOL_TS_SECTION_END_PHRASE`          | `command send`                                        | no        |
-| `--section-cancel-phrase <phrase>`  | `MIC_TOOL_TS_SECTION_CANCEL_PHRASE`       | `command cancel`                                     | no        |
-| `--literal-next-phrase <phrase>`    | `MIC_TOOL_TS_LITERAL_NEXT_PHRASE`         | `literal phrase`                                     | no        |
-| `--refine-default <on|off>`         | `MIC_TOOL_TS_REFINE_DEFAULT`              | `off`                                                | no        |
-| `--translate-default <on|off>`      | `MIC_TOOL_TS_TRANSLATE_DEFAULT`           | `off`                                                | no        |
-| `--translation-policy <policy>`     | `MIC_TOOL_TS_TRANSLATION_POLICY`          | `opposite`                                           | no        |
-| `--clipboard-default <on|off>`      | `MIC_TOOL_TS_CLIPBOARD_DEFAULT`           | `off`                                                | no        |
-| `--input-default <on|off>`          | `MIC_TOOL_TS_INPUT_DEFAULT`               | `off`                                                | no        |
-| `--protocol-output <path>`          | `MIC_TOOL_TS_PROTOCOL_OUTPUT`             | _unset_                                              | required when `--interaction-mode=hybrid` |
-| `--refine` / `--no-refine`          | `MIC_TOOL_TS_REFINE`                      | `true`                                               | no        |
-| `--llm-provider <name>`             | `MIC_TOOL_TS_LLM_PROVIDER`                | `azure-openai`                                       | no        |
-| `--llm-model <name>`                | `MIC_TOOL_TS_LLM_MODEL`                   | `gpt-5.4`                                            | no        |
-| `-v, --verbose`                     | `MIC_TOOL_TS_VERBOSE`                     | `false`                                              | no        |
+| `--model <name>`                    | `UNTYPE_MODEL`                       | provider-specific                                    | no        |
+| `--endpoint <wss-url>`              | `UNTYPE_ENDPOINT`                    | provider-specific                                    | no        |
+| `--language <code>` (repeatable)    | `UNTYPE_LANGUAGES` (CSV)             | provider-specific                                    | no        |
+| `--sample-rate <hz>`                | `UNTYPE_SAMPLE_RATE`                 | `16000`                                              | no        |
+| `--endpoint-detection` / `--no-endpoint-detection` | `UNTYPE_ENABLE_ENDPOINT_DETECTION`   | `true`                                               | no        |
+| `--output-mode <mode>`              | `UNTYPE_OUTPUT_MODE`                 | `overwrite`                                          | no        |
+| `--guard-phrase <phrase>`           | `UNTYPE_GUARD_PHRASE`                | `τέλος εντολής`                                      | no        |
+| `--interaction-mode <mode>`         | `UNTYPE_INTERACTION_MODE`            | `dictation`                                          | no        |
+| `--command-phrase <phrase>`         | `UNTYPE_COMMAND_PHRASE`              | `command`                                            | no        |
+| `--section-end-phrase <phrase>`     | `UNTYPE_SECTION_END_PHRASE`          | `command send`                                        | no        |
+| `--section-cancel-phrase <phrase>`  | `UNTYPE_SECTION_CANCEL_PHRASE`       | `command cancel`                                     | no        |
+| `--literal-next-phrase <phrase>`    | `UNTYPE_LITERAL_NEXT_PHRASE`         | `literal phrase`                                     | no        |
+| `--refine-default <on|off>`         | `UNTYPE_REFINE_DEFAULT`              | `off`                                                | no        |
+| `--translate-default <on|off>`      | `UNTYPE_TRANSLATE_DEFAULT`           | `off`                                                | no        |
+| `--translation-policy <policy>`     | `UNTYPE_TRANSLATION_POLICY`          | `opposite`                                           | no        |
+| `--clipboard-default <on|off>`      | `UNTYPE_CLIPBOARD_DEFAULT`           | `off`                                                | no        |
+| `--input-default <on|off>`          | `UNTYPE_INPUT_DEFAULT`               | `off`                                                | no        |
+| `--protocol-output <path>`          | `UNTYPE_PROTOCOL_OUTPUT`             | _unset_                                              | required when `--interaction-mode=hybrid` |
+| `--refine` / `--no-refine`          | `UNTYPE_REFINE`                      | `true`                                               | no        |
+| `--llm-provider <name>`             | `UNTYPE_LLM_PROVIDER`                | `azure-openai`                                       | no        |
+| `--llm-model <name>`                | `UNTYPE_LLM_MODEL`                   | `gpt-5.4`                                            | no        |
+| `-v, --verbose`                     | `UNTYPE_VERBOSE`                     | `false`                                              | no        |
 
 Provider-specific env vars (consulted only when `--refine` is on and the matching `--llm-provider` is selected):
 
@@ -117,57 +117,57 @@ Provider-specific env vars (consulted only when `--refine` is on and the matchin
 ### 3.1 `SONIOX_API_KEY` — Soniox API key (required)
 - **Purpose**: authenticates the WebSocket session opened by the `@soniox/node` SDK.
 - **Obtain**: create an account at <https://console.soniox.com>, navigate to the API Keys page, create a key.
-- **Storage**: secrets-grade. Store in `~/.tool-agents/mic-tool-ts/.env` (folder 0700, file 0600). Never check into git. Never paste into a shared chat.
+- **Storage**: secrets-grade. Store in `~/.tool-agents/untype/.env` (folder 0700, file 0600). Never check into git. Never paste into a shared chat.
 - **Options**: a non-empty string after trimming. No fallback — a missing key raises `MissingConfigurationError` with exit code 2.
 - **Default**: none.
 
 ### 3.2 `SONIOX_API_KEY_EXPIRES_AT` — Soniox key renewal reminder (optional)
 - **Purpose**: operational reminder. When set, the tool checks at startup and writes a single stderr warning if the key is within 14 days of expiry, or has already expired.
 - **Obtain**: read it off the Soniox console, or set it to whatever date your team decided is a "renew by" date.
-- **Storage**: anywhere — this is not a secret. Living alongside `SONIOX_API_KEY` in `~/.tool-agents/mic-tool-ts/.env` is the recommended pairing so the reminder cannot drift away from the key.
+- **Storage**: anywhere — this is not a secret. Living alongside `SONIOX_API_KEY` in `~/.tool-agents/untype/.env` is the recommended pairing so the reminder cannot drift away from the key.
 - **Options / format**: `YYYY-MM-DD`. The parser round-trips through `Date.UTC` so calendar-invalid values like `2026-02-30` are rejected.
 - **Default**: unset → expiry tracking is disabled.
 - **Behaviour**:
   - `> 14 days` away → silent (verbose only).
-  - `1..14 days` away → `[mic-tool-ts] WARNING: SONIOX_API_KEY expires in N days (YYYY-MM-DD). Plan a renewal.`
-  - Past expiry → `[mic-tool-ts] WARNING: SONIOX_API_KEY expired N days ago (YYYY-MM-DD). Renew at https://console.soniox.com.`
+  - `1..14 days` away → `[untype] WARNING: SONIOX_API_KEY expires in N days (YYYY-MM-DD). Plan a renewal.`
+  - Past expiry → `[untype] WARNING: SONIOX_API_KEY expired N days ago (YYYY-MM-DD). Renew at https://console.soniox.com.`
   - The tool always tries to run; expiry is operational, not enforcement.
 
-### 3.3 `MIC_TOOL_TS_STT_PROVIDER` — realtime transcription provider
+### 3.3 `UNTYPE_STT_PROVIDER` — realtime transcription provider
 - **Purpose**: selects which provider receives microphone audio for transcription.
 - **Storage**: project-local `.env`, shell, or CLI flag.
 - **Options**: `soniox` or `elevenlabs`.
 - **Default**: `soniox`.
-- **Behavior**: provider selection controls which API key is required and which provider defaults apply for `MIC_TOOL_TS_MODEL`, `MIC_TOOL_TS_ENDPOINT`, and `MIC_TOOL_TS_LANGUAGES`.
+- **Behavior**: provider selection controls which API key is required and which provider defaults apply for `UNTYPE_MODEL`, `UNTYPE_ENDPOINT`, and `UNTYPE_LANGUAGES`.
 
 ### 3.4 `ELEVENLABS_API_KEY` — ElevenLabs API key (required for ElevenLabs)
 - **Purpose**: authenticates the ElevenLabs Scribe Realtime WebSocket session.
 - **Obtain**: create or copy an API key from the ElevenLabs dashboard.
-- **Storage**: secrets-grade. Store in `~/.tool-agents/mic-tool-ts/.env` (folder 0700, file 0600). Never check into git.
+- **Storage**: secrets-grade. Store in `~/.tool-agents/untype/.env` (folder 0700, file 0600). Never check into git.
 - **Options**: a non-empty string after trimming. No fallback — when `--stt-provider=elevenlabs`, a missing key raises `MissingConfigurationError` with exit code 2.
 - **Default**: none.
 
 ### 3.5 `ELEVENLABS_API_KEY_EXPIRES_AT` — ElevenLabs key renewal reminder (optional)
 - **Purpose**: operational reminder. Mirrors `SONIOX_API_KEY_EXPIRES_AT` for the ElevenLabs key.
-- **Storage**: recommended next to `ELEVENLABS_API_KEY` in `~/.tool-agents/mic-tool-ts/.env`.
+- **Storage**: recommended next to `ELEVENLABS_API_KEY` in `~/.tool-agents/untype/.env`.
 - **Options / format**: `YYYY-MM-DD`.
 - **Default**: unset → expiry tracking is disabled for ElevenLabs.
 
-### 3.6 `MIC_TOOL_TS_MODEL` — STT provider realtime model
+### 3.6 `UNTYPE_MODEL` — STT provider realtime model
 - **Purpose**: selects the active provider's realtime STT model.
 - **Obtain**: see the active provider's model catalog. Soniox default is `stt-rt-v4`; ElevenLabs default is `scribe_v2_realtime`.
 - **Storage**: project-local `.env` or shell — not a secret.
 - **Options**: any string the selected provider accepts as a realtime transcription model.
 - **Default**: `stt-rt-v4` for Soniox; `scribe_v2_realtime` for ElevenLabs.
 
-### 3.7 `MIC_TOOL_TS_ENDPOINT` — STT provider WebSocket endpoint
+### 3.7 `UNTYPE_ENDPOINT` — STT provider WebSocket endpoint
 - **Purpose**: lets you point the tool at a non-default provider endpoint.
 - **Obtain**: from the active provider.
 - **Storage**: project-local `.env` or shell.
 - **Options**: must be a valid `wss://` (preferred) or `ws://` URL.
 - **Default**: `wss://stt-rt.soniox.com/transcribe-websocket` for Soniox; `wss://api.elevenlabs.io/v1/speech-to-text/realtime` for ElevenLabs.
 
-### 3.8 `MIC_TOOL_TS_LANGUAGES` — language hints
+### 3.8 `UNTYPE_LANGUAGES` — language hints
 - **Purpose**: tells the active provider which language(s) to expect. Improves accuracy for code-switched dictation when the provider supports multiple hints.
 - **Obtain**: ISO 639-1 (`en`) or 639-2 (`eng`) codes; regional variants supported as `pt-BR`.
 - **Storage**: project-local `.env` if your project has a stable language pair; otherwise pass via CLI.
@@ -178,21 +178,21 @@ Provider-specific env vars (consulted only when `--refine` is on and the matchin
   - ElevenLabs accepts either `auto` or one explicit language code; multiple hints are rejected when `--stt-provider=elevenlabs`.
 - **Default**: `el,en` for Soniox; `auto` for ElevenLabs.
 
-### 3.9 `MIC_TOOL_TS_SAMPLE_RATE` — PCM sample rate (Hz)
-- **Purpose**: drives BOTH the `sox` capture argv (`-r <value>`) AND the active provider session config. They MUST match — `mic-tool-ts` keeps them in lockstep from a single value.
+### 3.9 `UNTYPE_SAMPLE_RATE` — PCM sample rate (Hz)
+- **Purpose**: drives BOTH the `sox` capture argv (`-r <value>`) AND the active provider session config. They MUST match — `untype` keeps them in lockstep from a single value.
 - **Obtain**: just pick a supported rate; `16000` is the canonical rate for real-time STT.
 - **Storage**: project-local `.env` or shell.
 - **Options**: a positive integer in `[8000, 48000]`. For ElevenLabs, the value must be one of `8000`, `16000`, `22050`, `24000`, `44100`, or `48000`.
 - **Default**: `16000`.
 
-### 3.10 `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION` — server-side endpoint / VAD detection
+### 3.10 `UNTYPE_ENABLE_ENDPOINT_DETECTION` — server-side endpoint / VAD detection
 - **Purpose**: when `true`, Soniox uses server-side endpoint detection and ElevenLabs uses VAD commit strategy. When `false`, provider finality/commits are less automatic.
 - **Obtain**: pick a boolean.
 - **Storage**: project-local `.env` or shell.
 - **Options**: `true` / `false` / `yes` / `no` / `on` / `off` / `1` / `0` (case-insensitive). The CLI side accepts `--endpoint-detection` to force it on and `--no-endpoint-detection` to force it off, so UI mode can override either env setting explicitly.
 - **Default**: `true`.
 
-### 3.11 `MIC_TOOL_TS_OUTPUT_MODE` — stdout rendering mode
+### 3.11 `UNTYPE_OUTPUT_MODE` — stdout rendering mode
 - **Purpose**: chooses how partial and final transcript tokens hit stdout.
 - **Storage**: project-local `.env` or shell.
 - **Options**:
@@ -202,20 +202,20 @@ Provider-specific env vars (consulted only when `--refine` is on and the matchin
 - **Default**: `overwrite`.
 - **Auto-downgrade**: when stdout is NOT a TTY (i.e. piped/redirected), `overwrite` silently becomes `append` to avoid `\r` artifacts in files. This applies even when `--output-mode overwrite` was explicit.
 
-### 3.12 `MIC_TOOL_TS_GUARD_PHRASE` — turn-boundary phrase
+### 3.12 `UNTYPE_GUARD_PHRASE` — turn-boundary phrase
 - **Purpose**: phrase that closes the current turn when detected in the recent finalized transcript. On match, the renderer emits a blank line and (if refinement is enabled) sends the turn to the LLM.
 - **Storage**: project-local `.env` if you want a project-specific phrase; otherwise use the default.
 - **Options**: any non-empty string that contains at least one letter or digit AFTER normalization (NFD + strip combining marks + lowercase + collapse non-alphanumeric to space). Reject reasons: empty string, whitespace-only, punctuation-only.
 - **Default**: `τέλος εντολής` (Greek for "end of instruction"). The phrase remains visible in the rendered transcript — it is only stripped from the input sent to the LLM.
 
-### 3.13 `MIC_TOOL_TS_REFINE` — LLM refinement on/off
+### 3.13 `UNTYPE_REFINE` — LLM refinement on/off
 - **Purpose**: when true, each closed turn's text (with the guard phrase stripped) is sent to the configured LLM, and the cleaned response is rendered on its own line + a blank line.
 - **Storage**: project-local `.env` if you have a stable preference; otherwise toggle per-invocation.
 - **Options**: boolean (see §3.7 for accepted spellings). On the CLI, use `--refine` or `--no-refine`.
 - **Default**: `true`.
 - **Failure semantics**: runtime LLM failures are fail-open — the verbatim transcript continues; only the refined line is omitted. Startup misconfiguration (missing Azure env vars when refine is on) is fail-closed (exit code 2).
 
-### 3.14 `MIC_TOOL_TS_LLM_PROVIDER` — LLM provider name
+### 3.14 `UNTYPE_LLM_PROVIDER` — LLM provider name
 - **Purpose**: chooses which LLM family handles refinement.
 - **Storage**: project-local `.env` or shell.
 - **Options**: one of the eight project-standard names:
@@ -224,13 +224,13 @@ Provider-specific env vars (consulted only when `--refine` is on and the matchin
   - `openai`, `anthropic`, `azure-ai-inference`, `ollama`, `litellm`, `openai-compat` — accepted by validation but throw `LLMConfigurationError` at refiner construction with a message naming the env vars to set when the provider lands.
 - **Default**: `azure-openai`.
 
-### 3.15 `MIC_TOOL_TS_LLM_MODEL` — LLM model / deployment name
+### 3.15 `UNTYPE_LLM_MODEL` — LLM model / deployment name
 - **Purpose**: provider-specific model name. For Azure OpenAI, this is the *deployment* name (NOT the underlying model id) unless `AZURE_OPENAI_DEPLOYMENT` is set, in which case that wins.
 - **Storage**: project-local `.env` or shell.
 - **Options**: any non-empty string the provider accepts.
 - **Default**: `gpt-5.4`.
 
-### 3.16 `MIC_TOOL_TS_VERBOSE` — diagnostic stderr logging
+### 3.16 `UNTYPE_VERBOSE` — diagnostic stderr logging
 - **Purpose**: emits one-line diagnostics for the major lifecycle events (config resolution, transcription state, LLM refinement, shutdown). stdout still contains transcript text only.
 - **Storage**: shell (developer convenience) or `--verbose` flag for one-off debugging.
 - **Options**: boolean.
@@ -242,17 +242,17 @@ Provider-specific env vars (consulted only when `--refine` is on and the matchin
   - `dictation` — human transcript and processed-section output on stdout.
   - `agent-protocol` — JSONL protocol events on stdout; diagnostics remain on stderr.
   - `hybrid` — human transcript remains on stdout and JSONL events are written to `--protocol-output`.
-- **Markers**: `MIC_TOOL_TS_COMMAND_PHRASE`, `MIC_TOOL_TS_SECTION_END_PHRASE`, `MIC_TOOL_TS_SECTION_CANCEL_PHRASE`, and `MIC_TOOL_TS_LITERAL_NEXT_PHRASE` must be non-empty. Defaults are `command`, `command send`, `command cancel`, and `literal phrase`.
-- **Operators**: `MIC_TOOL_TS_REFINE_DEFAULT`, `MIC_TOOL_TS_TRANSLATE_DEFAULT`, `MIC_TOOL_TS_CLIPBOARD_DEFAULT`, and `MIC_TOOL_TS_INPUT_DEFAULT` set the initial persistent state for section processing. During a session, speak `command refine`, `command translate`, `command clipboard`, or `command input` to enable an operator; add `off` to disable it.
-- **Focused input delivery**: when `input` is enabled, the final processed section output is sent to the currently focused macOS input control through the bundled native helper at `dist/native/macos/mic-tool-ts-input-helper`. The helper reads text from stdin, attempts direct Accessibility insertion, falls back to Unicode keyboard events, then falls back to clipboard-preserving physical Command-V. macOS may require Accessibility permission for `mic-tool-ts-input-helper` and sometimes the app that launched `mic-tool-ts`. The operation is fail-open and emits non-fatal warnings rather than terminating the session.
-- **Translation**: `MIC_TOOL_TS_TRANSLATION_POLICY` is one of `opposite`, `to-en`, or `to-el`. `opposite` translates Greek sections to English and English sections to Greek using simple complete-section language detection.
-- **Remembered runtime state**: on graceful shutdown, the tool writes `~/.tool-agents/mic-tool-ts/state.json` with only non-secret protocol state: `refine`, `translate`, `clipboard`, `input`, and `translation_policy`. At startup, saved values are restored only when the corresponding CLI/env default is absent. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, or `--translation-policy` values override the saved state.
-- **Stream separation**: if JSONL uses stdout (`agent-protocol`), human transcript text is not written to stdout. `hybrid` requires `MIC_TOOL_TS_PROTOCOL_OUTPUT` so streams are not silently mixed.
+- **Markers**: `UNTYPE_COMMAND_PHRASE`, `UNTYPE_SECTION_END_PHRASE`, `UNTYPE_SECTION_CANCEL_PHRASE`, and `UNTYPE_LITERAL_NEXT_PHRASE` must be non-empty. Defaults are `command`, `command send`, `command cancel`, and `literal phrase`.
+- **Operators**: `UNTYPE_REFINE_DEFAULT`, `UNTYPE_TRANSLATE_DEFAULT`, `UNTYPE_CLIPBOARD_DEFAULT`, and `UNTYPE_INPUT_DEFAULT` set the initial persistent state for section processing. During a session, speak `command refine`, `command translate`, `command clipboard`, or `command input` to enable an operator; add `off` to disable it.
+- **Focused input delivery**: when `input` is enabled, the final processed section output is sent to the currently focused macOS input control through the bundled native helper at `dist/native/macos/untype-input-helper`. The helper reads text from stdin, attempts direct Accessibility insertion, falls back to Unicode keyboard events, then falls back to clipboard-preserving physical Command-V. macOS may require Accessibility permission for `untype-input-helper` and sometimes the app that launched `untype`. The operation is fail-open and emits non-fatal warnings rather than terminating the session.
+- **Translation**: `UNTYPE_TRANSLATION_POLICY` is one of `opposite`, `to-en`, or `to-el`. `opposite` translates Greek sections to English and English sections to Greek using simple complete-section language detection.
+- **Remembered runtime state**: on graceful shutdown, the tool writes `~/.tool-agents/untype/state.json` with only non-secret protocol state: `refine`, `translate`, `clipboard`, `input`, and `translation_policy`. At startup, saved values are restored only when the corresponding CLI/env default is absent. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, or `--translation-policy` values override the saved state.
+- **Stream separation**: if JSONL uses stdout (`agent-protocol`), human transcript text is not written to stdout. `hybrid` requires `UNTYPE_PROTOCOL_OUTPUT` so streams are not silently mixed.
 
 ### 3.18 `AZURE_OPENAI_API_KEY` — Azure OpenAI key
 - **Required when**: `--refine` is on AND provider is `azure-openai`.
 - **Obtain**: Azure portal → your OpenAI resource → Keys and Endpoint.
-- **Storage**: secrets-grade. `~/.tool-agents/mic-tool-ts/.env` (0600 in a 0700 folder) is the recommended location.
+- **Storage**: secrets-grade. `~/.tool-agents/untype/.env` (0600 in a 0700 folder) is the recommended location.
 - **Options**: any non-empty string.
 - **Default**: none. Missing → `LLMConfigurationError` at startup (exit 2).
 
@@ -290,7 +290,7 @@ A canonical setup for the recommended secrets-grade per-user store:
 
 ```
 ~/.tool-agents/                            # mode 0700 (only you can read)
-└── mic-tool-ts/                              # mode 0700
+└── untype/                              # mode 0700
     ├── .env                               # mode 0600
     ├── state.json                         # mode 0600, non-secret runtime protocol state
     └── ui-state.json                      # mode 0600, non-secret UI settings state
@@ -309,50 +309,50 @@ AZURE_OPENAI_API_VERSION=2024-10-21
 Create the folder once:
 
 ```
-mkdir -m 0700 -p ~/.tool-agents/mic-tool-ts
-touch ~/.tool-agents/mic-tool-ts/.env
-chmod 0600 ~/.tool-agents/mic-tool-ts/.env
+mkdir -m 0700 -p ~/.tool-agents/untype
+touch ~/.tool-agents/untype/.env
+chmod 0600 ~/.tool-agents/untype/.env
 # then edit the file in your preferred editor
 ```
 
-`mic-tool-ts` creates `~/.tool-agents/mic-tool-ts/state.json` when it saves remembered protocol settings, and `mic-tool-ts ui` creates `~/.tool-agents/mic-tool-ts/ui-state.json` when it saves non-secret UI settings. The UI state file may contain provider, model, language hints, sample rate, endpoint detection, protocol mode, operator defaults, translation policy, LLM enablement, and push-to-talk settings. It does not contain API-key values, transcript text, protocol events, processed output, or derived credential status. The tool does not create or populate `.env`; you still own secret setup and review.
+`untype` creates `~/.tool-agents/untype/state.json` when it saves remembered protocol settings, and `untype ui` creates `~/.tool-agents/untype/ui-state.json` when it saves non-secret UI settings. The UI state file may contain provider, model, language hints, sample rate, endpoint detection, protocol mode, operator defaults, translation policy, LLM enablement, and push-to-talk settings. It does not contain API-key values, transcript text, protocol events, processed output, or derived credential status. The tool does not create or populate `.env`; you still own secret setup and review.
 
-For non-secret project-specific overrides (e.g. `MIC_TOOL_TS_LANGUAGES=pt-BR,en` for a Portuguese project), use a project-local `<cwd>/.env`. Do NOT put secrets in this file if the project is under version control.
+For non-secret project-specific overrides (e.g. `UNTYPE_LANGUAGES=pt-BR,en` for a Portuguese project), use a project-local `<cwd>/.env`. Do NOT put secrets in this file if the project is under version control.
 
 ---
 
 ## 5. CLI examples
 
 ```
-# Minimal: relies on ~/.tool-agents/mic-tool-ts/.env or shell for SONIOX_API_KEY
-mic-tool-ts
+# Minimal: relies on ~/.tool-agents/untype/.env or shell for SONIOX_API_KEY
+untype
 
 # Override languages for one run
-mic-tool-ts --language pt-BR --language en
+untype --language pt-BR --language en
 
 # Pipe to a file (auto-downgrades overwrite → append)
-mic-tool-ts > session.txt
+untype > session.txt
 
 # Disable LLM refinement
-mic-tool-ts --no-refine
+untype --no-refine
 
 # Diagnostic / debug
-mic-tool-ts --verbose
+untype --verbose
 
 # Custom guard phrase
-mic-tool-ts --guard-phrase "stop please"
+untype --guard-phrase "stop please"
 
 # Custom Soniox model + endpoint
-mic-tool-ts --model stt-rt-v4 --endpoint wss://stt-rt.soniox.com/transcribe-websocket
+untype --model stt-rt-v4 --endpoint wss://stt-rt.soniox.com/transcribe-websocket
 
 # Use ElevenLabs Scribe Realtime
-mic-tool-ts --stt-provider elevenlabs --elevenlabs-api-key xi_...
+untype --stt-provider elevenlabs --elevenlabs-api-key xi_...
 
 # JSONL voice-agent protocol on stdout
-mic-tool-ts --interaction-mode agent-protocol --no-refine
+untype --interaction-mode agent-protocol --no-refine
 
 # Human transcript on stdout, protocol events in a JSONL file
-mic-tool-ts --interaction-mode hybrid --protocol-output ./agent-events.jsonl --no-refine
+untype --interaction-mode hybrid --protocol-output ./agent-events.jsonl --no-refine
 ```
 
 ---

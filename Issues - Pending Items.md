@@ -1,10 +1,61 @@
 # Issues — Pending Items
 
-This file tracks open issues, pending follow-ups, and dependency-vetting decisions for the `mic-tool-ts` project. Pending items are listed first (most critical at the top), followed by completed items, followed by the dependency-vetting log.
+This file tracks open issues, pending follow-ups, and dependency-vetting decisions for the `untype` project. Pending items are listed first (most critical at the top), followed by completed items, followed by the dependency-vetting log.
 
 ## Pending Items
 
-- **Potential false release or idle transition may hide the hotkey overlay during speech pauses** (severity: active investigation) — User observed that when the dictation key is pressed and speech is interrupted for a period, the independent transcription overlay appears to disappear. Static inspection found no direct silence-timeout hide path; the likely paths are `hotkey.release` -> `capture.state: warm` -> scheduled overlay hide, `capture.state: idle`, `session.state: stopped/error`, or provider/mic error. Added verbose diagnostics in `docs/reference/refined-request-overlay-hide-diagnostics.md` / `docs/design/plan-023-overlay-hide-diagnostics.md` so a live run with `MIC_TOOL_TS_VERBOSE=true mic-tool-ts ui` can capture the exact transition sequence. Keep this pending until a live reproduction confirms the cause and a corrective behavior change is implemented if needed.
+- **Migration from `mic-tool-ts` to `untype`** (severity: action required for all existing end users; renamed 2026-05-23) — The project has been renamed from `mic-tool-ts` to `untype`. The OS command is now `untype`, the per-user config folder is `~/.tool-agents/untype/`, and the env-var prefix is `UNTYPE_*`. The CLI refuses to start with a clear migration hint if it detects the legacy `~/.tool-agents/mic-tool-ts/` folder while the new folder is missing.
+
+  ### Move your config folder
+
+  ```sh
+  mv ~/.tool-agents/mic-tool-ts ~/.tool-agents/untype
+  ```
+
+  This preserves your existing `.env` and any persisted state (`state.json`, `ui-state.json`).
+
+  ### Re-link the binary
+
+  After pulling the rename and rebuilding the project:
+
+  ```sh
+  pnpm run build
+  pnpm unlink --global mic-tool-ts && pnpm link --global
+  ```
+
+  Run the second command from the project root so the new `untype` binary lands on your `PATH` and the stale `mic-tool-ts` symlink is removed.
+
+  ### Rename your env vars
+
+  Every project-specific env var named `MIC_TOOL_TS_*` was renamed to `UNTYPE_*`. Update them in `~/.tool-agents/untype/.env`, your project-local `.env`, and any shell rc files. Provider-canonical vars (`SONIOX_API_KEY`, `ELEVENLABS_API_KEY`, `AZURE_OPENAI_*`, `GOOGLE_API_KEY`) keep their canonical names — they were never prefixed.
+
+  | Old name | New name |
+  |---|---|
+  | `MIC_TOOL_TS_STT_PROVIDER` | `UNTYPE_STT_PROVIDER` |
+  | `MIC_TOOL_TS_MODEL` | `UNTYPE_MODEL` |
+  | `MIC_TOOL_TS_ENDPOINT` | `UNTYPE_ENDPOINT` |
+  | `MIC_TOOL_TS_LANGUAGES` | `UNTYPE_LANGUAGES` |
+  | `MIC_TOOL_TS_SAMPLE_RATE` | `UNTYPE_SAMPLE_RATE` |
+  | `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION` | `UNTYPE_ENABLE_ENDPOINT_DETECTION` |
+  | `MIC_TOOL_TS_OUTPUT_MODE` | `UNTYPE_OUTPUT_MODE` |
+  | `MIC_TOOL_TS_GUARD_PHRASE` | `UNTYPE_GUARD_PHRASE` |
+  | `MIC_TOOL_TS_INTERACTION_MODE` | `UNTYPE_INTERACTION_MODE` |
+  | `MIC_TOOL_TS_COMMAND_PHRASE` | `UNTYPE_COMMAND_PHRASE` |
+  | `MIC_TOOL_TS_SECTION_END_PHRASE` | `UNTYPE_SECTION_END_PHRASE` |
+  | `MIC_TOOL_TS_SECTION_CANCEL_PHRASE` | `UNTYPE_SECTION_CANCEL_PHRASE` |
+  | `MIC_TOOL_TS_LITERAL_NEXT_PHRASE` | `UNTYPE_LITERAL_NEXT_PHRASE` |
+  | `MIC_TOOL_TS_REFINE_DEFAULT` | `UNTYPE_REFINE_DEFAULT` |
+  | `MIC_TOOL_TS_TRANSLATE_DEFAULT` | `UNTYPE_TRANSLATE_DEFAULT` |
+  | `MIC_TOOL_TS_TRANSLATION_POLICY` | `UNTYPE_TRANSLATION_POLICY` |
+  | `MIC_TOOL_TS_CLIPBOARD_DEFAULT` | `UNTYPE_CLIPBOARD_DEFAULT` |
+  | `MIC_TOOL_TS_INPUT_DEFAULT` | `UNTYPE_INPUT_DEFAULT` |
+  | `MIC_TOOL_TS_PROTOCOL_OUTPUT` | `UNTYPE_PROTOCOL_OUTPUT` |
+  | `MIC_TOOL_TS_REFINE` | `UNTYPE_REFINE` |
+  | `MIC_TOOL_TS_LLM_PROVIDER` | `UNTYPE_LLM_PROVIDER` |
+  | `MIC_TOOL_TS_LLM_MODEL` | `UNTYPE_LLM_MODEL` |
+  | `MIC_TOOL_TS_VERBOSE` | `UNTYPE_VERBOSE` |
+
+- **Potential false release or idle transition may hide the hotkey overlay during speech pauses** (severity: active investigation) — User observed that when the dictation key is pressed and speech is interrupted for a period, the independent transcription overlay appears to disappear. Static inspection found no direct silence-timeout hide path; the likely paths are `hotkey.release` -> `capture.state: warm` -> scheduled overlay hide, `capture.state: idle`, `session.state: stopped/error`, or provider/mic error. Added verbose diagnostics in `docs/reference/refined-request-overlay-hide-diagnostics.md` / `docs/design/plan-023-overlay-hide-diagnostics.md` so a live run with `UNTYPE_VERBOSE=true untype ui` can capture the exact transition sequence. Keep this pending until a live reproduction confirms the cause and a corrective behavior change is implemented if needed.
 
 - **Manual compatibility matrix for native focused-input helper** (severity: blocker for helper release validation, not for static review) — The helper is implemented and covered by compile/unit/build checks, but macOS focused-control behavior still needs live verification in TextEdit, Notes, Terminal/iTerm2, Safari and Chrome textareas, Google Docs or another contenteditable editor, VS Code, Cursor, and Slack/Discord using English, Greek, mixed-language, punctuation-heavy, multiline, and long payloads. Use `test_scripts/focused-input-helper-smoke.sh` after `pnpm build` and record which helper method succeeds in each target, whether selected text replacement works, whether undo behaves naturally, and whether the clipboard is preserved.
 
@@ -46,7 +97,7 @@ This file tracks open issues, pending follow-ups, and dependency-vetting decisio
 
 - **Google LLM provider failed from the UI because it was still a stub** (resolved 2026-05-20) — Issue: after adding the UI LLM provider selector, choosing `google` persisted successfully but UI-started sessions still failed at LLM refiner construction because the provider was accepted by config validation but intentionally stubbed. Solution: implemented `src/llm/google.ts` over Gemini `generateContent`, required `GOOGLE_API_KEY` in `resolveProviderConfig()`, wired `GoogleRefiner` through `createRefiner()`, changed the UI provider switch to default the model field to `gemini-3.5-flash`, added focused config/factory/Google refiner tests, and updated documentation and pending-provider tracking.
 
-- **Electron UI could not choose the LLM provider/model used for refinement and translation** (resolved 2026-05-20) — Issue: the UI exposed only an LLM enable toggle, so UI-started sessions could not override `MIC_TOOL_TS_LLM_PROVIDER` or `MIC_TOOL_TS_LLM_MODEL` without leaving the UI and editing external configuration. Solution: added `llmProvider` and `llmModel` to the shared renderer settings contract, Protocol view controls, non-secret UI persistence, UI-started session arguments (`--llm-provider` / `--llm-model`), compatibility for older UI state files, focused tests, and design/function documentation. Credentials and endpoints remain outside the UI and continue to use the normal config chain with typed errors for missing required values.
+- **Electron UI could not choose the LLM provider/model used for refinement and translation** (resolved 2026-05-20) — Issue: the UI exposed only an LLM enable toggle, so UI-started sessions could not override `UNTYPE_LLM_PROVIDER` or `UNTYPE_LLM_MODEL` without leaving the UI and editing external configuration. Solution: added `llmProvider` and `llmModel` to the shared renderer settings contract, Protocol view controls, non-secret UI persistence, UI-started session arguments (`--llm-provider` / `--llm-model`), compatibility for older UI state files, focused tests, and design/function documentation. Credentials and endpoints remain outside the UI and continue to use the normal config chain with typed errors for missing required values.
 
 - **Electron UI transcript cards did not flow inside the monitor pane** (resolved 2026-05-20) — Issue: the previous section-scrolling fix still sized the transcript timeline with `width: max-content` and transcript rows with a fixed practical minimum, so long final or processed-section cards could extend under the right edge of the center pane and feel unscrollable in compact windows. Solution: made the monitor timeline a vertical-only scroll container, changed transcript rows to fill the available pane with `min-width: 0`, capped only the bubble width on wider panes, preserved wrapping for long text with `overflow-wrap: anywhere`, and extended `test_scripts/verify-ui-bridge.cjs` to assert that injected long transcript rows stay inside the monitor pane with no horizontal timeline overflow while vertical timeline scrolling remains available.
 
@@ -80,9 +131,9 @@ This file tracks open issues, pending follow-ups, and dependency-vetting decisio
 
 - **Focused input delivery failures were invisible without verbose logging** (resolved 2026-05-16) — Issue: `command status` could correctly show `input=on`, but if the macOS focused-input paste failed because the target control was not focused in time or the terminal lacked Accessibility permission, the failure was only logged under `--verbose`. In normal runs this looked like `command input` did not send anything. Solution: focused-input failures now emit a non-fatal stderr warning and a `protocol.warning` event in protocol modes, while preserving fail-open behavior and still withholding `input.sent` unless delivery succeeds. Added protocol tests proving that the focused-input writer receives the final processed output after refinement/translation and that delivery failures emit warnings without terminating the session.
 
-- **Installed runtime did not include the command input operator** (resolved 2026-05-16) — Issue: the TypeScript source had the `command input` implementation, but the installed `mic-tool-ts` command points at `dist/index.js`, and `dist/` was stale from before the focused-input changes. At runtime, the command therefore lacked `--input-default` / `MIC_TOOL_TS_INPUT_DEFAULT`, did not recognize `input` as a protocol operator, did not report `input` in `command status`, and could not emit `input.sent`. Solution: rebuilt the project with `pnpm build`, which refreshed `dist/config.js`, `dist/main.js`, and `dist/protocol/*` to include the current input-operator implementation. Verified the installed command help now exposes `--input-default`, the compiled protocol controller contains `sendToFocusedInput` and `input.sent`, and focused protocol/config/settings tests plus type checking pass.
+- **Installed runtime did not include the command input operator** (resolved 2026-05-16) — Issue: the TypeScript source had the `command input` implementation, but the installed `mic-tool-ts` command points at `dist/index.js`, and `dist/` was stale from before the focused-input changes. At runtime, the command therefore lacked `--input-default` / `UNTYPE_INPUT_DEFAULT`, did not recognize `input` as a protocol operator, did not report `input` in `command status`, and could not emit `input.sent`. Solution: rebuilt the project with `pnpm build`, which refreshed `dist/config.js`, `dist/main.js`, and `dist/protocol/*` to include the current input-operator implementation. Verified the installed command help now exposes `--input-default`, the compiled protocol controller contains `sendToFocusedInput` and `input.sent`, and focused protocol/config/settings tests plus type checking pass.
 
-- **Focused input operator for voice protocol** (resolved 2026-05-16) — Issue: users needed a `command input` operator that sends the final processed section output to the current terminal, GUI field, browser editor, or other focused input control. Solution: added `input` as a persistent protocol operator with `command input` / `command input off`, added `--input-default` / `MIC_TOOL_TS_INPUT_DEFAULT`, included `input` in status reporting and remembered state, emitted `input.sent` on successful focused-input delivery, and implemented a dependency-free macOS delivery path using `pbcopy` plus System Events Command-V. Focused-input failures are fail-open and now emit a non-fatal warning; no transcript or sent text is persisted. Updated README, configuration guide, tool docs, project design, project functions, and plan-007, and added focused tests for config, state persistence, status, and protocol output.
+- **Focused input operator for voice protocol** (resolved 2026-05-16) — Issue: users needed a `command input` operator that sends the final processed section output to the current terminal, GUI field, browser editor, or other focused input control. Solution: added `input` as a persistent protocol operator with `command input` / `command input off`, added `--input-default` / `UNTYPE_INPUT_DEFAULT`, included `input` in status reporting and remembered state, emitted `input.sent` on successful focused-input delivery, and implemented a dependency-free macOS delivery path using `pbcopy` plus System Events Command-V. Focused-input failures are fail-open and now emit a non-fatal warning; no transcript or sent text is persisted. Updated README, configuration guide, tool docs, project design, project functions, and plan-007, and added focused tests for config, state persistence, status, and protocol output.
 
 - **Remember voice protocol settings between runs** (resolved 2026-05-16) — Issue: voice-agent operator settings such as `refine`, `translate`, and `clipboard` were reset to defaults on each run, even if the user had changed them orally during the previous session. Solution: added `src/protocol/settingsStore.ts` to persist non-secret protocol settings to `~/.tool-agents/mic-tool-ts/state.json` with `0600` file mode in the `0700` per-user tool folder, added startup restoration that applies saved values only when the corresponding CLI/env default is absent, exposed controller/state-machine settings snapshots, and documented the override behavior. The persisted file contains only operator booleans, `translation_policy`, version, and save timestamp; no API keys, provider endpoints, prompts, transcripts, or processed section text. Added tests for save/load, override precedence, invalid saved state, and shutdown persistence.
 
@@ -92,7 +143,7 @@ This file tracks open issues, pending follow-ups, and dependency-vetting decisio
 
 - **Repeated interim transcript snapshots rendered as duplicate text** (resolved 2026-05-16) — Issue: realtime STT providers can emit the same partial hypothesis multiple times before a final commit, and Soniox live result frames can also repeat the current finalized prefix while the non-final suffix is still evolving. The previous `SonioxTranscriber` logic appended every final token run unconditionally, so phrases like `Εσύ, ρε παιδί μου... δείξ` could be duplicated inside the same rendered partial many times. Solution: added Soniox finalized-prefix overlap merging, kept renderer-level suppression of identical consecutive partial snapshots, reset the suppression cache on final output / turn boundaries / refined output / dispose, added focused Soniox and renderer regression tests, and updated renderer/provider design and user docs.
 
-- **Voice protocol submit marker changed from `command end` to `command send`** (resolved 2026-05-16) — Issue: the spoken section-submit marker needed to be `command send` instead of `command end`. Solution: changed the default `MIC_TOOL_TS_SECTION_END_PHRASE` value to `command send`; updated protocol/config/orchestrator tests and all protocol documentation references in README, tool docs, configuration guide, project design, project functions, and plan-007.
+- **Voice protocol submit marker changed from `command end` to `command send`** (resolved 2026-05-16) — Issue: the spoken section-submit marker needed to be `command send` instead of `command end`. Solution: changed the default `UNTYPE_SECTION_END_PHRASE` value to `command send`; updated protocol/config/orchestrator tests and all protocol documentation references in README, tool docs, configuration guide, project design, project functions, and plan-007.
 
 - **Voice protocol marker wording changed from slash markers to command-prefixed phrases** (resolved 2026-05-16) — Issue: the implemented defaults used slash-style markers (`/command`, `/end`, `/cancel`), but the desired spoken protocol is `command refine|translate|clipboard`, `command send`, and `command cancel`. Solution: changed default marker config to `command`, `command send`, and `command cancel`; updated the state machine so `command <operator>` enables the operator and `command <operator> off` disables it; updated protocol tests, config tests, README, configuration guide, tool docs, project design, project functions, and plan-007.
 
@@ -104,7 +155,7 @@ This file tracks open issues, pending follow-ups, and dependency-vetting decisio
 
 - **Direct OS command was not installed after build** (resolved 2026-05-16) — Issue: `mic-tool-ts --help` failed with `zsh: command not found` after `pnpm run build`, and `pnpm link` failed because pnpm had no configured global bin directory. Solution: confirmed `~/.local/bin` is already on `PATH`, confirmed `dist/index.js` is executable, created `/Users/giorgosmarinos/.local/bin/mic-tool-ts -> /Users/giorgosmarinos/aiwork/coding-platform/mic-tool-ts/dist/index.js`, verified `mic-tool-ts --help`, and updated `README.md` / `docs/tools/mic-tool-ts.md` to document the direct symlink install path instead of relying on `pnpm link`.
 
-- **Project rename to `mic-tool-ts`** (resolved 2026-05-16) — Issue: the project identity, command name, per-user config folder, env-var namespace, and documentation still used the legacy name. Solution: renamed `package.json` to `mic-tool-ts`, changed the installed binary to `mic-tool-ts`, updated `src/config.ts` to load `~/.tool-agents/mic-tool-ts/.env`, moved project-specific env vars to `MIC_TOOL_TS_*`, updated diagnostics to `[mic-tool-ts]`, added `docs/design/plan-005-project-rename-mic-tool-ts.md` and `docs/tools/mic-tool-ts.md`, and synchronized README/design docs/tests/sanity scripts/local agent instructions. The supported user invocation is the direct OS command `mic-tool-ts`.
+- **Project rename to `mic-tool-ts`** (resolved 2026-05-16) — Issue: the project identity, command name, per-user config folder, env-var namespace, and documentation still used the legacy name. Solution: renamed `package.json` to `mic-tool-ts`, changed the installed binary to `mic-tool-ts`, updated `src/config.ts` to load `~/.tool-agents/mic-tool-ts/.env`, moved project-specific env vars to `UNTYPE_*`, updated diagnostics to `[mic-tool-ts]`, added `docs/design/plan-005-project-rename-mic-tool-ts.md` and `docs/tools/mic-tool-ts.md`, and synchronized README/design docs/tests/sanity scripts/local agent instructions. The supported user invocation is the direct OS command `mic-tool-ts`.
 
 - **Plan-004 documentation backfill** (resolved 2026-05-16). All five docs synced with the current code state:
   - `docs/design/project-functions.md` extended with FR-12..FR-17 and NFR-8..NFR-10.

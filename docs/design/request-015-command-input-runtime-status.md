@@ -60,3 +60,7 @@ Out of scope:
 > Οκ, command input is not implemented yet, or it is not available during runtime—maybe, I don't know.
 >
 > You must check the status of the implementation because, during the implementation, the process failed. And do something.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

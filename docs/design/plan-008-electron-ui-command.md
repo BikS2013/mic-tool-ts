@@ -349,3 +349,7 @@ The investigation observed `electron@42.1.0` as the npm latest version on 2026-0
 - Should the first implementation include protocol JSONL export controls?
 - Should secrets be editable inline or through a dedicated credential sheet?
 - Should UI preferences live in `.env`, `state.json`, or a separate `ui-preferences.json` file?
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

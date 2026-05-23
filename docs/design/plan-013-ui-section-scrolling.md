@@ -24,3 +24,7 @@ Use CSS containment and overflow rules on the existing layout regions. Keep the 
 - Sidebar and inspector scroll independently.
 - Toolbar and capture bar do not permanently clip overflowed controls.
 - Existing UI behavior tests, type checking, build, and full test suite pass.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

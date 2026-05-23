@@ -66,3 +66,7 @@ None.
 
 > I want you to persist all the settings changes happened through the ui 
 > from session to session
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

@@ -2,12 +2,12 @@
  * Unit A — Configuration resolution.
  *
  * Responsibilities:
- *   1. Parse argv via commander (binary name: `mic-tool-ts`).
+ *   1. Parse argv via commander (binary name: `untype`).
  *   2. For every configurable value, resolve through the four-tier env-var
  *      chain (highest priority first):
  *        a. CLI flag
  *        b. `<CWD>/.env`
- *        c. `~/.tool-agents/mic-tool-ts/.env`
+ *        c. `~/.tool-agents/untype/.env`
  *        d. shell environment
  *      The chain lives in `./config/envChain.ts`. This module never mutates
  *      `process.env`.
@@ -20,7 +20,10 @@
  * {@link HelpOrVersionShown} sentinels so the orchestrator owns `process.exit`.
  */
 
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Command, CommanderError } from "commander";
 
 import {
@@ -124,7 +127,7 @@ export interface ResolveConfigOptions {
 // Defaults and constants
 // ----------------------------------------------------------------------------
 
-const TOOL_NAME = "mic-tool-ts";
+const TOOL_NAME = "untype";
 
 const OUTPUT_MODE_VALUES: readonly OutputMode[] = [
   "overwrite",
@@ -226,7 +229,7 @@ function parseCli(argv: string[], version: string): ParsedCliOptions {
     .description(
       "Stream microphone audio to a realtime STT provider and print transcripts to stdout.",
     )
-    .version(version, "-V, --version", "Print the mic-tool-ts version and exit.")
+    .version(version, "-V, --version", "Print the untype version and exit.")
     .helpOption("-h, --help", "Show this help message and exit.")
     .addHelpText(
       "after",
@@ -235,16 +238,16 @@ function parseCli(argv: string[], version: string): ParsedCliOptions {
         "Configuration sources (highest priority first):",
         "  1. CLI flag",
         "  2. <cwd>/.env",
-        "  3. ~/.tool-agents/mic-tool-ts/.env",
+        "  3. ~/.tool-agents/untype/.env",
         "  4. shell environment",
         "",
         "Examples:",
-        "  $ mic-tool-ts ui                              # open the macOS monitoring UI",
-        "  $ mic-tool-ts --api-key sk_... --language el --language en",
-        "  $ SONIOX_API_KEY=sk_... mic-tool-ts --output-mode append",
-        "  $ mic-tool-ts --stt-provider elevenlabs --elevenlabs-api-key xi_...",
-        "  $ mic-tool-ts --no-refine                       # disable LLM refinement",
-        "  $ mic-tool-ts --language auto                   # let the STT provider auto-detect",
+        "  $ untype ui                              # open the macOS monitoring UI",
+        "  $ untype --api-key sk_... --language el --language en",
+        "  $ SONIOX_API_KEY=sk_... untype --output-mode append",
+        "  $ untype --stt-provider elevenlabs --elevenlabs-api-key xi_...",
+        "  $ untype --no-refine                       # disable LLM refinement",
+        "  $ untype --language auto                   # let the STT provider auto-detect",
         "",
       ].join("\n"),
     )
@@ -256,7 +259,7 @@ function parseCli(argv: string[], version: string): ParsedCliOptions {
     )
     .option(
       "--stt-provider <name>",
-      `Realtime transcription provider. One of: ${STT_PROVIDERS.join(", ")}. Env: MIC_TOOL_TS_STT_PROVIDER.`,
+      `Realtime transcription provider. One of: ${STT_PROVIDERS.join(", ")}. Env: UNTYPE_STT_PROVIDER.`,
     )
     .option(
       "--elevenlabs-api-key <value>",
@@ -268,96 +271,96 @@ function parseCli(argv: string[], version: string): ParsedCliOptions {
     )
     .option(
       "--model <name>",
-      "STT provider realtime model. Env: MIC_TOOL_TS_MODEL.",
+      "STT provider realtime model. Env: UNTYPE_MODEL.",
     )
     .option(
       "--endpoint <wss-url>",
-      "STT provider WebSocket endpoint. Env: MIC_TOOL_TS_ENDPOINT.",
+      "STT provider WebSocket endpoint. Env: UNTYPE_ENDPOINT.",
     )
     .option(
       "--language <code>",
-      "Language hint (ISO 639-1/2) or 'auto'. Repeat for multiple. Env: MIC_TOOL_TS_LANGUAGES (comma-separated).",
+      "Language hint (ISO 639-1/2) or 'auto'. Repeat for multiple. Env: UNTYPE_LANGUAGES (comma-separated).",
       collectLanguage,
     )
     .option(
       "--sample-rate <hz>",
-      "PCM sample rate (8000-48000). Env: MIC_TOOL_TS_SAMPLE_RATE.",
+      "PCM sample rate (8000-48000). Env: UNTYPE_SAMPLE_RATE.",
     )
     .option(
       "--endpoint-detection",
-      "Enable provider endpoint/VAD detection. Env: MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION.",
+      "Enable provider endpoint/VAD detection. Env: UNTYPE_ENABLE_ENDPOINT_DETECTION.",
     )
     .option(
       "--no-endpoint-detection",
-      "Disable provider endpoint/VAD detection. Env: MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION.",
+      "Disable provider endpoint/VAD detection. Env: UNTYPE_ENABLE_ENDPOINT_DETECTION.",
     )
     // Rendering / turn detection
     .option(
       "--output-mode <mode>",
-      `Stdout rendering mode. One of: ${OUTPUT_MODE_VALUES.join(", ")}. Env: MIC_TOOL_TS_OUTPUT_MODE.`,
+      `Stdout rendering mode. One of: ${OUTPUT_MODE_VALUES.join(", ")}. Env: UNTYPE_OUTPUT_MODE.`,
     )
     .option(
       "--guard-phrase <phrase>",
-      "Phrase that closes the current turn. Env: MIC_TOOL_TS_GUARD_PHRASE.",
+      "Phrase that closes the current turn. Env: UNTYPE_GUARD_PHRASE.",
     )
     // Voice-agent protocol
     .option(
       "--interaction-mode <mode>",
-      `Interaction mode. One of: ${INTERACTION_MODES.join(", ")}. Env: MIC_TOOL_TS_INTERACTION_MODE.`,
+      `Interaction mode. One of: ${INTERACTION_MODES.join(", ")}. Env: UNTYPE_INTERACTION_MODE.`,
     )
     .option(
       "--command-phrase <phrase>",
-      "Spoken marker for protocol state commands. Env: MIC_TOOL_TS_COMMAND_PHRASE.",
+      "Spoken marker for protocol state commands. Env: UNTYPE_COMMAND_PHRASE.",
     )
     .option(
       "--section-end-phrase <phrase>",
-      "Spoken marker that submits the current section. Env: MIC_TOOL_TS_SECTION_END_PHRASE.",
+      "Spoken marker that submits the current section. Env: UNTYPE_SECTION_END_PHRASE.",
     )
     .option(
       "--section-cancel-phrase <phrase>",
-      "Spoken marker that cancels the current section. Env: MIC_TOOL_TS_SECTION_CANCEL_PHRASE.",
+      "Spoken marker that cancels the current section. Env: UNTYPE_SECTION_CANCEL_PHRASE.",
     )
     .option(
       "--literal-next-phrase <phrase>",
-      "Spoken marker that treats the next marker as literal dictation. Env: MIC_TOOL_TS_LITERAL_NEXT_PHRASE.",
+      "Spoken marker that treats the next marker as literal dictation. Env: UNTYPE_LITERAL_NEXT_PHRASE.",
     )
     .option(
       "--refine-default <on|off>",
-      "Initial protocol refine operator state. Env: MIC_TOOL_TS_REFINE_DEFAULT.",
+      "Initial protocol refine operator state. Env: UNTYPE_REFINE_DEFAULT.",
     )
     .option(
       "--translate-default <on|off>",
-      "Initial protocol translate operator state. Env: MIC_TOOL_TS_TRANSLATE_DEFAULT.",
+      "Initial protocol translate operator state. Env: UNTYPE_TRANSLATE_DEFAULT.",
     )
     .option(
       "--translation-policy <policy>",
-      `Protocol translation policy. One of: ${TRANSLATION_POLICIES.join(", ")}. Env: MIC_TOOL_TS_TRANSLATION_POLICY.`,
+      `Protocol translation policy. One of: ${TRANSLATION_POLICIES.join(", ")}. Env: UNTYPE_TRANSLATION_POLICY.`,
     )
     .option(
       "--clipboard-default <on|off>",
-      "Initial protocol clipboard operator state. Env: MIC_TOOL_TS_CLIPBOARD_DEFAULT.",
+      "Initial protocol clipboard operator state. Env: UNTYPE_CLIPBOARD_DEFAULT.",
     )
     .option(
       "--input-default <on|off>",
-      "Initial protocol focused-input operator state. Env: MIC_TOOL_TS_INPUT_DEFAULT.",
+      "Initial protocol focused-input operator state. Env: UNTYPE_INPUT_DEFAULT.",
     )
     .option(
       "--protocol-output <path>",
-      "JSONL protocol output path. Required for --interaction-mode hybrid. Env: MIC_TOOL_TS_PROTOCOL_OUTPUT.",
+      "JSONL protocol output path. Required for --interaction-mode hybrid. Env: UNTYPE_PROTOCOL_OUTPUT.",
     )
     // LLM refinement
-    .option("--refine", "Enable LLM refinement (default: on). Env: MIC_TOOL_TS_REFINE.")
+    .option("--refine", "Enable LLM refinement (default: on). Env: UNTYPE_REFINE.")
     .option("--no-refine", "Disable LLM refinement.")
     .option(
       "--llm-provider <name>",
-      `LLM provider. One of: ${LLM_PROVIDERS.join(", ")}. Env: MIC_TOOL_TS_LLM_PROVIDER.`,
+      `LLM provider. One of: ${LLM_PROVIDERS.join(", ")}. Env: UNTYPE_LLM_PROVIDER.`,
     )
     .option(
       "--llm-model <name>",
-      "LLM model / deployment name (provider-specific). Env: MIC_TOOL_TS_LLM_MODEL.",
+      "LLM model / deployment name (provider-specific). Env: UNTYPE_LLM_MODEL.",
     )
     // Diagnostics
-    .option("-v, --verbose", "Emit diagnostic logs to stderr. Env: MIC_TOOL_TS_VERBOSE.");
+    .option("-v, --verbose", "Emit diagnostic logs to stderr. Env: UNTYPE_VERBOSE.");
 
   program.exitOverride();
   program.configureOutput({
@@ -506,7 +509,7 @@ function resolveProviderConfig(
     if (endpoint === undefined) missing.push("AZURE_OPENAI_ENDPOINT");
     if (missing.length > 0) {
       throw new LLMConfigurationError(
-        `Azure OpenAI is enabled (--refine on, --llm-provider=azure-openai) but the following env vars are not set in any of: CLI flag, ./.env, ~/.tool-agents/mic-tool-ts/.env, shell env — ${missing.join(", ")}. Set them or run with --no-refine to disable LLM refinement.`,
+        `Azure OpenAI is enabled (--refine on, --llm-provider=azure-openai) but the following env vars are not set in any of: CLI flag, ./.env, ~/.tool-agents/untype/.env, shell env — ${missing.join(", ")}. Set them or run with --no-refine to disable LLM refinement.`,
       );
     }
     return {
@@ -521,7 +524,7 @@ function resolveProviderConfig(
     const apiKey = chain.value("GOOGLE_API_KEY");
     if (apiKey === undefined) {
       throw new LLMConfigurationError(
-        "Google Gemini is enabled (--refine on, --llm-provider=google) but GOOGLE_API_KEY is not set in any of: CLI flag, ./.env, ~/.tool-agents/mic-tool-ts/.env, shell env. Set it or run with --no-refine to disable LLM refinement.",
+        "Google Gemini is enabled (--refine on, --llm-provider=google) but GOOGLE_API_KEY is not set in any of: CLI flag, ./.env, ~/.tool-agents/untype/.env, shell env. Set it or run with --no-refine to disable LLM refinement.",
       );
     }
     return {
@@ -546,6 +549,18 @@ export function resolveConfig(
 ): ResolvedConfig {
   const version = readPackageVersion();
   const parsed = parseCli(argv, version);
+  // Legacy-folder migration detection: if the new per-user config folder
+  // ~/.tool-agents/untype/ is absent but the legacy folder
+  // ~/.tool-agents/mic-tool-ts/ is present, error out with an explicit
+  // migration hint. No silent fallback (per project no-fallback rule).
+  const home = homedir();
+  const newConfigDir = join(home, ".tool-agents", TOOL_NAME);
+  const legacyConfigDir = join(home, ".tool-agents", "mic-tool-ts");
+  if (!existsSync(newConfigDir) && existsSync(legacyConfigDir)) {
+    throw new MissingConfigurationError(
+      `Config folder not found at ~/.tool-agents/${TOOL_NAME}/. Detected legacy folder at ~/.tool-agents/mic-tool-ts/. Migrate with: mv ~/.tool-agents/mic-tool-ts ~/.tool-agents/${TOOL_NAME}`,
+    );
+  }
   const chain = loadEnvChain({ toolName: TOOL_NAME });
   const validateLlmProviderConfig = opts.validateLlmProviderConfig ?? true;
 
@@ -554,7 +569,7 @@ export function resolveConfig(
     resolveString(
       parsed.sttProvider,
       chain,
-      "MIC_TOOL_TS_STT_PROVIDER",
+      "UNTYPE_STT_PROVIDER",
       "soniox",
     ),
   );
@@ -577,7 +592,7 @@ export function resolveConfig(
     const found = chain.get(apiKeyEnvName);
     if (found === null) {
       throw new MissingConfigurationError(
-        `${apiKeyEnvName} is not set. Provide via ${apiKeyFlagName} flag, .env file (${apiKeyEnvName}=...), ~/.tool-agents/mic-tool-ts/.env, or shell environment variable.`,
+        `${apiKeyEnvName} is not set. Provide via ${apiKeyFlagName} flag, .env file (${apiKeyEnvName}=...), ~/.tool-agents/untype/.env, or shell environment variable.`,
       );
     }
     apiKey = found.value;
@@ -618,18 +633,18 @@ export function resolveConfig(
   const model = resolveString(
     parsed.model,
     chain,
-    "MIC_TOOL_TS_MODEL",
+    "UNTYPE_MODEL",
     defaultModel,
   );
   const endpoint = parseWsUrl(
     resolveString(
       parsed.endpoint,
       chain,
-      "MIC_TOOL_TS_ENDPOINT",
+      "UNTYPE_ENDPOINT",
       defaultEndpoint,
     ),
     "--endpoint",
-    "MIC_TOOL_TS_ENDPOINT",
+    "UNTYPE_ENDPOINT",
   );
 
   // languages: array via flag (variadic), CSV via env var
@@ -637,13 +652,13 @@ export function resolveConfig(
   if (parsed.language !== undefined && parsed.language.length > 0) {
     languages = parsed.language;
   } else {
-    const fromEnv = chain.value("MIC_TOOL_TS_LANGUAGES");
+    const fromEnv = chain.value("UNTYPE_LANGUAGES");
     languages = fromEnv !== undefined
-      ? parseCsvNonEmpty(fromEnv, "--language", "MIC_TOOL_TS_LANGUAGES")
+      ? parseCsvNonEmpty(fromEnv, "--language", "UNTYPE_LANGUAGES")
       : parseCsvNonEmpty(
           defaultLanguagesCsv,
           "--language",
-          "MIC_TOOL_TS_LANGUAGES",
+          "UNTYPE_LANGUAGES",
         );
   }
   languages = validateLanguages(languages);
@@ -652,17 +667,17 @@ export function resolveConfig(
     resolveString(
       parsed.sampleRate,
       chain,
-      "MIC_TOOL_TS_SAMPLE_RATE",
+      "UNTYPE_SAMPLE_RATE",
       String(DEFAULT_SAMPLE_RATE),
     ),
     "--sample-rate",
-    "MIC_TOOL_TS_SAMPLE_RATE",
+    "UNTYPE_SAMPLE_RATE",
     SAMPLE_RATE_MIN,
     SAMPLE_RATE_MAX,
   );
   if (sttProvider === "elevenlabs" && !ELEVENLABS_SAMPLE_RATES.has(sampleRate)) {
     throw new InvalidConfigurationError(
-      `--sample-rate / MIC_TOOL_TS_SAMPLE_RATE must be one of ${Array.from(ELEVENLABS_SAMPLE_RATES).join(", ")} when --stt-provider=elevenlabs. Got: ${sampleRate}.`,
+      `--sample-rate / UNTYPE_SAMPLE_RATE must be one of ${Array.from(ELEVENLABS_SAMPLE_RATES).join(", ")} when --stt-provider=elevenlabs. Got: ${sampleRate}.`,
     );
   }
   if (sttProvider === "elevenlabs" && languages.length > 1) {
@@ -679,14 +694,14 @@ export function resolveConfig(
     // was passed; absent when neither endpoint flag was passed.
     enableEndpointDetection = false;
   } else {
-    const envVal = chain.value("MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION");
+    const envVal = chain.value("UNTYPE_ENABLE_ENDPOINT_DETECTION");
     enableEndpointDetection =
       envVal === undefined
         ? true
         : parseBoolean(
             envVal,
             "--no-endpoint-detection",
-            "MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION",
+            "UNTYPE_ENABLE_ENDPOINT_DETECTION",
           );
   }
 
@@ -695,7 +710,7 @@ export function resolveConfig(
     resolveString(
       parsed.outputMode,
       chain,
-      "MIC_TOOL_TS_OUTPUT_MODE",
+      "UNTYPE_OUTPUT_MODE",
       DEFAULT_OUTPUT_MODE,
     ),
   );
@@ -703,7 +718,7 @@ export function resolveConfig(
     resolveString(
       parsed.guardPhrase,
       chain,
-      "MIC_TOOL_TS_GUARD_PHRASE",
+      "UNTYPE_GUARD_PHRASE",
       DEFAULT_GUARD_PHRASE,
     ),
   );
@@ -713,7 +728,7 @@ export function resolveConfig(
     resolveString(
       parsed.interactionMode,
       chain,
-      "MIC_TOOL_TS_INTERACTION_MODE",
+      "UNTYPE_INTERACTION_MODE",
       DEFAULT_INTERACTION_MODE,
     ),
   );
@@ -721,7 +736,7 @@ export function resolveConfig(
     resolveString(
       parsed.commandPhrase,
       chain,
-      "MIC_TOOL_TS_COMMAND_PHRASE",
+      "UNTYPE_COMMAND_PHRASE",
       DEFAULT_COMMAND_PHRASE,
     ),
     "--command-phrase",
@@ -730,7 +745,7 @@ export function resolveConfig(
     resolveString(
       parsed.sectionEndPhrase,
       chain,
-      "MIC_TOOL_TS_SECTION_END_PHRASE",
+      "UNTYPE_SECTION_END_PHRASE",
       DEFAULT_SECTION_END_PHRASE,
     ),
     "--section-end-phrase",
@@ -739,7 +754,7 @@ export function resolveConfig(
     resolveString(
       parsed.sectionCancelPhrase,
       chain,
-      "MIC_TOOL_TS_SECTION_CANCEL_PHRASE",
+      "UNTYPE_SECTION_CANCEL_PHRASE",
       DEFAULT_SECTION_CANCEL_PHRASE,
     ),
     "--section-cancel-phrase",
@@ -748,7 +763,7 @@ export function resolveConfig(
     resolveString(
       parsed.literalNextPhrase,
       chain,
-      "MIC_TOOL_TS_LITERAL_NEXT_PHRASE",
+      "UNTYPE_LITERAL_NEXT_PHRASE",
       DEFAULT_LITERAL_NEXT_PHRASE,
     ),
     "--literal-next-phrase",
@@ -757,59 +772,59 @@ export function resolveConfig(
     resolveString(
       parsed.refineDefault,
       chain,
-      "MIC_TOOL_TS_REFINE_DEFAULT",
+      "UNTYPE_REFINE_DEFAULT",
       "off",
     ),
     "--refine-default",
-    "MIC_TOOL_TS_REFINE_DEFAULT",
+    "UNTYPE_REFINE_DEFAULT",
   );
   const translateDefault = parseBoolean(
     resolveString(
       parsed.translateDefault,
       chain,
-      "MIC_TOOL_TS_TRANSLATE_DEFAULT",
+      "UNTYPE_TRANSLATE_DEFAULT",
       "off",
     ),
     "--translate-default",
-    "MIC_TOOL_TS_TRANSLATE_DEFAULT",
+    "UNTYPE_TRANSLATE_DEFAULT",
   );
   const clipboardDefault = parseBoolean(
     resolveString(
       parsed.clipboardDefault,
       chain,
-      "MIC_TOOL_TS_CLIPBOARD_DEFAULT",
+      "UNTYPE_CLIPBOARD_DEFAULT",
       "off",
     ),
     "--clipboard-default",
-    "MIC_TOOL_TS_CLIPBOARD_DEFAULT",
+    "UNTYPE_CLIPBOARD_DEFAULT",
   );
   const inputDefault = parseBoolean(
     resolveString(
       parsed.inputDefault,
       chain,
-      "MIC_TOOL_TS_INPUT_DEFAULT",
+      "UNTYPE_INPUT_DEFAULT",
       "off",
     ),
     "--input-default",
-    "MIC_TOOL_TS_INPUT_DEFAULT",
+    "UNTYPE_INPUT_DEFAULT",
   );
   const translationPolicy = validateTranslationPolicy(
     resolveString(
       parsed.translationPolicy,
       chain,
-      "MIC_TOOL_TS_TRANSLATION_POLICY",
+      "UNTYPE_TRANSLATION_POLICY",
       DEFAULT_TRANSLATION_POLICY,
     ),
   );
   const protocolOutputRaw =
-    parsed.protocolOutput ?? chain.value("MIC_TOOL_TS_PROTOCOL_OUTPUT");
+    parsed.protocolOutput ?? chain.value("UNTYPE_PROTOCOL_OUTPUT");
   const protocolOutput =
     protocolOutputRaw === undefined || protocolOutputRaw.trim().length === 0
       ? undefined
       : protocolOutputRaw.trim();
   if (interactionMode === "hybrid" && protocolOutput === undefined) {
     throw new InvalidConfigurationError(
-      "--protocol-output / MIC_TOOL_TS_PROTOCOL_OUTPUT is required when --interaction-mode=hybrid.",
+      "--protocol-output / UNTYPE_PROTOCOL_OUTPUT is required when --interaction-mode=hybrid.",
     );
   }
   const protocol: ProtocolRuntimeConfig = Object.freeze({
@@ -834,28 +849,28 @@ export function resolveConfig(
         refine: protocolSettingSource(
           parsed.refineDefault,
           chain,
-          "MIC_TOOL_TS_REFINE_DEFAULT",
+          "UNTYPE_REFINE_DEFAULT",
         ),
         translate: protocolSettingSource(
           parsed.translateDefault,
           chain,
-          "MIC_TOOL_TS_TRANSLATE_DEFAULT",
+          "UNTYPE_TRANSLATE_DEFAULT",
         ),
         clipboard: protocolSettingSource(
           parsed.clipboardDefault,
           chain,
-          "MIC_TOOL_TS_CLIPBOARD_DEFAULT",
+          "UNTYPE_CLIPBOARD_DEFAULT",
         ),
         input: protocolSettingSource(
           parsed.inputDefault,
           chain,
-          "MIC_TOOL_TS_INPUT_DEFAULT",
+          "UNTYPE_INPUT_DEFAULT",
         ),
       }),
       translationPolicy: protocolSettingSource(
         parsed.translationPolicy,
         chain,
-        "MIC_TOOL_TS_TRANSLATION_POLICY",
+        "UNTYPE_TRANSLATION_POLICY",
       ),
     }),
   });
@@ -865,8 +880,8 @@ export function resolveConfig(
   if (parsed.verbose === true) {
     verbose = true;
   } else {
-    const v = chain.value("MIC_TOOL_TS_VERBOSE");
-    verbose = v === undefined ? false : parseBoolean(v, "--verbose", "MIC_TOOL_TS_VERBOSE");
+    const v = chain.value("UNTYPE_VERBOSE");
+    verbose = v === undefined ? false : parseBoolean(v, "--verbose", "UNTYPE_VERBOSE");
   }
 
   // ---- LLM refinement ----------------------------------------------------
@@ -876,21 +891,21 @@ export function resolveConfig(
   } else if (parsed.refine === false) {
     llmEnabled = false;
   } else {
-    const v = chain.value("MIC_TOOL_TS_REFINE");
-    llmEnabled = v === undefined ? true : parseBoolean(v, "--refine", "MIC_TOOL_TS_REFINE");
+    const v = chain.value("UNTYPE_REFINE");
+    llmEnabled = v === undefined ? true : parseBoolean(v, "--refine", "UNTYPE_REFINE");
   }
   const llmProvider = validateLLMProvider(
     resolveString(
       parsed.llmProvider,
       chain,
-      "MIC_TOOL_TS_LLM_PROVIDER",
+      "UNTYPE_LLM_PROVIDER",
       DEFAULT_LLM_PROVIDER,
     ),
   );
   const llmModel = resolveString(
     parsed.llmModel,
     chain,
-    "MIC_TOOL_TS_LLM_MODEL",
+    "UNTYPE_LLM_MODEL",
     DEFAULT_LLM_MODEL,
   ).trim();
   if (llmModel.length === 0) {
@@ -929,17 +944,17 @@ export function resolveConfig(
 
   if (verbose) {
     process.stderr.write(
-      `[mic-tool-ts] ${apiKeyEnvName} loaded from: ${apiKeySource}\n`,
+      `[untype] ${apiKeyEnvName} loaded from: ${apiKeySource}\n`,
     );
-    process.stderr.write(`[mic-tool-ts] guard phrase: ${guardPhrase}\n`);
+    process.stderr.write(`[untype] guard phrase: ${guardPhrase}\n`);
     process.stderr.write(
-      `[mic-tool-ts] transcription: provider=${sttProvider}, model=${model}, endpoint=${endpoint}, languages=[${languages.join(", ")}], sample_rate=${sampleRate}, endpoint_detection=${enableEndpointDetection}\n`,
-    );
-    process.stderr.write(
-      `[mic-tool-ts] protocol: mode=${interactionMode}, command=${commandPhrase}, send=${sectionEndPhrase}, cancel=${sectionCancelPhrase}, refine_default=${refineDefault}, translate_default=${translateDefault}, clipboard_default=${clipboardDefault}, input_default=${inputDefault}, translation_policy=${translationPolicy}\n`,
+      `[untype] transcription: provider=${sttProvider}, model=${model}, endpoint=${endpoint}, languages=[${languages.join(", ")}], sample_rate=${sampleRate}, endpoint_detection=${enableEndpointDetection}\n`,
     );
     process.stderr.write(
-      `[mic-tool-ts] llm: ${llmEnabled ? "enabled" : "disabled"} (provider=${llmProvider}, model=${llmModel})\n`,
+      `[untype] protocol: mode=${interactionMode}, command=${commandPhrase}, send=${sectionEndPhrase}, cancel=${sectionCancelPhrase}, refine_default=${refineDefault}, translate_default=${translateDefault}, clipboard_default=${clipboardDefault}, input_default=${inputDefault}, translation_policy=${translationPolicy}\n`,
+    );
+    process.stderr.write(
+      `[untype] llm: ${llmEnabled ? "enabled" : "disabled"} (provider=${llmProvider}, model=${llmModel})\n`,
     );
   }
 
@@ -973,7 +988,7 @@ function resolveString(
   defaultValue: string,
 ): string {
   // Explicit flag (even empty) wins so downstream validators can reject it
-  // — `mic-tool-ts --guard-phrase ""` is a user error, not a silent fallback.
+  // — `untype --guard-phrase ""` is a user error, not a silent fallback.
   if (flagValue !== undefined) {
     return flagValue;
   }

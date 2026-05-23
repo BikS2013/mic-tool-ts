@@ -175,8 +175,8 @@ app.on("activate", () => {
 });
 
 function registerIpc(): void {
-  ipcMain.handle("mic-tool-ts:settings:load", () => loadSettingsForRenderer());
-  ipcMain.handle("mic-tool-ts:settings:update", (_event, patch: unknown) => {
+  ipcMain.handle("untype:settings:load", () => loadSettingsForRenderer());
+  ipcMain.handle("untype:settings:update", (_event, patch: unknown) => {
     if (typeof patch !== "object" || patch === null || Array.isArray(patch)) {
       throw new Error("Settings update payload must be an object.");
     }
@@ -199,7 +199,7 @@ function registerIpc(): void {
     });
     return latestSettings;
   });
-  ipcMain.handle("mic-tool-ts:session:start", async (_event, options: unknown) => {
+  ipcMain.handle("untype:session:start", async (_event, options: unknown) => {
     const startOptions = normalizeStartOptions(options);
     if (startOptions.hotkey === true) {
       await startHotkeySession("renderer-ipc");
@@ -207,16 +207,16 @@ function registerIpc(): void {
     }
     await startSession({ owner: "manual" });
   });
-  ipcMain.handle("mic-tool-ts:session:stop", async (_event, options: unknown) => {
+  ipcMain.handle("untype:session:stop", async (_event, options: unknown) => {
     await stopSession(normalizeStopOptions(options));
   });
-  ipcMain.handle("mic-tool-ts:protocol:toggle", (_event, key: unknown) => {
+  ipcMain.handle("untype:protocol:toggle", (_event, key: unknown) => {
     toggleProtocolFeature(normalizeOperatorKey(key));
   });
 }
 
 function saveUiSettings(settings: RendererSettings): void {
-  savePersistedUiSettings(settings, { toolName: "mic-tool-ts" });
+  savePersistedUiSettings(settings, { toolName: "untype" });
 }
 
 async function createWindow(): Promise<void> {
@@ -231,7 +231,7 @@ async function createWindow(): Promise<void> {
     minWidth: 860,
     minHeight: 620,
     show: false,
-    title: "mic-tool-ts",
+    title: "untype",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 18, y: 18 },
     vibrancy: "sidebar",
@@ -332,7 +332,7 @@ async function startSession(options: StartSessionInternalOptions): Promise<void>
   sessionRunning = true;
   sessionOwner = options.owner;
   sessionAbort = new AbortController();
-  const argv = ["node", "mic-tool-ts", ...settingsToSessionArgs(latestSettings)];
+  const argv = ["node", "untype", ...settingsToSessionArgs(latestSettings)];
 
   void runMicSession(argv, {
     frontend: "ui",
@@ -354,7 +354,7 @@ async function startSession(options: StartSessionInternalOptions): Promise<void>
     if (code !== 0) {
       emitSessionEvent({
         type: "diagnostic.warning",
-        message: `[mic-tool-ts] UI session exited with code ${code}`,
+        message: `[untype] UI session exited with code ${code}`,
       });
     }
     if (restartWarmSessionAfterStop) {
@@ -407,7 +407,7 @@ async function startHotkeyWarmSession(): Promise<void> {
   hotkeySessionActive = true;
   emitSessionEvent({
     type: "diagnostic.info",
-    message: "[mic-tool-ts] push-to-talk warmed",
+    message: "[untype] push-to-talk warmed",
   });
   await startSession({
     owner: "hotkey",
@@ -463,7 +463,7 @@ async function recycleWarmSession(): Promise<void> {
   restartWarmSessionAfterStop = true;
   emitSessionEvent({
     type: "diagnostic.info",
-    message: "[mic-tool-ts] recycling warm push-to-talk session",
+    message: "[untype] recycling warm push-to-talk session",
   });
   emitCaptureState("idle", "warm session recycling");
   try {
@@ -531,7 +531,7 @@ async function startHotkeySession(source: UiHotkeyEventSource): Promise<void> {
   emitCaptureState("recording", "push-to-talk pressed");
   emitSessionEvent({
     type: "diagnostic.info",
-    message: "[mic-tool-ts] push-to-talk pressed",
+    message: "[untype] push-to-talk pressed",
   });
 }
 
@@ -548,7 +548,7 @@ async function stopHotkeySession(source: UiHotkeyEventSource): Promise<void> {
   emitCaptureState("warm", "push-to-talk released");
   emitSessionEvent({
     type: "diagnostic.info",
-    message: "[mic-tool-ts] push-to-talk released",
+    message: "[untype] push-to-talk released",
   });
   await stopSession({ submitPending: true });
 }
@@ -628,7 +628,7 @@ function emitCaptureState(state: "idle" | "warm" | "recording", reason: string):
 }
 
 function deliverSessionEvent(event: SessionEvent): void {
-  mainWindow?.webContents.send("mic-tool-ts:session:event", event);
+  mainWindow?.webContents.send("untype:session:event", event);
   transcriptionOverlay?.handleSessionEvent(event, {
     hotkeyOwned: sessionOwner === "hotkey",
     hotkey: latestSettings.hotkey,
@@ -638,9 +638,9 @@ function deliverSessionEvent(event: SessionEvent): void {
 
 function emitVerboseUiDiagnostic(detail: string): void {
   if (!uiVerboseDiagnostics) return;
-  const message = `[mic-tool-ts] ui diagnostic: ${detail}`;
+  const message = `[untype] ui diagnostic: ${detail}`;
   process.stderr.write(`${message}\n`);
-  mainWindow?.webContents.send("mic-tool-ts:session:event", {
+  mainWindow?.webContents.send("untype:session:event", {
     type: "diagnostic.info",
     message,
   } satisfies SessionEvent);
@@ -648,10 +648,10 @@ function emitVerboseUiDiagnostic(detail: string): void {
 
 function readUiVerboseDiagnostics(): boolean {
   try {
-    const value = loadEnvChain({ toolName: "mic-tool-ts" }).value("MIC_TOOL_TS_VERBOSE");
+    const value = loadEnvChain({ toolName: "untype" }).value("UNTYPE_VERBOSE");
     return value === undefined
       ? false
-      : parseBoolean(value, "--verbose", "MIC_TOOL_TS_VERBOSE");
+      : parseBoolean(value, "--verbose", "UNTYPE_VERBOSE");
   } catch {
     return false;
   }

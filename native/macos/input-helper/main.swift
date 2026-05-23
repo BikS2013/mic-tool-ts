@@ -3,7 +3,7 @@ import ApplicationServices
 import CoreGraphics
 import Foundation
 
-private let helperName = "mic-tool-ts-input-helper"
+private let helperName = "untype-input-helper"
 private let defaultMethod = "auto"
 private let unicodeAutoThreshold = 500
 private let hotkeySettleDelaySeconds: TimeInterval = 0.10

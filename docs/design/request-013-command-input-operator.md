@@ -67,3 +67,7 @@ Out of scope:
 ## Original Request
 
 > I want you to also add a command input feature option, which means that the output will be sent to the current input control. It might be a terminal, a GUI, or any other input control.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

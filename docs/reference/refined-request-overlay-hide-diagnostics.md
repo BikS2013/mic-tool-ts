@@ -63,3 +63,7 @@ Out of scope:
 ## Original Request
 
 > Alright, I agree with your proposal for how you want us to proceed?
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

@@ -142,7 +142,7 @@ function renderFeatureIndicators(features: ProtocolFeatures): void {
   }));
 }
 
-if (window.micToolTs === undefined) {
+if (window.untype === undefined) {
   render({
     visible: true,
     phase: "error",
@@ -159,7 +159,7 @@ if (window.micToolTs === undefined) {
     },
   });
 } else {
-  const unsubscribe = window.micToolTs.onOverlaySnapshot((rawSnapshot: unknown) => {
+  const unsubscribe = window.untype.onOverlaySnapshot((rawSnapshot: unknown) => {
     const snapshot = parseSnapshot(rawSnapshot);
     if (snapshot !== null) render(snapshot);
   });

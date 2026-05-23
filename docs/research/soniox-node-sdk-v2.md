@@ -946,3 +946,7 @@ const session = client.realtime.stt(
 - **https://soniox.com/docs/sdk/node-SDK/reference/classes**: The authoritative method-by-method reference for `RealtimeSttSession`. Read before implementing the shutdown sequence.
 - **https://soniox.com/docs/sdk/node-SDK/reference/types**: The authoritative type definitions for `SttSessionConfig`, `SttSessionEvents`, and the error codes. Read before implementing error classification.
 - **https://soniox.com/docs/stt/rt/error-handling**: The server-side error behavior (503 early termination) is important for understanding `NetworkError` and whether a reconnect policy is needed in v2.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

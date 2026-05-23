@@ -177,3 +177,7 @@ This pattern is entirely contained in `tests/soniox-client.test.ts` and requires
 | 2 | `npx vitest run tests/soniox-client.test.ts --reporter=verbose` | 0 (21/21 passing) |
 | 3 | `npx vitest run tests/main.test.ts --reporter=verbose` | 0 (14/14 passing) |
 | 4 | `npx vitest run --reporter=verbose` (full suite) | 0 (143/143 passing) |
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

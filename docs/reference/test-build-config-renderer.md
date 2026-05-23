@@ -216,3 +216,7 @@ No shared test infrastructure files (`conftest.py`, `vitest.config.ts`, `jest.co
 | 1 | `mkdir -p /Users/giorgosmarinos/aiwork/coding-platform/mic-tool-ts/tests` | 0 |
 | 2 | `pnpm exec vitest run tests/errors.test.ts tests/renderer.test.ts tests/config.test.ts --reporter=verbose` | 0 |
 | 3 | LSP diagnostics check on all 3 test files | 0 (no diagnostics) |
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

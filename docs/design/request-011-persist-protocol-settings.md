@@ -72,3 +72,7 @@ Out of scope:
 ## Original Request
 
 > I want you to add a feature to remember the settings when The tool closed. and start with the same settings next time.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

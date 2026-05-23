@@ -324,3 +324,7 @@ Benchmark each provider for:
 ## Original Request
 
 > I want you to examine which other speech-to-text APIs are working to consider as alternatives to Soniox and ElevenLabs. Please remember that I need to transcribe Greek mixed with English words. Also, examine not only commercial products and options, but also open-source products; in that case, I expect it may not be an API, but most likely a locally deployed, running model.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

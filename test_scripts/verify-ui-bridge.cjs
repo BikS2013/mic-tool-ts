@@ -9,13 +9,13 @@ async function main() {
     pathToFileURL(join(distUi, "runtimeSettings.js")).href
   );
 
-  ipcMain.handle("mic-tool-ts:settings:load", () =>
+  ipcMain.handle("untype:settings:load", () =>
     runtimeSettingsModule.loadRendererSettingsForUi(),
   );
-  ipcMain.handle("mic-tool-ts:settings:update", (_event, patch) => patch);
-  ipcMain.handle("mic-tool-ts:session:start", () => undefined);
-  ipcMain.handle("mic-tool-ts:session:stop", () => undefined);
-  ipcMain.handle("mic-tool-ts:protocol:toggle", () => undefined);
+  ipcMain.handle("untype:settings:update", (_event, patch) => patch);
+  ipcMain.handle("untype:session:start", () => undefined);
+  ipcMain.handle("untype:session:stop", () => undefined);
+  ipcMain.handle("untype:protocol:toggle", () => undefined);
 
   await app.whenReady();
 
@@ -49,7 +49,7 @@ async function main() {
     { type: "capture.state", state: "recording", reason: "push-to-talk pressed" },
   ];
   for (const event of sessionEvents) {
-    win.webContents.send("mic-tool-ts:session:event", event);
+    win.webContents.send("untype:session:event", event);
   }
   await new Promise((resolveReady) => setTimeout(resolveReady, 100));
 
@@ -58,7 +58,7 @@ async function main() {
     toggleText: document.querySelector("#sessionToggle")?.textContent ?? null,
     shellState: document.querySelector(".app-shell")?.getAttribute("data-state") ?? null
   })`);
-  win.webContents.send("mic-tool-ts:session:event", {
+  win.webContents.send("untype:session:event", {
     type: "capture.state",
     state: "warm",
     reason: "push-to-talk released",
@@ -68,8 +68,8 @@ async function main() {
   const result = await Promise.race([
     win.webContents.executeJavaScript(`
       (async () => {
-        const hasBridge = typeof window.micToolTs !== "undefined";
-        const loaded = hasBridge ? await window.micToolTs.loadSettings() : null;
+        const hasBridge = typeof window.untype !== "undefined";
+        const loaded = hasBridge ? await window.untype.loadSettings() : null;
         const shell = document.querySelector(".app-shell");
         const settingsButton = document.querySelector('[data-view-button="settings"]');
         const timeline = document.querySelector("#timeline");

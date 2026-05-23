@@ -19,3 +19,7 @@ Restart a hotkey-owned warmed idle session after five continuous minutes in `War
 6. Emit diagnostic/status events for recycle start.
 7. Update documentation and issue log.
 8. Run `pnpm run typecheck`, `pnpm test`, `pnpm run build`, and `pnpm exec electron test_scripts/verify-ui-bridge.cjs`.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

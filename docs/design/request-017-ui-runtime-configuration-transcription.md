@@ -67,3 +67,7 @@ None blocking.
 > I was expecting to see the configuration data from the configuration file, and I don't see it. It seems like the Soniox API key is not set, although it is configured. I don't understand what you are doing. It is not what I asked you to do, and I want you to fix it and make it a real working application that reflects the settings and operating mode and is capable of driving the operations of the command line tool through a UI.
 >
 > Is it clear, or do you need more clarification?
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

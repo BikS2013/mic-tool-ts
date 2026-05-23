@@ -68,3 +68,7 @@ Implement ElevenLabs Scribe Realtime v2 as a second STT provider behind a provid
 ## Original Request
 
 > I want you to find out if you can support the 11 Labs API for transcription purposes and, if you can, use it as an alternative option to Soniox.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

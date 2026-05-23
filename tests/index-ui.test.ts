@@ -38,7 +38,7 @@ describe("src/index ui dispatch", () => {
   });
 
   it("launches Electron for the ui subcommand", async () => {
-    await importIndexWithArgv(["node", "mic-tool-ts", "ui"]);
+    await importIndexWithArgv(["node", "untype", "ui"]);
 
     expect(launchElectronUiMock).toHaveBeenCalledOnce();
     expect(mainMock).not.toHaveBeenCalled();
@@ -46,7 +46,7 @@ describe("src/index ui dispatch", () => {
   });
 
   it("uses the CLI main for normal invocation", async () => {
-    const argv = ["node", "mic-tool-ts", "--no-refine"];
+    const argv = ["node", "untype", "--no-refine"];
     await importIndexWithArgv(argv);
 
     expect(mainMock).toHaveBeenCalledWith(argv);

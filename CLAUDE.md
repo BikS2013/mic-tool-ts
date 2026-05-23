@@ -1,6 +1,141 @@
 <structure-and-conventions>
 ## Structure & Conventions
 
+<request-refinement>
+- **Every non-trivial request must begin with a Request Refinement step** before any planning, design, investigation, implementation, review, or testing work. The refinement converts the raw request into a self-contained, verifiable specification that ALL downstream steps consume.
+
+- **When refinement IS required** (refine before doing anything else):
+  - The request is broad, vague, or implicitly multi-step (e.g., "add authentication", "build a dashboard", "set up a CI/CD pipeline").
+  - The request will trigger downstream activities such as planning, design, implementation, or testing — whether you execute them directly or via a skill/workflow.
+  - The request spans multiple files, modules, or systems.
+  - The acceptance criteria are not explicitly stated in the user's message.
+  - The request mixes WHAT and HOW, or leaves either of the two underspecified.
+  - The request is for a deliverable that will be consumed by others (documentation, research, design, infrastructure plan, etc.).
+
+- **When refinement is NOT required** (skip and proceed directly):
+  - Simple read-only or exploratory questions ("what does function X do?", "where is Y defined?", "show me file Z").
+  - Trivial single-step actions ("rename variable A to B", "fix this typo", "run `pnpm install`").
+  - Requests that are already a fully-specified instruction (the user has explicitly provided objective, scope, and acceptance criteria).
+  - Continuations of an already-refined request — a refined-request file from the current conversation already covers the new ask.
+  - Requests that invoke a workflow slash command (`/team-workflow`, `/change-workflow`, `/doc-workflow`, etc.) — those workflows run the refinement as their own Phase 1 internally; do NOT duplicate it at the orchestrator level. In that case, pass the raw request to the workflow and let it produce the refined-request file.
+
+- **How to perform refinement**: Dispatch the `request-refiner` subagent (`~/.claude/agents/request-refiner.md`) via the Agent tool. Do NOT attempt to write the refined specification by hand — the subagent owns the full template (Category, Objective, Scope, Requirements, Constraints, Acceptance Criteria, Assumptions, Open Questions, Original Request) and the file-naming convention.
+
+- **Where the refined-request file must be saved**: The subagent saves it as `docs/reference/refined-request-<descriptive-name>.md` inside the active project root. The `<descriptive-name>` slug is a short, lowercase, hyphenated description derived from the request objective (e.g., `refined-request-oauth2-auth.md`). If the `docs/reference/` folder does not exist, the subagent creates it. The refined-request file is the authoritative specification for the request — never edit it during execution. If the scope changes mid-flight, re-run the refiner and produce a new (or updated) refined-request file rather than mutating an existing one silently.
+
+- **How the refined-request file must be passed to next steps**:
+  - Capture the absolute path returned by the request-refiner subagent and treat it as `REFINED_REQUEST_FILE` for the duration of the conversation.
+  - When invoking ANY downstream subagent (planner, designer, investigator, technical-researcher, codebase-scanner, coder, reviewer, dependency-validator, test-builder, integration-verifier, etc.), include the absolute path in the agent's instructions with a line such as: *"Read the refined request specification at `<REFINED_REQUEST_FILE>` to understand the full scope, requirements, and acceptance criteria."*
+  - When invoking a workflow slash command (`/team-workflow`, `/change-workflow`, `/doc-workflow`, etc.), do NOT pre-run the refiner — the workflow's Phase 1 produces its own refined-request file and tracks it as `REFINED_REQUEST_FILE` throughout the workflow's phases. Pass the raw request to the workflow.
+  - When invoking a skill (e.g. `taches-cc-resources:create-plans`, `huashu-design`, `presentation-maker:create-presentation`) that needs scope context, pass the `REFINED_REQUEST_FILE` path in the skill's context block so the skill consumes the refined specification rather than the raw request.
+  - When you create the project plan (`docs/design/plan-NNN-<description>.md`), reference the `REFINED_REQUEST_FILE` path at the top of the plan so the linkage between specification and plan is permanent.
+
+- **Explicit-skip rule**: If you decide a given request does NOT need refinement, state the reason briefly in your first response (e.g., "Skipping refinement — single-step read-only action.") so the user can override if they disagree.
+</request-refinement>
+
+<investigation-and-research>
+- **Immediately AFTER request refinement**, evaluate whether the request needs an Investigation phase, a Technical Research phase, or both, before proceeding to planning, design, or implementation. The goal is to surface the landscape of available options (investigation) and/or fill in deep technical knowledge gaps (research) BEFORE committing to a plan.
+
+- **Two distinct agents** — pick by purpose, not by domain:
+  - `investigator` (`~/.claude/agents/investigator.md`) — answers **"WHICH approach should we take?"** It surveys the landscape of available options/tools/libraries/patterns, compares them with a trade-off matrix, and produces a justified recommendation. Works for any domain (development, documentation, infrastructure, design, training, etc.). Tools: WebSearch, WebFetch, Context7, project file reading.
+  - `technical-researcher` (`~/.claude/agents/technical-researcher.md`) — answers **"HOW does X actually work?"** It produces deep technical documentation on a specific library, framework, API, SDK, or pattern that has already been chosen. Tools: WebSearch, WebFetch, Context7, mcp__fetch.
+  - The two agents are complementary: investigator decides WHICH to use, then technical-researcher digs deep on the chosen one when needed.
+
+- **When INVESTIGATION is required** (dispatch `investigator`):
+  - The refined request has more than one plausible approach, technology, library, tool, or pattern to satisfy it.
+  - A decision among external options materially affects scope, cost, complexity, or risk (e.g., "WebSockets vs SSE vs polling", "Auth0 vs Entra ID vs Keycloak", "Markdown vs Docusaurus vs MkDocs").
+  - The project has no established convention for this kind of work yet.
+  - The request explicitly asks to "investigate", "evaluate options", "compare", "recommend", or "research approaches".
+
+- **When TECHNICAL RESEARCH is required** (dispatch `technical-researcher` — one per topic, parallelizable):
+  - The investigation's "Technical Research Guidance" section flagged `Research needed: Yes` and lists one or more topics.
+  - The chosen technology is new to the project and the team needs implementation-level depth (APIs, configuration, error handling, edge cases, best practices) beyond what the investigation gathered.
+  - The request directly names a specific library/API/SDK and asks for usage guidance, integration patterns, or a "deep dive" — in this case, skip investigation and go straight to technical research.
+  - The investigation found conflicting or insufficient information about a critical implementation aspect.
+
+- **When BOTH are skipped** (proceed directly to planning):
+  - The refined request can be satisfied with a single, obvious approach already used in the project.
+  - The project's `CLAUDE.md`, `docs/design/project-design.md`, or an existing tool documentation already prescribes the approach.
+  - The work is a localized change (rename, bug fix, formatting, minor refactor) where the implementation strategy is self-evident.
+  - The request is a continuation of a previous workflow whose investigation/research artifacts are still valid and referenced in the current refined-request file.
+  - The request was dispatched via a workflow slash command (`/team-workflow`, `/change-workflow`, `/doc-workflow`, etc.) — those workflows run Phase 3a (Investigator) and conditional Phase 3b (Technical Researcher) internally; do NOT duplicate at the orchestrator level.
+
+- **How to perform investigation**: Dispatch the `investigator` subagent via the Agent tool. Pass it `REFINED_REQUEST_FILE` and, if available, the `CODEBASE_SCAN_FILE`. Do NOT attempt to write the investigation document by hand — the subagent owns the full template (Executive Summary, Context, Options Identified, Comparison Matrix, Recommendation, Technical Research Guidance, Implementation Considerations, References, Original Request) and the file-naming convention.
+
+- **How to perform technical research**: Dispatch one `technical-researcher` subagent **per topic** flagged in the investigation's "Technical Research Guidance" section (or per topic identified directly from the refined request when skipping investigation). If multiple topics are independent, launch them in parallel using `run_in_background: true`. Pass each agent the topic name, focus areas, depth level, and the `INVESTIGATION_FILE` path (when applicable) for context.
+
+- **Where the investigation file must be saved**: The `investigator` subagent saves it as `docs/reference/investigation-<descriptive-name>.md` inside the active project root. The `<descriptive-name>` slug is a short, lowercase, hyphenated description derived from the investigation topic (e.g., `investigation-real-time-notifications.md`). If `docs/reference/` does not exist, the subagent creates it. The file is the authoritative options-and-recommendation document — never edit it during execution; if new options surface later, re-run the investigator with an updated scope.
+
+- **Where the technical research files must be saved**: The `technical-researcher` subagent saves each topic to `docs/research/<topic-name>.md` inside the active project root. The `<topic-name>` slug is a short, lowercase, hyphenated description of the specific technology/library/pattern (e.g., `docs/research/langgraph-streaming.md`, `docs/research/jose-jwt-validation.md`). If `docs/research/` does not exist, the subagent creates it. Each research file stands on its own and includes sources, assumptions, uncertainties, and code examples.
+
+- **How investigation and research results must be passed to next steps**:
+  - Capture the investigation file path as `INVESTIGATION_FILE` for the duration of the conversation.
+  - Capture the list of technical research file paths as `TECHNICAL_RESEARCH_FILES` (a list — may have zero, one, or many entries).
+  - When invoking ANY downstream subagent (planner, designer, codebase-scanner, coder, reviewer, test-builder, integration-verifier, etc.), include the paths in the agent's instructions, e.g.:
+    - *"Read the refined request specification at `<REFINED_REQUEST_FILE>` for scope and acceptance criteria."*
+    - *"Read the investigation document at `<INVESTIGATION_FILE>` for the recommended approach and rationale."*
+    - *"If technical research was conducted, read the research documents at `<TECHNICAL_RESEARCH_FILES>` for deep technical details on the recommended approach."*
+  - When invoking a workflow slash command (`/team-workflow`, `/change-workflow`, `/doc-workflow`, etc.), do NOT pre-run investigation/research — the workflow's Phase 3a and Phase 3b produce their own `INVESTIGATION_FILE` and `TECHNICAL_RESEARCH_FILES` and thread them through subsequent phases. Pass the raw request to the workflow.
+  - When invoking a skill (e.g. `taches-cc-resources:create-plans`, `huashu-design`, `presentation-maker:create-presentation`) that needs approach context, pass both `INVESTIGATION_FILE` and `TECHNICAL_RESEARCH_FILES` paths in the skill's context block so the skill consumes the chosen approach and its technical depth rather than re-deciding it.
+  - When you create the project plan (`docs/design/plan-NNN-<description>.md`), reference `INVESTIGATION_FILE` and any `TECHNICAL_RESEARCH_FILES` at the top of the plan, alongside the `REFINED_REQUEST_FILE`, so the linkage between specification → recommendation → research → plan is permanent and auditable.
+  - When you update `docs/design/project-design.md`, the design decisions section must cite the relevant investigation and research files so future readers can trace any architectural choice back to its evidence.
+
+- **Explicit-skip rule**: If you decide a given request does NOT need investigation or research (or skip just one of the two), state the reason briefly in your first response (e.g., "Skipping investigation — single established approach already used in this project. Skipping technical research — no new technology introduced.") so the user can override if they disagree.
+</investigation-and-research>
+
+<codebase-scanning>
+- **Immediately AFTER investigation/research (or after refinement if both were skipped), and BEFORE planning/design**, evaluate whether the request requires Codebase Scanning. The scan answers two critical questions:
+  1. **Is the feature already implemented (fully or partially)?** — to avoid duplicate work and surface reusable code/tools.
+  2. **How does the current implementation fit the requested extension?** — to identify integration points, in-scope files, out-of-scope modules, and new landing locations the change must touch.
+
+- **Which agent to dispatch**: The `codebase-scanner` subagent (`~/.claude/agents/codebase-scanner.md`) via the Agent tool. It is read-only on the codebase, produces a structured markdown file with mandatory YAML frontmatter (language, framework, package_manager, build_command, test_command, lint_command, entry_points, last_scanned_commit, scanned_for_request, scanned_at), and — when given a refined-request file — narrows its output to a request-driven "Integration Points" section that classifies each candidate file as In-Scope, Out-of-Scope, or New Integration Point.
+
+- **When CODEBASE SCANNING is required** (dispatch `codebase-scanner`):
+  - The request involves coding, implementation, refactoring, or any modification of source files in an existing project (i.e., not a purely greenfield project).
+  - The request might extend, replace, or duplicate existing functionality — the scanner detects overlap before plan/design.
+  - The request mentions a feature area, module, or pattern but the user has not pointed you at specific files (the scanner does the localization for you).
+  - Multiple downstream subagents will run in parallel and need a shared, consistent view of the project's structure, conventions, build/test commands, and entry points (the YAML frontmatter prevents each agent from re-detecting these and disagreeing).
+  - You are about to extend a feature whose current implementation you have not yet read end-to-end — the scan's Integration Points section maps the surface area.
+
+- **When CODEBASE SCANNING is NOT required** (skip and proceed directly):
+  - The project is greenfield — no source files exist yet under the project root (excluding `node_modules/`, `.git/`, `docs/`). There is nothing to scan.
+  - The request is a pure read-only or exploratory question that has no implementation downstream.
+  - The user has already pointed you at the exact files, symbols, or line ranges to modify — the scope is fully localized, no surface-area discovery is needed.
+  - A recent codebase scan file already exists at `docs/reference/codebase-scan-<slug>.md`, its `last_scanned_commit` matches the current `HEAD`, AND its `scanned_for_request` matches the current `REFINED_REQUEST_FILE` slug — reuse it instead of re-scanning. Capture its path as `CODEBASE_SCAN_FILE` and continue.
+  - The request was dispatched via a workflow slash command (`/team-workflow`, `/change-workflow`, etc.) — those workflows run Phase 2 (Codebase Scanner) internally with the conditional "is it greenfield?" check; do NOT duplicate at the orchestrator level.
+  - The request is a documentation-only or design-only task with no source-code touch points.
+
+- **How to perform the scan**: Dispatch the `codebase-scanner` subagent via the Agent tool. Pass it:
+  - `request_file`: the `REFINED_REQUEST_FILE` path (so request-driven narrowing kicks in and the Integration Points section is populated).
+  - `output_path`: `docs/reference/codebase-scan-<descriptive-name>.md`, where `<descriptive-name>` is the same slug used for the refined-request and investigation files (e.g., `codebase-scan-oauth2-auth.md`). This keeps related artifacts visually grouped under `docs/reference/`.
+  Do NOT write the scan file by hand — the subagent owns the frontmatter schema, traversal limits (depth ≤ 4, ≤ 5 samples per large directory), `.gitignore` handling, and the 300–500 line output cap. Hand-written scans break downstream agents that parse the YAML keys.
+
+- **Where the codebase-scan file must be saved**: The scanner writes it to `docs/reference/codebase-scan-<descriptive-name>.md` inside the active project root. If `docs/reference/` does not exist, the subagent creates it. The file is overwritten on each scan (never merged) — the frontmatter's `last_scanned_commit` and `scanned_at` let callers detect staleness. The file is the single source of truth for the project's structural facts (build command, test command, conventions, entry points) during the workflow — downstream subagents must read it rather than re-detect these fields themselves.
+
+- **Pre-implementation duplication check** (mandatory when the scan runs):
+  - Before launching planner/designer/coder, read the scan's "Module Map" and "Integration Points" sections.
+  - If the requested feature appears to be **already implemented** (a module's purpose matches the request objective), STOP and surface this to the user via `AskUserQuestion`: confirm whether to (a) extend the existing implementation, (b) replace it, or (c) abandon the request as already-done.
+  - If the requested feature is **partially implemented**, the planner must scope the work as an extension of the existing module, NOT as a parallel implementation. Reference the existing file/symbol locations from the scan in the plan.
+  - If the scan flags a **New Integration Point**, the design must explain where the new module lands, how it interacts with the existing surface, and which conventions it adopts from the scan's "Conventions" section.
+
+- **How the codebase-scan results must be passed to next steps**:
+  - Capture the scan file path as `CODEBASE_SCAN_FILE` for the duration of the conversation.
+  - When invoking ANY downstream subagent (planner, designer, coder, reviewer, dependency-validator, test-builder, integration-verifier, etc.), include the path in the agent's instructions, e.g.:
+    - *"Read the codebase scan at `<CODEBASE_SCAN_FILE>` — use its YAML frontmatter for the project's build/test/lint commands and its Integration Points section for the in-scope/out-of-scope file boundaries. Do NOT re-detect these fields."*
+  - The planner must reference each In-Scope file from the scan in the plan's "Files to modify" section and must explicitly leave Out-of-Scope modules untouched.
+  - The designer must align new modules with the conventions documented in the scan's "Conventions" section (citing the same file:line evidence).
+  - The coder must use `mcp__serena__find_symbol` and `mcp__serena__replace_symbol_body` on the symbols identified in the scan, rather than blindly creating new files that duplicate existing ones.
+  - The test-builder must read the scan's frontmatter to detect the test framework instead of guessing.
+  - When invoking a workflow slash command (`/team-workflow`, `/change-workflow`, `/doc-workflow`, etc.), do NOT pre-run the codebase-scanner — the workflow's Phase 2 produces its own `CODEBASE_SCAN_FILE` (conditional on the project not being greenfield) and threads it through all subsequent phases. Pass the raw request to the workflow.
+  - When invoking a skill that consumes structural project facts (`create-plans`, `huashu-design`, etc.), pass `CODEBASE_SCAN_FILE` in the skill's context block.
+  - When you create the project plan (`docs/design/plan-NNN-<description>.md`), reference `CODEBASE_SCAN_FILE` at the top of the plan alongside `REFINED_REQUEST_FILE`, `INVESTIGATION_FILE`, and `TECHNICAL_RESEARCH_FILES` — the complete provenance chain (refined-request → investigation → research → scan → plan → design) must be permanent and auditable.
+  - When you update `docs/design/project-design.md`, cite the scan's Integration Points entries for any architectural change so future readers can trace why a specific module was chosen as the landing site.
+
+- **Staleness rule**: A scan is considered stale if `last_scanned_commit` differs from the current `HEAD` AND the diff touches files in the scan's "Module Map" or "Integration Points" sections. In that case, re-run the scanner before continuing — never proceed to planning with a stale scan, because the Integration Points may have shifted.
+
+- **Explicit-skip rule**: If you decide a given request does NOT need a codebase scan, state the reason briefly in your first response (e.g., "Skipping codebase scan — greenfield project, no source files exist yet." or "Skipping codebase scan — user pointed at exact file and line range; no surface-area discovery needed.") so the user can override if they disagree.
+</codebase-scanning>
+
 - Every time you want to create a test script, you must create it in the test_scripts folder. If the folder doesn't exist, you must make it.
 
 - All the plans must be kept under the docs/design folder inside the project's folder in separate files: Each plan file must be named according to the following pattern: plan-xxx-<indicative description>.md
@@ -80,11 +215,11 @@
 
 ## Project Tool Invocation
 
-- The project/tool name is `mic-tool-ts`.
-- The supported user-facing invocation is the direct OS command `mic-tool-ts` on the user's `PATH`.
+- The project/tool name is `untype`.
+- The supported user-facing invocation is the direct OS command `untype` on the user's `PATH`.
 - Do not document or recommend `node dist/index.js`, `tsx src/index.ts`, `pnpm run dev`, or package-manager scripts as the installed-tool invocation. Those are development conveniences only.
-- The per-user configuration folder is `~/.tool-agents/mic-tool-ts/`; the secrets file is `~/.tool-agents/mic-tool-ts/.env`.
+- The per-user configuration folder is `~/.tool-agents/untype/`; the secrets file is `~/.tool-agents/untype/.env`.
 
 ## Tools
 
-- `mic-tool-ts` — TypeScript CLI that captures macOS microphone audio, streams it to Soniox real-time STT, detects guard-phrase turn boundaries, and optionally refines closed turns through an LLM. Tool reference: `docs/tools/mic-tool-ts.md`.
+- `untype` — TypeScript CLI that captures macOS microphone audio, streams it to Soniox real-time STT, detects guard-phrase turn boundaries, and optionally refines closed turns through an LLM. Tool reference: `docs/tools/untype.md`.

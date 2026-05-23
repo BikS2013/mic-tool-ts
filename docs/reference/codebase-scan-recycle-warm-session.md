@@ -52,3 +52,7 @@ generated_at: 2026-05-21T04:38:44Z
 ## Duplication Check
 
 There is no existing warm-session recycle timer. The existing restart path for settings changes (`restartWarmSessionAfterStop`) can be reused so recycle does not need a parallel session-management implementation.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

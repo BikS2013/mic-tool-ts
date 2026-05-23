@@ -63,7 +63,7 @@ export function warnAboutExpiry(
 
   if (isoDate === undefined) {
     if (verbose) {
-      write(`[mic-tool-ts] ${envName}_EXPIRES_AT not set — expiry tracking disabled\n`);
+      write(`[untype] ${envName}_EXPIRES_AT not set — expiry tracking disabled\n`);
     }
     return;
   }
@@ -71,20 +71,20 @@ export function warnAboutExpiry(
   if (status.level === "expired") {
     const days = Math.abs(status.daysUntil);
     write(
-      `[mic-tool-ts] WARNING: ${envName} expired ${days} day${days === 1 ? "" : "s"} ago (${isoDate}). Renew at ${renewUrl}.\n`,
+      `[untype] WARNING: ${envName} expired ${days} day${days === 1 ? "" : "s"} ago (${isoDate}). Renew at ${renewUrl}.\n`,
     );
     return;
   }
   if (status.level === "soon") {
     write(
-      `[mic-tool-ts] WARNING: ${envName} expires in ${status.daysUntil} day${status.daysUntil === 1 ? "" : "s"} (${isoDate}). Plan a renewal.\n`,
+      `[untype] WARNING: ${envName} expires in ${status.daysUntil} day${status.daysUntil === 1 ? "" : "s"} (${isoDate}). Plan a renewal.\n`,
     );
     return;
   }
   // level === "ok"
   if (verbose) {
     write(
-      `[mic-tool-ts] ${envName} expires in ${status.daysUntil} days (${isoDate})\n`,
+      `[untype] ${envName} expires in ${status.daysUntil} days (${isoDate})\n`,
     );
   }
 }

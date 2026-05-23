@@ -303,3 +303,7 @@ No separate technical research is required before a first implementation if the 
 > So that the user understands that there is a recording and transcription in progress and can see the text as it is being recorded and transcribed.
 >
 > When I refer to the bottom of the screen, I mean a window at the bottom of the computer screen that will be independent from the user interface of the tool we currently have.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

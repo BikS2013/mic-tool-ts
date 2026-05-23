@@ -98,3 +98,7 @@ Runtime protocol settings are remembered across graceful restarts in `~/.tool-ag
 > I want you to propose an approach to that and prepare a proposal on how we could build this kind of communication protocol.
 >
 > Of course, I still want to use it as a dictation tool, so I won’t have the option of marking the end of a paragraph in order for the paragraph to be refined by an LLM.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

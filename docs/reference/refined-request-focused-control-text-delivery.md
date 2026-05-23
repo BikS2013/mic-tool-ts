@@ -75,3 +75,7 @@ Out of scope for this request:
 > Can you investigate if there is any other way that the copy text could deliver to the focused control instead of pasting? 
 > Even if that means we have to create a separate tool, even if this tool must be in other technology instead of TypeScript. 
 > Can you examine if it’s working to create a system tool to send text to the focused control on the active application and active window?
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

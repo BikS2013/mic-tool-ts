@@ -88,3 +88,7 @@ Out of scope:
 >   The design covers the components, deployment model, stdin/stdout JSON communication, permission behavior, privacy
 >   constraints, fallback ordering, packaging, and test strategy. I did not modify production source code or run the
 >   test suite because this was a documentation/design task.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

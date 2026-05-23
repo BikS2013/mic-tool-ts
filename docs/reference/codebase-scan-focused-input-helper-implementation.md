@@ -87,3 +87,7 @@ The feature is partially implemented but not duplicated:
 - Avoid a fallback from missing helper binary to the old `osascript` path because project configuration rules prohibit hidden fallback behavior. Missing helper should produce an explicit warning.
 - Build native helper with plain `swiftc` to avoid introducing Swift Package Manager files in the first implementation.
 - Do not echo transcript text in helper stderr/stdout or TypeScript error messages.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

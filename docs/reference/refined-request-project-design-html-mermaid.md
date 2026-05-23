@@ -55,3 +55,7 @@ None blocking.
 
 ## Original Request
 Θέλω να δημιουργήσεις μια έκδοση HTML του εγγράφου σχεδιασμού του έργου σε markdown. Θέλω να μετατρέψεις τα ASCII σχέδια και διαγράμματα από το έγγραφο markdown σε διαγράμματα και σχέδια Mermaid στην έκδοση HTML.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

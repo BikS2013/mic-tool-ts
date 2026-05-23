@@ -166,7 +166,7 @@ export class TranscriptionOverlayManager {
 
   private sendSnapshot(snapshot: OverlaySnapshot): void {
     if (this.window === null || this.window.isDestroyed()) return;
-    this.window.webContents.send("mic-tool-ts:overlay:snapshot", snapshot);
+    this.window.webContents.send("untype:overlay:snapshot", snapshot);
   }
 
   private scheduleHide(delayMs: number, actionVersion: number): void {

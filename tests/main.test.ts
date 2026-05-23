@@ -202,7 +202,7 @@ const GOOD_CONFIG: ResolvedConfig = Object.freeze({
 });
 
 /** Returns an argv array that the mocked resolveConfig will accept. */
-const GOOD_ARGV = ["node", "mic-tool-ts", "--api-key", "test-api-key"];
+const GOOD_ARGV = ["node", "untype", "--api-key", "test-api-key"];
 
 function setupGoodConfig(): void {
   resolveConfigImpl = () => GOOD_CONFIG;
@@ -426,7 +426,7 @@ describe("main() — happy path", () => {
 
     const stderrText = stderr.mock.calls.map((c) => String(c[0])).join("");
     expect(stderrText).toContain(
-      "[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.",
+      "[untype] Ready to listen. Press Control-C to stop the listening tool.",
     );
 
     fakeMic.audio.push(null);
@@ -444,7 +444,7 @@ describe("main() — config failures", () => {
   it("returns 0 on HelpOrVersionShown, never starts mic or transcriber", async () => {
     resolveConfigImpl = () => { throw new HelpOrVersionShown("help"); };
 
-    const code = await main(["node", "mic-tool-ts", "--help"]);
+    const code = await main(["node", "untype", "--help"]);
 
     expect(code).toBe(0);
     expect(fakeTranscriber.start).not.toHaveBeenCalled();
@@ -456,7 +456,7 @@ describe("main() — config failures", () => {
       throw new MissingConfigurationError("SONIOX_API_KEY is not set");
     };
 
-    const code = await main(["node", "mic-tool-ts"]);
+    const code = await main(["node", "untype"]);
 
     expect(code).toBe(2);
     expect(fakeTranscriber.start).not.toHaveBeenCalled();

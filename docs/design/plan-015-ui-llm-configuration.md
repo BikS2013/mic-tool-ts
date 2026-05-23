@@ -46,3 +46,7 @@ Expose the existing LLM provider and model/deployment configuration in the Elect
 - `pnpm test` passes.
 - `pnpm build` passes.
 - Packaged Electron UI bridge verification passes.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

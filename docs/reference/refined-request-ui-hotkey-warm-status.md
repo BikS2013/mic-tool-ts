@@ -58,3 +58,7 @@ None blocking.
 ## Original Request
 
 > can you fix it to show a correct indication ?
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

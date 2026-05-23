@@ -59,3 +59,7 @@ No separate UI-specific LLM configuration mechanism exists. The UI already has a
 - UI updates cross the preload bridge as partial `RendererSettings` patches and are validated in Electron main by `mergeRendererSettings()`.
 - Persisted UI state stores only non-secret user-editable values and excludes credential status, API keys, transcripts, and protocol payloads.
 - Session start builds explicit CLI-equivalent arguments from normalized renderer settings.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

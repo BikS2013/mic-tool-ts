@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>mic-tool-ts — Technical Design</title>
+  <title>untype — Technical Design</title>
   <style>
     /* Default styles provided by pandoc.
     ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -284,9 +284,9 @@
 <article class="document-shell">
 <p class="generated-note">Generated from <code>docs/design/project-design.md</code>. ASCII diagrams were converted to Mermaid for this HTML artifact.</p>
 <header id="title-block-header">
-<h1 class="title">mic-tool-ts — Technical Design</h1>
+<h1 class="title">untype — Technical Design</h1>
 </header>
-<h1 id="mic-tool-ts--technical-design">mic-tool-ts — Technical
+<h1 id="untype--technical-design">untype — Technical
 Design</h1>
 <p><strong>Document status</strong>: Authoritative implementation
 specification for v1. <strong>Audience</strong>: The engineer
@@ -297,7 +297,7 @@ the SDK research or investigation docs.</p>
 <hr />
 <h2 id="1-system-overview">1. System Overview</h2>
 <h3 id="elevator-summary">Elevator summary</h3>
-<p><code>mic-tool-ts</code> is a direct OS-command TypeScript CLI for
+<p><code>untype</code> is a direct OS-command TypeScript CLI for
 macOS that captures live microphone audio with a spawned
 <code>sox</code> process, streams it as <code>pcm_s16le</code> 16 kHz
 mono PCM through the <code>@soniox/node</code> v2 WebSocket SDK to
@@ -305,9 +305,9 @@ Soniox's <code>stt-rt-v4</code> real-time model, and renders the
 returned partial and final tokens to <code>stdout</code> in one of three
 modes (<code>overwrite</code>, <code>append</code>,
 <code>final-only</code>). The package name and installed command are
-both <code>mic-tool-ts</code>; the per-user configuration folder is
-<code>~/.tool-agents/mic-tool-ts/</code>; project-specific env vars use
-the <code>MIC_TOOL_TS_*</code> prefix. The tool has no hidden defaults
+both <code>untype</code>; the per-user configuration folder is
+<code>~/.tool-agents/untype/</code>; project-specific env vars use
+the <code>UNTYPE_*</code> prefix. The tool has no hidden defaults
 for required config: the Soniox API key is resolved deterministically
 through CLI flag &gt; local <code>.env</code> &gt; per-user tool
 <code>.env</code> &gt; shell env, and a missing key raises a typed
@@ -370,7 +370,7 @@ a frozen <code>ResolvedConfig</code>.</li>
 <code>ResolvedConfig</code> type.</li>
 <li><strong>Internal design</strong>:
 <ul>
-<li>The binary name is <code>mic-tool-ts</code>, and the installed
+<li>The binary name is <code>untype</code>, and the installed
 package exposes the same name in <code>package.json</code>
 <code>bin</code>.</li>
 <li>Commander definitions live inside <code>resolveConfig</code> (no
@@ -379,9 +379,9 @@ module-level side effects).</li>
 <code>--version</code> through <code>exitOverride()</code> and surfaces
 <code>HelpOrVersionShown</code>, so <code>main()</code> owns exit-code
 mapping.</li>
-<li><code>loadEnvChain({ toolName: "mic-tool-ts" })</code> reads
+<li><code>loadEnvChain({ toolName: "untype" })</code> reads
 <code>&lt;cwd&gt;/.env</code>,
-<code>~/.tool-agents/mic-tool-ts/.env</code>, and
+<code>~/.tool-agents/untype/.env</code>, and
 <code>process.env</code> without mutating <code>process.env</code>.</li>
 <li>All validation happens after argv parsing and env-chain
 construction, before constructing <code>ResolvedConfig</code>.</li>
@@ -776,7 +776,7 @@ source that yields a non-empty string wins</strong>:</p>
 <li>CLI flag.</li>
 <li><code>.env</code> file at
 <code>path.resolve(process.cwd(), ".env")</code>.</li>
-<li><code>~/.tool-agents/mic-tool-ts/.env</code>.</li>
+<li><code>~/.tool-agents/untype/.env</code>.</li>
 <li><code>process.env</code> (the shell environment).</li>
 </ol>
 <p><code>src/config/envChain.ts</code> owns the env-chain
@@ -789,8 +789,8 @@ and would make tests harder to isolate.</p>
 as absent values. Read or parse failures raise
 <code>InvalidConfigurationError</code> with the path in the message, so
 a malformed file is never silently ignored.</p>
-<p>The per-user config segment is fixed to <code>mic-tool-ts</code>; the
-runtime call is <code>loadEnvChain({ toolName: "mic-tool-ts" })</code>.
+<p>The per-user config segment is fixed to <code>untype</code>; the
+runtime call is <code>loadEnvChain({ toolName: "untype" })</code>.
 The tool reads the folder but does not auto-create it.</p>
 <h3 id="43-validation-rules-per-field">4.3 Validation rules (per
 field)</h3>
@@ -836,11 +836,11 @@ receive fallback defaults.</p>
 start</h3>
 <p>When <code>cfg.verbose === true</code>, the resolver and orchestrator
 write lifecycle diagnostics to stderr:</p>
-<pre><code>[mic-tool-ts] api key loaded from: &lt;flag|.env|user|env&gt;
-[mic-tool-ts] guard phrase: &lt;phrase&gt;
-[mic-tool-ts] transcription: model=&lt;v&gt;, endpoint=&lt;v&gt;, languages=[...], sample_rate=&lt;n&gt;, endpoint_detection=&lt;bool&gt;
-[mic-tool-ts] llm: enabled|disabled (provider=&lt;v&gt;, model=&lt;v&gt;)
-[mic-tool-ts] platform=darwin, node=&lt;version&gt;</code></pre>
+<pre><code>[untype] api key loaded from: &lt;flag|.env|user|env&gt;
+[untype] guard phrase: &lt;phrase&gt;
+[untype] transcription: model=&lt;v&gt;, endpoint=&lt;v&gt;, languages=[...], sample_rate=&lt;n&gt;, endpoint_detection=&lt;bool&gt;
+[untype] llm: enabled|disabled (provider=&lt;v&gt;, model=&lt;v&gt;)
+[untype] platform=darwin, node=&lt;version&gt;</code></pre>
 <p><strong>The key value is never logged. Only its source name
 (<code>flag</code>, <code>.env</code>, <code>user</code>,
 <code>env</code>) is logged.</strong></p>
@@ -921,7 +921,7 @@ class="sourceCode ts"><code class="sourceCode typescript"><span id="cb12-1"><a h
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (code <span class="op">===</span> <span class="dv">0</span> <span class="op">||</span> code <span class="op">===</span> <span class="kw">null</span>) <span class="cf">return</span><span class="op">;</span></span>
 <span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="ss">/permission</span><span class="sc">|</span><span class="ss">not authorized</span><span class="sc">|</span><span class="ss">coreaudio</span><span class="sc">|</span><span class="ss">input device/i</span><span class="op">.</span><span class="fu">test</span>(<span class="kw">this</span><span class="op">.</span><span class="at">stderrTail</span>)) {</span>
 <span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">this</span><span class="op">.</span><span class="fu">emit</span>(<span class="st">&quot;error&quot;</span><span class="op">,</span> <span class="kw">new</span> <span class="fu">MicPermissionDeniedError</span>(</span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Microphone access denied. Grant access in System Settings &gt; Privacy &amp; Security &gt; Microphone, then re-run mic-tool-ts.&quot;</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Microphone access denied. Grant access in System Settings &gt; Privacy &amp; Security &gt; Microphone, then re-run untype.&quot;</span></span>
 <span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    ))<span class="op">;</span></span>
 <span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>  } <span class="cf">else</span> {</span>
 <span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">this</span><span class="op">.</span><span class="fu">emit</span>(<span class="st">&quot;error&quot;</span><span class="op">,</span> <span class="kw">new</span> <span class="fu">MicToolError</span>(</span>
@@ -1029,7 +1029,7 @@ class="sourceCode ts"><code class="sourceCode typescript"><span id="cb17-1"><a h
 class="sourceCode ts"><code class="sourceCode typescript"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">pushAudio</span>(chunk<span class="op">:</span> <span class="bu">Buffer</span>)<span class="op">:</span> <span class="dt">void</span> {</span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="op">!</span><span class="kw">this</span><span class="op">.</span><span class="at">session</span> <span class="op">||</span> <span class="kw">this</span><span class="op">.</span><span class="at">session</span><span class="op">.</span><span class="at">state</span> <span class="op">!==</span> <span class="st">&quot;connected&quot;</span>) {</span>
 <span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="kw">this</span><span class="op">.</span><span class="at">cfg</span><span class="op">.</span><span class="at">verbose</span>) {</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>      <span class="bu">process</span><span class="op">.</span><span class="at">stderr</span><span class="op">.</span><span class="fu">write</span>(<span class="vs">`[mic-tool-ts] dropped </span><span class="sc">${</span>chunk<span class="op">.</span><span class="at">length</span><span class="sc">}</span><span class="vs"> audio bytes (session not connected)</span><span class="sc">\n</span><span class="vs">`</span>)<span class="op">;</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>      <span class="bu">process</span><span class="op">.</span><span class="at">stderr</span><span class="op">.</span><span class="fu">write</span>(<span class="vs">`[untype] dropped </span><span class="sc">${</span>chunk<span class="op">.</span><span class="at">length</span><span class="sc">}</span><span class="vs"> audio bytes (session not connected)</span><span class="sc">\n</span><span class="vs">`</span>)<span class="op">;</span></span>
 <span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    }</span>
 <span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span><span class="op">;</span></span>
 <span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>  }</span>
@@ -1221,7 +1221,7 @@ class="sourceCode ts"><code class="sourceCode typescript"><span id="cb25-1"><a h
 <span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="st">&quot;final-only&quot;</span><span class="op">:</span> <span class="cf">return</span> <span class="kw">new</span> <span class="fu">FinalOnlyRenderer</span>(stdout)<span class="op">;</span></span>
 <span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>This satisfies AC-12: piping <code>mic-tool-ts &gt; file.txt</code>
+<p>This satisfies AC-12: piping <code>untype &gt; file.txt</code>
 with the default mode produces a file containing only transcript text —
 no <code>\r</code> characters, no ANSI artifacts. Even if the user
 explicitly passes <code>--output-mode overwrite</code> while piping, the
@@ -1229,7 +1229,7 @@ downgrade still applies (no <code>\r</code> ever written to a
 non-TTY).</p>
 <p>If verbose mode is enabled and the downgrade triggers, the
 orchestrator logs once to stderr:</p>
-<pre><code>[mic-tool-ts] stdout is not a TTY: --output-mode overwrite downgraded to &#39;append&#39;.</code></pre>
+<pre><code>[untype] stdout is not a TTY: --output-mode overwrite downgraded to &#39;append&#39;.</code></pre>
 <h3 id="73-marker-filter-defence-in-depth">7.3 Marker filter
 (defence-in-depth)</h3>
 <p>Unit C already strips <code>&lt;end&gt;</code> and
@@ -1246,7 +1246,7 @@ path</h3>
 signal handlers are installed, and the mic audio stream is wired into
 the transcriber, <code>main()</code> writes this unconditional
 operational line to stderr:</p>
-<pre><code>[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.</code></pre>
+<pre><code>[untype] Ready to listen. Press Control-C to stop the listening tool.</code></pre>
 <p>The message intentionally goes to stderr so stdout remains
 transcript-only for shell redirection and pipelines.</p>
 <div class="sourceCode" id="cb28"><pre
@@ -1261,7 +1261,7 @@ class="sourceCode ts"><code class="sourceCode typescript"><span id="cb28-1"><a h
 <span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (shuttingDown) <span class="cf">return</span><span class="op">;</span></span>
 <span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>    shuttingDown <span class="op">=</span> <span class="kw">true</span><span class="op">;</span></span>
 <span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>    exitCode <span class="op">=</span> code<span class="op">;</span></span>
-<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (cfg<span class="op">?.</span><span class="at">verbose</span>) <span class="bu">process</span><span class="op">.</span><span class="at">stderr</span><span class="op">.</span><span class="fu">write</span>(<span class="st">&quot;[mic-tool-ts] shutting down...</span><span class="sc">\n</span><span class="st">&quot;</span>)<span class="op">;</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (cfg<span class="op">?.</span><span class="at">verbose</span>) <span class="bu">process</span><span class="op">.</span><span class="at">stderr</span><span class="op">.</span><span class="fu">write</span>(<span class="st">&quot;[untype] shutting down...</span><span class="sc">\n</span><span class="st">&quot;</span>)<span class="op">;</span></span>
 <span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span> { <span class="cf">await</span> mic<span class="op">?.</span><span class="fu">stop</span>()<span class="op">;</span> } <span class="cf">catch</span> { <span class="co">/* swallow */</span> }</span>
 <span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span> { <span class="cf">await</span> transcriber<span class="op">?.</span><span class="fu">stop</span>()<span class="op">;</span> } <span class="cf">catch</span> { <span class="co">/* swallow */</span> }</span>
 <span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span> { renderer<span class="op">?.</span><span class="fu">dispose</span>()<span class="op">;</span> } <span class="cf">catch</span> { <span class="co">/* swallow */</span> }</span>
@@ -1303,7 +1303,7 @@ class="sourceCode ts"><code class="sourceCode typescript"><span id="cb28-1"><a h
 <span id="cb28-51"><a href="#cb28-51" aria-hidden="true" tabindex="-1"></a>      <span class="kw">void</span> <span class="fu">shutdown</span>((err <span class="im">as</span> MicToolError)<span class="op">.</span><span class="at">exitCode</span> <span class="op">??</span> <span class="dv">1</span>)<span class="op">;</span></span>
 <span id="cb28-52"><a href="#cb28-52" aria-hidden="true" tabindex="-1"></a>    })<span class="op">;</span></span>
 <span id="cb28-53"><a href="#cb28-53" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-54"><a href="#cb28-54" aria-hidden="true" tabindex="-1"></a>    <span class="bu">process</span><span class="op">.</span><span class="at">stderr</span><span class="op">.</span><span class="fu">write</span>(<span class="st">&quot;[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.</span><span class="sc">\n</span><span class="st">&quot;</span>)<span class="op">;</span></span>
+<span id="cb28-54"><a href="#cb28-54" aria-hidden="true" tabindex="-1"></a>    <span class="bu">process</span><span class="op">.</span><span class="at">stderr</span><span class="op">.</span><span class="fu">write</span>(<span class="st">&quot;[untype] Ready to listen. Press Control-C to stop the listening tool.</span><span class="sc">\n</span><span class="st">&quot;</span>)<span class="op">;</span></span>
 <span id="cb28-55"><a href="#cb28-55" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb28-56"><a href="#cb28-56" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Wait for a shutdown trigger.</span></span>
 <span id="cb28-57"><a href="#cb28-57" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> <span class="kw">new</span> <span class="bu">Promise</span><span class="op">&lt;</span><span class="dt">void</span><span class="op">&gt;</span>((resolve) <span class="kw">=&gt;</span> {</span>
@@ -1478,7 +1478,7 @@ Diagram</h2>
 <td><code>config.ts</code></td>
 <td>argv parsing: every flag combination; four-tier precedence
 (<code>flag</code> &gt; <code>&lt;cwd&gt;/.env</code> &gt;
-<code>~/.tool-agents/mic-tool-ts/.env</code> &gt; shell env);
+<code>~/.tool-agents/untype/.env</code> &gt; shell env);
 missing-key error; invalid typed env values; help/version sentinel;
 whitespace-only values treated as absent.</td>
 </tr>
@@ -1524,11 +1524,11 @@ Integration tests (orchestrator end-to-end with stubs)</h3>
 an optional <code>'error'</code> event.</li>
 <li>Scenarios:
 <ul>
-<li>Missing-key path: <code>main(['node','mic-tool-ts'])</code> returns
+<li>Missing-key path: <code>main(['node','untype'])</code> returns
 2; stderr matches <code>MissingConfigurationError</code>.</li>
-<li>Help path: <code>main(['node','mic-tool-ts','--help'])</code> exits
+<li>Help path: <code>main(['node','untype','--help'])</code> exits
 0 (Commander); stdout lists all flags.</li>
-<li>Version path: <code>main(['node','mic-tool-ts','--version'])</code>
+<li>Version path: <code>main(['node','untype','--version'])</code>
 exits 0; stdout matches <code>package.json</code> version.</li>
 <li>Happy path: fake tokens flow → renderer captures expected
 lines.</li>
@@ -1885,7 +1885,7 @@ Configuration &amp; Four-Tier Env-Var Chain (added by plan-004)</h2>
 <pre class="mermaid"><code>flowchart TD
   flag[&quot;1. CLI flag&lt;br/&gt;(highest priority)&quot;]
   cwd[&quot;2. &amp;lt;cwd&amp;gt;/.env&quot;]
-  userenv[&quot;3. ~/.tool-agents/mic-tool-ts/.env&lt;br/&gt;(mode 0700 / 0600 — secrets)&quot;]
+  userenv[&quot;3. ~/.tool-agents/untype/.env&lt;br/&gt;(mode 0700 / 0600 — secrets)&quot;]
   procenv[&quot;4. process.env&lt;br/&gt;(lowest priority)&quot;]
 
   flag --&gt; cwd --&gt; userenv --&gt; procenv</code></pre>
@@ -1922,40 +1922,40 @@ schema</h3>
 </tr>
 <tr>
 <td><code>--model &lt;name&gt;</code></td>
-<td><code>MIC_TOOL_TS_MODEL</code></td>
+<td><code>UNTYPE_MODEL</code></td>
 <td><code>stt-rt-v4</code></td>
 <td>trim, non-empty</td>
 </tr>
 <tr>
 <td><code>--endpoint &lt;wss-url&gt;</code></td>
-<td><code>MIC_TOOL_TS_ENDPOINT</code></td>
+<td><code>UNTYPE_ENDPOINT</code></td>
 <td><code>wss://stt-rt.soniox.com/transcribe-websocket</code></td>
 <td><code>parseWsUrl</code> (must be <code>wss://</code> or
 <code>ws://</code>)</td>
 </tr>
 <tr>
 <td><code>--language &lt;code&gt;</code> (repeatable)</td>
-<td><code>MIC_TOOL_TS_LANGUAGES</code> (CSV)</td>
+<td><code>UNTYPE_LANGUAGES</code> (CSV)</td>
 <td><code>el,en</code></td>
 <td><code>validateLanguages</code> (ISO 639-1/2 OR sole
 <code>auto</code>)</td>
 </tr>
 <tr>
 <td><code>--sample-rate &lt;hz&gt;</code></td>
-<td><code>MIC_TOOL_TS_SAMPLE_RATE</code></td>
+<td><code>UNTYPE_SAMPLE_RATE</code></td>
 <td><code>16000</code></td>
 <td><code>parsePositiveInt</code>, range <code>[8000, 48000]</code></td>
 </tr>
 <tr>
 <td><code>--endpoint-detection</code> /
 <code>--no-endpoint-detection</code></td>
-<td><code>MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION</code></td>
+<td><code>UNTYPE_ENABLE_ENDPOINT_DETECTION</code></td>
 <td><code>true</code></td>
 <td><code>parseBoolean</code></td>
 </tr>
 <tr>
 <td><code>--output-mode &lt;mode&gt;</code></td>
-<td><code>MIC_TOOL_TS_OUTPUT_MODE</code></td>
+<td><code>UNTYPE_OUTPUT_MODE</code></td>
 <td><code>overwrite</code></td>
 <td>one of
 <code>overwrite</code>/<code>append</code>/<code>final-only</code>;
@@ -1963,37 +1963,37 @@ auto-downgrades to <code>append</code> when stdout is piped</td>
 </tr>
 <tr>
 <td><code>--guard-phrase &lt;phrase&gt;</code></td>
-<td><code>MIC_TOOL_TS_GUARD_PHRASE</code></td>
+<td><code>UNTYPE_GUARD_PHRASE</code></td>
 <td><code>τέλος εντολής</code></td>
 <td>trim, non-empty after <code>normalizeGuardPhrase</code></td>
 </tr>
 <tr>
 <td><code>--refine</code> / <code>--no-refine</code></td>
-<td><code>MIC_TOOL_TS_REFINE</code></td>
+<td><code>UNTYPE_REFINE</code></td>
 <td><code>true</code></td>
 <td><code>parseBoolean</code></td>
 </tr>
 <tr>
 <td><code>--llm-provider &lt;name&gt;</code></td>
-<td><code>MIC_TOOL_TS_LLM_PROVIDER</code></td>
+<td><code>UNTYPE_LLM_PROVIDER</code></td>
 <td><code>azure-openai</code></td>
 <td>one of the eight <code>LLM_PROVIDERS</code>; non-Azure stubbed</td>
 </tr>
 <tr>
 <td><code>--llm-model &lt;name&gt;</code></td>
-<td><code>MIC_TOOL_TS_LLM_MODEL</code></td>
+<td><code>UNTYPE_LLM_MODEL</code></td>
 <td><code>gpt-5.4</code></td>
 <td>trim, non-empty</td>
 </tr>
 <tr>
 <td><code>-v, --verbose</code></td>
-<td><code>MIC_TOOL_TS_VERBOSE</code></td>
+<td><code>UNTYPE_VERBOSE</code></td>
 <td><code>false</code></td>
 <td><code>parseBoolean</code></td>
 </tr>
 <tr>
 <td><code>--stt-provider &lt;name&gt;</code></td>
-<td><code>MIC_TOOL_TS_STT_PROVIDER</code></td>
+<td><code>UNTYPE_STT_PROVIDER</code></td>
 <td><code>soniox</code></td>
 <td><code>soniox</code> / <code>elevenlabs</code></td>
 </tr>
@@ -2121,10 +2121,10 @@ missing <em>required</em> value raises, never substitutes silently.</p>
 <p>When <code>--verbose</code> is set, the resolver emits (to stderr)
 one line per family:</p>
 <ul>
-<li><code>[mic-tool-ts] &lt;ACTIVE_API_KEY_ENV&gt; loaded from: &lt;flag|.env|user|env&gt;</code></li>
-<li><code>[mic-tool-ts] guard phrase: &lt;phrase&gt;</code></li>
-<li><code>[mic-tool-ts] transcription: provider=..., model=..., endpoint=..., languages=[...], sample_rate=..., endpoint_detection=...</code></li>
-<li><code>[mic-tool-ts] llm: enabled|disabled (provider=..., model=...)</code></li>
+<li><code>[untype] &lt;ACTIVE_API_KEY_ENV&gt; loaded from: &lt;flag|.env|user|env&gt;</code></li>
+<li><code>[untype] guard phrase: &lt;phrase&gt;</code></li>
+<li><code>[untype] transcription: provider=..., model=..., endpoint=..., languages=[...], sample_rate=..., endpoint_detection=...</code></li>
+<li><code>[untype] llm: enabled|disabled (provider=..., model=...)</code></li>
 </ul>
 <p>The API key value itself is NEVER logged.</p>
 <hr />
@@ -2143,7 +2143,7 @@ directly constructs a Soniox client.</p>
 <code>SONIOX_API_KEY</code>.</li>
 <li><code>elevenlabs</code> is opt-in through
 <code>--stt-provider elevenlabs</code> /
-<code>MIC_TOOL_TS_STT_PROVIDER=elevenlabs</code>.</li>
+<code>UNTYPE_STT_PROVIDER=elevenlabs</code>.</li>
 <li>When ElevenLabs is selected, <code>ELEVENLABS_API_KEY</code> or
 <code>--elevenlabs-api-key</code> is required and
 <code>SONIOX_API_KEY</code> is not required.</li>
@@ -2278,7 +2278,7 @@ A <code>.env</code> file with <code>SONIOX_API_KEY=   </code> is far
 more likely to be a copy-paste mistake than a deliberate blank
 value.</li>
 <li><strong>No auto-create of
-<code>~/.tool-agents/mic-tool-ts/</code>.</strong> The tool reads the
+<code>~/.tool-agents/untype/</code>.</strong> The tool reads the
 folder if it exists; creating it (with the required 0700 mode + a 0600
 <code>.env</code>) is a one-time user operation documented in the
 configuration guide, not a runtime side-effect.</li>
@@ -2295,20 +2295,20 @@ message.</strong> Reduces the back-and-forth of "where do I fix this"
 when an <code>.env</code> value is bad — the error names both
 knobs.</li>
 </ul>
-<h3 id="plan-005-project-rename-to-mic-tool-ts">Plan 005 (project rename
-to <code>mic-tool-ts</code>)</h3>
+<h3 id="plan-005-project-rename-to-untype">Plan 005 (project rename
+to <code>untype</code>)</h3>
 <ul>
 <li><strong>Package name, binary name, config folder, and log prefix all
-use <code>mic-tool-ts</code>.</strong> The rename is user-facing, so
+use <code>untype</code>.</strong> The rename is user-facing, so
 installation, help examples, diagnostics, and per-user secret storage
 must agree on one name.</li>
 <li><strong>Project-specific env vars use
-<code>MIC_TOOL_TS_*</code>.</strong> This keeps the config namespace
+<code>UNTYPE_*</code>.</strong> This keeps the config namespace
 aligned with the renamed command. Provider-canonical and vendor env vars
 (<code>SONIOX_*</code>, <code>AZURE_OPENAI_*</code>) retain their
 existing names.</li>
 <li><strong>Installed use is a direct OS command.</strong> User-facing
-docs and local agent instructions treat <code>mic-tool-ts</code> as the
+docs and local agent instructions treat <code>untype</code> as the
 supported invocation on <code>PATH</code>; <code>node</code>,
 <code>tsx</code>, and package-manager scripts remain development
 conveniences only.</li>
@@ -2339,7 +2339,7 @@ Protocol</h2>
 <h3 id="171-status">17.1 Status</h3>
 <p>Implemented 2026-05-16.</p>
 <h3 id="172-design-intent">17.2 Design intent</h3>
-<p><code>mic-tool-ts</code> supports oral communication with downstream
+<p><code>untype</code> supports oral communication with downstream
 agents without sacrificing its current dictation behavior. The
 implementation separates four concepts:</p>
 <ul>
@@ -2421,33 +2421,33 @@ protocol events to an explicit <code>--protocol-output</code> file.</li>
 </tr>
 <tr>
 <td><code>--command-phrase &lt;phrase&gt;</code></td>
-<td><code>MIC_TOOL_TS_COMMAND_PHRASE</code></td>
+<td><code>UNTYPE_COMMAND_PHRASE</code></td>
 <td><code>command</code></td>
 </tr>
 <tr>
 <td><code>--section-end-phrase &lt;phrase&gt;</code></td>
-<td><code>MIC_TOOL_TS_SECTION_END_PHRASE</code></td>
+<td><code>UNTYPE_SECTION_END_PHRASE</code></td>
 <td><code>command send</code></td>
 </tr>
 <tr>
 <td><code>--section-cancel-phrase &lt;phrase&gt;</code></td>
-<td><code>MIC_TOOL_TS_SECTION_CANCEL_PHRASE</code></td>
+<td><code>UNTYPE_SECTION_CANCEL_PHRASE</code></td>
 <td><code>command cancel</code></td>
 </tr>
 <tr>
 <td><code>--literal-next-phrase &lt;phrase&gt;</code></td>
-<td><code>MIC_TOOL_TS_LITERAL_NEXT_PHRASE</code></td>
+<td><code>UNTYPE_LITERAL_NEXT_PHRASE</code></td>
 <td><code>literal phrase</code></td>
 </tr>
 <tr>
 <td>`--refine-default &lt;on</td>
 <td>off&gt;`</td>
-<td><code>MIC_TOOL_TS_REFINE_DEFAULT</code></td>
+<td><code>UNTYPE_REFINE_DEFAULT</code></td>
 </tr>
 <tr>
 <td>`--translate-default &lt;on</td>
 <td>off&gt;`</td>
-<td><code>MIC_TOOL_TS_TRANSLATE_DEFAULT</code></td>
+<td><code>UNTYPE_TRANSLATE_DEFAULT</code></td>
 </tr>
 <tr>
 <td>`--translation-policy &lt;opposite</td>
@@ -2457,16 +2457,16 @@ protocol events to an explicit <code>--protocol-output</code> file.</li>
 <tr>
 <td>`--clipboard-default &lt;on</td>
 <td>off&gt;`</td>
-<td><code>MIC_TOOL_TS_CLIPBOARD_DEFAULT</code></td>
+<td><code>UNTYPE_CLIPBOARD_DEFAULT</code></td>
 </tr>
 <tr>
 <td>`--input-default &lt;on</td>
 <td>off&gt;`</td>
-<td><code>MIC_TOOL_TS_INPUT_DEFAULT</code></td>
+<td><code>UNTYPE_INPUT_DEFAULT</code></td>
 </tr>
 <tr>
 <td><code>--protocol-output &lt;path&gt;</code></td>
-<td><code>MIC_TOOL_TS_PROTOCOL_OUTPUT</code></td>
+<td><code>UNTYPE_PROTOCOL_OUTPUT</code></td>
 <td>required for <code>hybrid</code></td>
 </tr>
 </tbody>
@@ -2488,7 +2488,7 @@ monotonic <code>seq</code> values.</li>
 refiner/translator, clipboard sink, and protocol writer.</li>
 <li><code>src/protocol/settingsStore.ts</code> — persists and restores
 non-secret runtime protocol settings in
-<code>~/.tool-agents/mic-tool-ts/state.json</code>.</li>
+<code>~/.tool-agents/untype/state.json</code>.</li>
 </ul>
 <p>The orchestrator constructs <code>VoiceAgentProtocolController</code>
 and routes all finalized STT text through it. In
@@ -2509,14 +2509,14 @@ buffer contains unsent dictated text. The controller writes this event
 to the protocol writer in <code>agent-protocol</code> and
 <code>hybrid</code> modes. In human-facing modes, it renders a single
 status line such as:</p>
-<pre class="text"><code>[mic-tool-ts] status: refine=on, translate=off, clipboard=off, input=on, translation_policy=opposite, pending_section=yes</code></pre>
+<pre class="text"><code>[untype] status: refine=on, translate=off, clipboard=off, input=on, translation_policy=opposite, pending_section=yes</code></pre>
 <h3 id="178-focused-input-operator">17.8 Focused input operator</h3>
 <p><code>command input</code> enables the focused-input operator, and
 <code>command input off</code> disables it. When enabled, the final
 processed output for a submitted section is sent to the currently
 focused macOS input control after refinement and translation complete.
 The implemented delivery path invokes the bundled Swift helper at
-<code>dist/native/macos/mic-tool-ts-input-helper</code>, writes the
+<code>dist/native/macos/untype-input-helper</code>, writes the
 processed text to helper stdin, reads one JSON result from helper
 stdout, and maps helper failures into the existing fail-open protocol
 warning path.</p>
@@ -2526,8 +2526,8 @@ keyboard-event typing, then clipboard-preserving physical Command-V
 using virtual key code <code>9</code>. The user is responsible for
 focusing the target control before <code>command send</code> completes.
 macOS may require Accessibility permission for
-<code>mic-tool-ts-input-helper</code> and sometimes for the app that
-launched <code>mic-tool-ts</code>, such as Terminal, iTerm2, VS Code, or
+<code>untype-input-helper</code> and sometimes for the app that
+launched <code>untype</code>, such as Terminal, iTerm2, VS Code, or
 Cursor. Focused-input failures emit a non-fatal stderr warning plus a
 <code>protocol.warning</code> event in protocol modes, produce no
 <code>input.sent</code> event, and do not fail the process.</p>
@@ -2541,7 +2541,7 @@ visible.</p>
 settings</h3>
 <p>Runtime protocol settings are persisted separately from configuration
 and secrets. <code>src/protocol/settingsStore.ts</code> owns the state
-file at <code>~/.tool-agents/mic-tool-ts/state.json</code>:</p>
+file at <code>~/.tool-agents/untype/state.json</code>:</p>
 <div class="sourceCode" id="cb38"><pre
 class="sourceCode json"><code class="sourceCode json"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
 <span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;version&quot;</span><span class="fu">:</span> <span class="dv">1</span><span class="fu">,</span></span>
@@ -2608,9 +2608,9 @@ Preferred revised visual:
 <code>docs/design/plan-009-modern-macos-ui-visual.html</code>.
 Implementation research:
 <code>docs/reference/investigation-010-electron-ui-implementation.md</code>.</p>
-<p><code>mic-tool-ts ui</code> opens an Electron-based macOS UI for
+<p><code>untype ui</code> opens an Electron-based macOS UI for
 monitoring and controlling a live transcription session. The existing
-CLI invocation remains <code>mic-tool-ts</code>; the UI is an additional
+CLI invocation remains <code>untype</code>; the UI is an additional
 subcommand, not a replacement.</p>
 <p>The orchestration now lives in
 <code>src/core/sessionRunner.ts</code>. <code>src/main.ts</code> is a
@@ -2627,7 +2627,7 @@ native menu, session start/stop, configuration resolution, mic/STT
 lifecycle, secrets, protocol persistence, clipboard/input operations,
 and IPC. On UI load, Electron main resolves the same CLI configuration
 chain (<code>./.env</code> &gt;
-<code>~/.tool-agents/mic-tool-ts/.env</code> &gt; shell env) with
+<code>~/.tool-agents/untype/.env</code> &gt; shell env) with
 persisted non-secret UI settings applied as CLI-equivalent arguments
 before strict validation, applies persisted protocol settings, and sends
 only non-secret renderer settings across IPC. API-key values never cross
@@ -2657,7 +2657,7 @@ only once as editable controls; they do not repeat the same values in
 read-only summary lists, and the right inspector is limited to
 credential status and recent events instead of duplicating settings
 controls. Setting edits are sent through
-<code>mic-tool-ts:settings:update</code>; Electron main validates and
+<code>untype:settings:update</code>; Electron main validates and
 stores the typed settings, refreshes the active provider credential
 status from the config chain, and session start converts the current UI
 settings to explicit CLI-equivalent arguments before invoking the shared
@@ -2714,7 +2714,7 @@ preference <code>Command+'</code>; invalid accelerator text is rejected
 by shared settings validation instead of being replaced by a hidden
 fallback. <code>src/ui/settingsStore.ts</code> persists all non-secret
 user-editable UI settings to
-<code>~/.tool-agents/mic-tool-ts/ui-state.json</code> with file mode
+<code>~/.tool-agents/untype/ui-state.json</code> with file mode
 <code>0600</code> under the existing <code>0700</code> per-user tool
 folder. Persisted settings include provider, model, language hints,
 sample rate, endpoint detection, protocol mode, operator defaults,
@@ -2815,8 +2815,8 @@ Implementation plan:
 <code>docs/design/plan-014-focused-input-helper.md</code>. Focused
 design: <code>docs/design/focused-input-helper-design.md</code>.</p>
 <p>The focused-input helper is a bundled macOS user-level assistive
-binary named <code>mic-tool-ts-input-helper</code>. It is an internal
-component invoked by <code>mic-tool-ts</code>; it is not the primary
+binary named <code>untype-input-helper</code>. It is an internal
+component invoked by <code>untype</code>; it is not the primary
 user-facing command. The helper exists because there is no single
 universal macOS API for inserting arbitrary text into every active
 focused control. The chosen architecture is therefore ordered and
@@ -2835,24 +2835,24 @@ object from stdout, and maps failures into the existing
 as a command-line argument, echoed in diagnostics, or written to
 persistent helper files.</p>
 <p>The helper command surface is intentionally small:</p>
-<pre class="text"><code>mic-tool-ts-input-helper diagnose
-mic-tool-ts-input-helper send --method auto
-mic-tool-ts-input-helper send --method ax-value
-mic-tool-ts-input-helper send --method unicode-events
-mic-tool-ts-input-helper send --method paste-keycode</code></pre>
+<pre class="text"><code>untype-input-helper diagnose
+untype-input-helper send --method auto
+untype-input-helper send --method ax-value
+untype-input-helper send --method unicode-events
+untype-input-helper send --method paste-keycode</code></pre>
 <p><code>diagnose</code> is non-mutating and reports Accessibility trust
 plus focused-element capabilities. <code>send --method auto</code> reads
 stdin and runs the delivery cascade. A successful result returns JSON
 such as
 <code>{"ok":true,"method":"ax-value","target_role":"AXTextArea"}</code>.
 An actionable failure returns JSON such as
-<code>{"ok":false,"code":"accessibility_not_trusted","message":"Grant Accessibility permission to mic-tool-ts-input-helper."}</code>
+<code>{"ok":false,"code":"accessibility_not_trusted","message":"Grant Accessibility permission to untype-input-helper."}</code>
 and exits with code <code>2</code>. Unexpected helper failures exit with
 code <code>1</code>.</p>
 <p>Deployment is bundled rather than privileged. The build compiles
 <code>native/macos/input-helper/main.swift</code> with
 <code>swiftc</code> and copies the executable to
-<code>dist/native/macos/mic-tool-ts-input-helper</code>. No LaunchAgent,
+<code>dist/native/macos/untype-input-helper</code>. No LaunchAgent,
 root daemon, or global system installation is required. macOS
 Accessibility permission applies to the process that performs UI
 control, so users may need to approve the helper binary, the launching
@@ -2883,7 +2883,7 @@ configuration contract, and the model field maps to the existing
 provider-specific model/deployment setting. Both values are non-secret
 UI settings: they load from <code>SafeConfigSummary.llmProvider</code>
 and <code>SafeConfigSummary.llmModel</code>, persist to
-<code>~/.tool-agents/mic-tool-ts/ui-state.json</code>, and are sent to
+<code>~/.tool-agents/untype/ui-state.json</code>, and are sent to
 UI-started sessions as <code>--llm-provider</code> and
 <code>--llm-model</code>. When the UI provider is changed to
 <code>google</code>, the renderer switches the model field to the Google

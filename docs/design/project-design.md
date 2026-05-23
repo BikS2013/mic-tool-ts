@@ -1,4 +1,4 @@
-# mic-tool-ts — Technical Design
+# untype — Technical Design
 
 **Document status**: Authoritative implementation specification for v1.
 **Audience**: The engineer implementing Units A–E in Phase 5 of `plan-001-soniox-mic-cli.md`.
@@ -10,7 +10,7 @@
 
 ### Elevator summary
 
-`mic-tool-ts` is a direct OS-command TypeScript CLI for macOS that captures live microphone audio with a spawned `sox` process, streams it as `pcm_s16le` 16 kHz mono PCM through the `@soniox/node` v2 WebSocket SDK to Soniox's `stt-rt-v4` real-time model, and renders the returned partial and final tokens to `stdout` in one of three modes (`overwrite`, `append`, `final-only`). The package name and installed command are both `mic-tool-ts`; the per-user configuration folder is `~/.tool-agents/mic-tool-ts/`; project-specific env vars use the `MIC_TOOL_TS_*` prefix. The tool has no hidden defaults for required config: the Soniox API key is resolved deterministically through CLI flag > local `.env` > per-user tool `.env` > shell env, and a missing key raises a typed `MicToolError` subclass with a stable exit code. SIGINT triggers a bounded graceful shutdown that finalises pending partials, drains finals, and closes the WebSocket within 1.5 s.
+`untype` is a direct OS-command TypeScript CLI for macOS that captures live microphone audio with a spawned `sox` process, streams it as `pcm_s16le` 16 kHz mono PCM through the `@soniox/node` v2 WebSocket SDK to Soniox's `stt-rt-v4` real-time model, and renders the returned partial and final tokens to `stdout` in one of three modes (`overwrite`, `append`, `final-only`). The package name and installed command are both `untype`; the per-user configuration folder is `~/.tool-agents/untype/`; project-specific env vars use the `UNTYPE_*` prefix. The tool has no hidden defaults for required config: the Soniox API key is resolved deterministically through CLI flag > local `.env` > per-user tool `.env` > shell env, and a missing key raises a typed `MicToolError` subclass with a stable exit code. SIGINT triggers a bounded graceful shutdown that finalises pending partials, drains finals, and closes the WebSocket within 1.5 s.
 
 ### Data-flow diagram (audio path)
 
@@ -75,10 +75,10 @@ The codebase is partitioned into six modules. The first five map 1:1 to Phase 5'
 - **Purpose**: Parse `argv` via Commander; resolve configuration through the four-tier chain implemented in `src/config/envChain.ts`; validate every typed value; produce a frozen `ResolvedConfig`.
 - **Public interface**: `resolveConfig(argv: string[]): ResolvedConfig` and the `ResolvedConfig` type.
 - **Internal design**:
-  - The binary name is `mic-tool-ts`, and the installed package exposes the same name in `package.json` `bin`.
+  - The binary name is `untype`, and the installed package exposes the same name in `package.json` `bin`.
   - Commander definitions live inside `resolveConfig` (no module-level side effects).
   - The Commander program intercepts `--help` and `--version` through `exitOverride()` and surfaces `HelpOrVersionShown`, so `main()` owns exit-code mapping.
-  - `loadEnvChain({ toolName: "mic-tool-ts" })` reads `<cwd>/.env`, `~/.tool-agents/mic-tool-ts/.env`, and `process.env` without mutating `process.env`.
+  - `loadEnvChain({ toolName: "untype" })` reads `<cwd>/.env`, `~/.tool-agents/untype/.env`, and `process.env` without mutating `process.env`.
   - All validation happens after argv parsing and env-chain construction, before constructing `ResolvedConfig`.
   - `--verbose` log lines write to `stderr`; the key value itself is **never** logged.
 - **Error responsibilities**:
@@ -380,7 +380,7 @@ The chain is implemented in this exact order; the **first source that yields a n
 
 1. CLI flag.
 2. `.env` file at `path.resolve(process.cwd(), ".env")`.
-3. `~/.tool-agents/mic-tool-ts/.env`.
+3. `~/.tool-agents/untype/.env`.
 4. `process.env` (the shell environment).
 
 `src/config/envChain.ts` owns the env-chain implementation. It parses `.env` files into an internal map and never calls `process.loadEnvFile()`, because mutating `process.env` would make precedence dependent on host state and would make tests harder to isolate.
@@ -389,7 +389,7 @@ The chain is implemented in this exact order; the **first source that yields a n
 
 Both `.env` files are optional. Missing files are treated as absent values. Read or parse failures raise `InvalidConfigurationError` with the path in the message, so a malformed file is never silently ignored.
 
-The per-user config segment is fixed to `mic-tool-ts`; the runtime call is `loadEnvChain({ toolName: "mic-tool-ts" })`. The tool reads the folder but does not auto-create it.
+The per-user config segment is fixed to `untype`; the runtime call is `loadEnvChain({ toolName: "untype" })`. The tool reads the folder but does not auto-create it.
 
 ### 4.3 Validation rules (per field)
 
@@ -407,11 +407,11 @@ Defaults are explicit constants in `src/config.ts` and are applied only when the
 When `cfg.verbose === true`, the resolver and orchestrator write lifecycle diagnostics to stderr:
 
 ```
-[mic-tool-ts] api key loaded from: <flag|.env|user|env>
-[mic-tool-ts] guard phrase: <phrase>
-[mic-tool-ts] transcription: model=<v>, endpoint=<v>, languages=[...], sample_rate=<n>, endpoint_detection=<bool>
-[mic-tool-ts] llm: enabled|disabled (provider=<v>, model=<v>)
-[mic-tool-ts] platform=darwin, node=<version>
+[untype] api key loaded from: <flag|.env|user|env>
+[untype] guard phrase: <phrase>
+[untype] transcription: model=<v>, endpoint=<v>, languages=[...], sample_rate=<n>, endpoint_detection=<bool>
+[untype] llm: enabled|disabled (provider=<v>, model=<v>)
+[untype] platform=darwin, node=<version>
 ```
 
 **The key value is never logged. Only its source name (`flag`, `.env`, `user`, `env`) is logged.**
@@ -500,7 +500,7 @@ this.child.once("exit", (code, signal) => {
   if (code === 0 || code === null) return;
   if (/permission|not authorized|coreaudio|input device/i.test(this.stderrTail)) {
     this.emit("error", new MicPermissionDeniedError(
-      "Microphone access denied. Grant access in System Settings > Privacy & Security > Microphone, then re-run mic-tool-ts."
+      "Microphone access denied. Grant access in System Settings > Privacy & Security > Microphone, then re-run untype."
     ));
   } else {
     this.emit("error", new MicToolError(
@@ -624,7 +624,7 @@ async start(callbacks: TranscriberCallbacks): Promise<void> {
 pushAudio(chunk: Buffer): void {
   if (!this.session || this.session.state !== "connected") {
     if (this.cfg.verbose) {
-      process.stderr.write(`[mic-tool-ts] dropped ${chunk.length} audio bytes (session not connected)\n`);
+      process.stderr.write(`[untype] dropped ${chunk.length} audio bytes (session not connected)\n`);
     }
     return;
   }
@@ -810,12 +810,12 @@ export function createRenderer(mode: OutputMode, stdout: NodeJS.WriteStream): Re
 }
 ```
 
-This satisfies AC-12: piping `mic-tool-ts > file.txt` with the default mode produces a file containing only transcript text — no `\r` characters, no ANSI artifacts. Even if the user explicitly passes `--output-mode overwrite` while piping, the downgrade still applies (no `\r` ever written to a non-TTY).
+This satisfies AC-12: piping `untype > file.txt` with the default mode produces a file containing only transcript text — no `\r` characters, no ANSI artifacts. Even if the user explicitly passes `--output-mode overwrite` while piping, the downgrade still applies (no `\r` ever written to a non-TTY).
 
 If verbose mode is enabled and the downgrade triggers, the orchestrator logs once to stderr:
 
 ```
-[mic-tool-ts] stdout is not a TTY: --output-mode overwrite downgraded to 'append'.
+[untype] stdout is not a TTY: --output-mode overwrite downgraded to 'append'.
 ```
 
 ### 7.3 Marker filter (defence-in-depth)
@@ -831,7 +831,7 @@ Unit C already strips `<end>` and `<fin>` before they reach the renderer. The re
 Once the Soniox session is connected, the mic source has started, signal handlers are installed, and the mic audio stream is wired into the transcriber, `main()` writes this unconditional operational line to stderr:
 
 ```
-[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.
+[untype] Ready to listen. Press Control-C to stop the listening tool.
 ```
 
 The message intentionally goes to stderr so stdout remains transcript-only for shell redirection and pipelines.
@@ -848,7 +848,7 @@ export async function main(argv: string[]): Promise<number> {
     if (shuttingDown) return;
     shuttingDown = true;
     exitCode = code;
-    if (cfg?.verbose) process.stderr.write("[mic-tool-ts] shutting down...\n");
+    if (cfg?.verbose) process.stderr.write("[untype] shutting down...\n");
     try { await mic?.stop(); } catch { /* swallow */ }
     try { await transcriber?.stop(); } catch { /* swallow */ }
     try { renderer?.dispose(); } catch { /* swallow */ }
@@ -890,7 +890,7 @@ export async function main(argv: string[]): Promise<number> {
       void shutdown((err as MicToolError).exitCode ?? 1);
     });
 
-    process.stderr.write("[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.\n");
+    process.stderr.write("[untype] Ready to listen. Press Control-C to stop the listening tool.\n");
 
     // Wait for a shutdown trigger.
     await new Promise<void>((resolve) => {
@@ -1030,7 +1030,7 @@ t=T+0.4  index.ts: process.exit(0)
 
 | Unit | Seams to exercise |
 |---|---|
-| `config.ts` | argv parsing: every flag combination; four-tier precedence (`flag` > `<cwd>/.env` > `~/.tool-agents/mic-tool-ts/.env` > shell env); missing-key error; invalid typed env values; help/version sentinel; whitespace-only values treated as absent. |
+| `config.ts` | argv parsing: every flag combination; four-tier precedence (`flag` > `<cwd>/.env` > `~/.tool-agents/untype/.env` > shell env); missing-key error; invalid typed env values; help/version sentinel; whitespace-only values treated as absent. |
 | `soxMicSource.ts` | Mock `child_process.spawn` (return a stub `ChildProcess` with controllable streams + events). Cases: ENOENT on spawn → `MicNotAvailableError`; non-zero exit with `coreaudio` in stderr → `MicPermissionDeniedError`; clean exit during stop → resolves; SIGTERM-then-SIGKILL fallback. |
 | `client.ts` | Mock `@soniox/node` module via `vi.mock`. Cases: `connect()` throws `AuthError` → wrapper throws `SonioxAuthError`; pre-connect `'error'` event → mapped & thrown; mid-stream `'error'` → forwarded via `onError`; marker tokens dropped; partial → final promotion; `stop()` timeout path triggers `session.close()`. |
 | `renderer.ts` | Drive each renderer with a canned token sequence and a stub `WriteStream` that captures all writes; assert exact byte output. Cases: overwrite padding with shrinking text; wrapped overwrite rows are cleared before repaint; TTY downgrade (`isTTY: false`); `dispose()` clears overwrite line; append/final-only never emit `\r`. |
@@ -1040,9 +1040,9 @@ t=T+0.4  index.ts: process.exit(0)
 - Use a `FakeMicSource` that implements `MicSource` and emits a canned PCM `Buffer` on `audio` after `start()` resolves.
 - Use a fake Soniox session (either via `vi.mock('@soniox/node')` or by injecting a `Transcriber` factory) that emits canned token sequences and an optional `'error'` event.
 - Scenarios:
-  - Missing-key path: `main(['node','mic-tool-ts'])` returns 2; stderr matches `MissingConfigurationError`.
-  - Help path: `main(['node','mic-tool-ts','--help'])` exits 0 (Commander); stdout lists all flags.
-  - Version path: `main(['node','mic-tool-ts','--version'])` exits 0; stdout matches `package.json` version.
+  - Missing-key path: `main(['node','untype'])` returns 2; stderr matches `MissingConfigurationError`.
+  - Help path: `main(['node','untype','--help'])` exits 0 (Commander); stdout lists all flags.
+  - Version path: `main(['node','untype','--version'])` exits 0; stdout matches `package.json` version.
   - Happy path: fake tokens flow → renderer captures expected lines.
   - SIGINT simulation: `process.emit('SIGINT')` mid-stream → assert `mic.stop` then `transcriber.stop` then `renderer.dispose` invoked in order; return value 0.
   - Auth error: fake transcriber throws `SonioxAuthError` from `start()` → return value 4.
@@ -1221,7 +1221,7 @@ All five sub-codes are runtime-only (non-fatal). The orchestrator logs them unde
 | 2. <cwd>/.env        |
 +----------------------+
 | 3. ~/.tool-agents/   |
-|    mic-tool-ts/.env     |   (mode 0700 / 0600 — secrets)
+|    untype/.env     |   (mode 0700 / 0600 — secrets)
 +----------------------+
 | 4. process.env       |
 +----------------------+   lowest priority
@@ -1235,18 +1235,18 @@ Implementation: `src/config/envChain.ts` exports `loadEnvChain({ toolName })` wh
 |-------------------------------------|----------------------------------------|------------------------------------------------------|--------------------|
 | `--api-key <value>`                 | `SONIOX_API_KEY`                       | _required_ (no fallback; throws `MissingConfigurationError`, exit 2) | trim, non-empty |
 | `--api-key-expires-at <YYYY-MM-DD>` | `SONIOX_API_KEY_EXPIRES_AT`            | _unset_                                              | `parseIsoDate` (round-trips via `Date.UTC`) |
-| `--model <name>`                    | `MIC_TOOL_TS_MODEL`                       | `stt-rt-v4`                                          | trim, non-empty |
-| `--endpoint <wss-url>`              | `MIC_TOOL_TS_ENDPOINT`                    | `wss://stt-rt.soniox.com/transcribe-websocket`       | `parseWsUrl` (must be `wss://` or `ws://`) |
-| `--language <code>` (repeatable)    | `MIC_TOOL_TS_LANGUAGES` (CSV)             | `el,en`                                              | `validateLanguages` (ISO 639-1/2 OR sole `auto`) |
-| `--sample-rate <hz>`                | `MIC_TOOL_TS_SAMPLE_RATE`                 | `16000`                                              | `parsePositiveInt`, range `[8000, 48000]` |
-| `--endpoint-detection` / `--no-endpoint-detection` | `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION`   | `true`                                               | `parseBoolean` |
-| `--output-mode <mode>`              | `MIC_TOOL_TS_OUTPUT_MODE`                 | `overwrite`                                          | one of `overwrite`/`append`/`final-only`; auto-downgrades to `append` when stdout is piped |
-| `--guard-phrase <phrase>`           | `MIC_TOOL_TS_GUARD_PHRASE`                | `τέλος εντολής`                                      | trim, non-empty after `normalizeGuardPhrase` |
-| `--refine` / `--no-refine`          | `MIC_TOOL_TS_REFINE`                      | `true`                                               | `parseBoolean` |
-| `--llm-provider <name>`             | `MIC_TOOL_TS_LLM_PROVIDER`                | `azure-openai`                                       | one of the eight `LLM_PROVIDERS`; non-Azure stubbed |
-| `--llm-model <name>`                | `MIC_TOOL_TS_LLM_MODEL`                   | `gpt-5.4`                                            | trim, non-empty |
-| `-v, --verbose`                     | `MIC_TOOL_TS_VERBOSE`                     | `false`                                              | `parseBoolean` |
-| `--stt-provider <name>`             | `MIC_TOOL_TS_STT_PROVIDER`                | `soniox`                                             | `soniox` / `elevenlabs` |
+| `--model <name>`                    | `UNTYPE_MODEL`                       | `stt-rt-v4`                                          | trim, non-empty |
+| `--endpoint <wss-url>`              | `UNTYPE_ENDPOINT`                    | `wss://stt-rt.soniox.com/transcribe-websocket`       | `parseWsUrl` (must be `wss://` or `ws://`) |
+| `--language <code>` (repeatable)    | `UNTYPE_LANGUAGES` (CSV)             | `el,en`                                              | `validateLanguages` (ISO 639-1/2 OR sole `auto`) |
+| `--sample-rate <hz>`                | `UNTYPE_SAMPLE_RATE`                 | `16000`                                              | `parsePositiveInt`, range `[8000, 48000]` |
+| `--endpoint-detection` / `--no-endpoint-detection` | `UNTYPE_ENABLE_ENDPOINT_DETECTION`   | `true`                                               | `parseBoolean` |
+| `--output-mode <mode>`              | `UNTYPE_OUTPUT_MODE`                 | `overwrite`                                          | one of `overwrite`/`append`/`final-only`; auto-downgrades to `append` when stdout is piped |
+| `--guard-phrase <phrase>`           | `UNTYPE_GUARD_PHRASE`                | `τέλος εντολής`                                      | trim, non-empty after `normalizeGuardPhrase` |
+| `--refine` / `--no-refine`          | `UNTYPE_REFINE`                      | `true`                                               | `parseBoolean` |
+| `--llm-provider <name>`             | `UNTYPE_LLM_PROVIDER`                | `azure-openai`                                       | one of the eight `LLM_PROVIDERS`; non-Azure stubbed |
+| `--llm-model <name>`                | `UNTYPE_LLM_MODEL`                   | `gpt-5.4`                                            | trim, non-empty |
+| `-v, --verbose`                     | `UNTYPE_VERBOSE`                     | `false`                                              | `parseBoolean` |
+| `--stt-provider <name>`             | `UNTYPE_STT_PROVIDER`                | `soniox`                                             | `soniox` / `elevenlabs` |
 | `--elevenlabs-api-key <value>`      | `ELEVENLABS_API_KEY`                      | required when provider is `elevenlabs`               | trim, non-empty |
 | `--elevenlabs-api-key-expires-at <YYYY-MM-DD>` | `ELEVENLABS_API_KEY_EXPIRES_AT` | _unset_                                              | `parseIsoDate` |
 
@@ -1286,10 +1286,10 @@ Defaults are declared as module-level constants near the top of `src/config.ts` 
 
 ### 14.7 Verbose diagnostics
 When `--verbose` is set, the resolver emits (to stderr) one line per family:
-- `[mic-tool-ts] <ACTIVE_API_KEY_ENV> loaded from: <flag|.env|user|env>`
-- `[mic-tool-ts] guard phrase: <phrase>`
-- `[mic-tool-ts] transcription: provider=..., model=..., endpoint=..., languages=[...], sample_rate=..., endpoint_detection=...`
-- `[mic-tool-ts] llm: enabled|disabled (provider=..., model=...)`
+- `[untype] <ACTIVE_API_KEY_ENV> loaded from: <flag|.env|user|env>`
+- `[untype] guard phrase: <phrase>`
+- `[untype] transcription: provider=..., model=..., endpoint=..., languages=[...], sample_rate=..., endpoint_detection=...`
+- `[untype] llm: enabled|disabled (provider=..., model=...)`
 
 The API key value itself is NEVER logged.
 
@@ -1302,7 +1302,7 @@ The API key value itself is NEVER logged.
 
 ### 15.2 Configuration behavior
 - `soniox` remains the default provider and continues using `SONIOX_API_KEY`.
-- `elevenlabs` is opt-in through `--stt-provider elevenlabs` / `MIC_TOOL_TS_STT_PROVIDER=elevenlabs`.
+- `elevenlabs` is opt-in through `--stt-provider elevenlabs` / `UNTYPE_STT_PROVIDER=elevenlabs`.
 - When ElevenLabs is selected, `ELEVENLABS_API_KEY` or `--elevenlabs-api-key` is required and `SONIOX_API_KEY` is not required.
 - Provider defaults are applied before validation: Soniox uses `stt-rt-v4`, the Soniox realtime endpoint, and `el,en`; ElevenLabs uses `scribe_v2_realtime`, `wss://api.elevenlabs.io/v1/speech-to-text/realtime`, and `auto`.
 - ElevenLabs accepts `auto` or one explicit language code because its realtime API exposes a single `language_code` option, not multiple language hints.
@@ -1343,15 +1343,15 @@ When endpoint detection is enabled, the client uses ElevenLabs VAD commit strate
 - **Four tiers, with `<cwd>/.env` beating `~/.tool-agents/.../.env` beating shell env.** Project-local config takes precedence so per-project overrides don't require touching shared user files; the per-user `~/.tool-agents/<tool>/.env` is the canonical secrets store, mandated by the project's tool conventions.
 - **Never mutate `process.env`.** Tests stay isolated and precedence is deterministic — the alternative (`process.loadEnvFile()`) would silently refuse to overwrite an existing shell var, inverting the desired priority.
 - **Whitespace-only env values are treated as missing.** A `.env` file with `SONIOX_API_KEY=   ` is far more likely to be a copy-paste mistake than a deliberate blank value.
-- **No auto-create of `~/.tool-agents/mic-tool-ts/`.** The tool reads the folder if it exists; creating it (with the required 0700 mode + a 0600 `.env`) is a one-time user operation documented in the configuration guide, not a runtime side-effect.
+- **No auto-create of `~/.tool-agents/untype/`.** The tool reads the folder if it exists; creating it (with the required 0700 mode + a 0600 `.env`) is a one-time user operation documented in the configuration guide, not a runtime side-effect.
 - **Sample rate parameterized everywhere (sox argv + Soniox session).** A single config value drives both, so they can never drift; validated `[8000, 48000]` to match the realistic envelope of the Soniox real-time model.
 - **Operational expiry tracking, not enforcement.** The tool warns at 14 days and at zero, but always tries to run. Hard-failing on a stale ISO date would punish users for the failure mode "I forgot to update the reminder, not the key."
 - **Both flag and env-var name in every parser error message.** Reduces the back-and-forth of "where do I fix this" when an `.env` value is bad — the error names both knobs.
 
-### Plan 005 (project rename to `mic-tool-ts`)
-- **Package name, binary name, config folder, and log prefix all use `mic-tool-ts`.** The rename is user-facing, so installation, help examples, diagnostics, and per-user secret storage must agree on one name.
-- **Project-specific env vars use `MIC_TOOL_TS_*`.** This keeps the config namespace aligned with the renamed command. Provider-canonical and vendor env vars (`SONIOX_*`, `AZURE_OPENAI_*`) retain their existing names.
-- **Installed use is a direct OS command.** User-facing docs and local agent instructions treat `mic-tool-ts` as the supported invocation on `PATH`; `node`, `tsx`, and package-manager scripts remain development conveniences only.
+### Plan 005 (project rename to `untype`)
+- **Package name, binary name, config folder, and log prefix all use `untype`.** The rename is user-facing, so installation, help examples, diagnostics, and per-user secret storage must agree on one name.
+- **Project-specific env vars use `UNTYPE_*`.** This keeps the config namespace aligned with the renamed command. Provider-canonical and vendor env vars (`SONIOX_*`, `AZURE_OPENAI_*`) retain their existing names.
+- **Installed use is a direct OS command.** User-facing docs and local agent instructions treat `untype` as the supported invocation on `PATH`; `node`, `tsx`, and package-manager scripts remain development conveniences only.
 
 ### Plan 006 (ElevenLabs transcription provider)
 - **Soniox remains default.** Existing users keep their current command and config behavior unless they explicitly select ElevenLabs.
@@ -1367,7 +1367,7 @@ When endpoint detection is enabled, the client uses ElevenLabs VAD commit strate
 Implemented 2026-05-16.
 
 ### 17.2 Design intent
-`mic-tool-ts` supports oral communication with downstream agents without sacrificing its current dictation behavior. The implementation separates four concepts:
+`untype` supports oral communication with downstream agents without sacrificing its current dictation behavior. The implementation separates four concepts:
 
 - Dictation text: continuous plain transcript.
 - Text section: the paragraph or section accumulated until `command send`.
@@ -1408,17 +1408,17 @@ Configuration keys:
 
 | CLI flag | Env var | Default |
 |----------|---------|---------|
-| `--interaction-mode <dictation|agent-protocol|hybrid>` | `MIC_TOOL_TS_INTERACTION_MODE` | `dictation` |
-| `--command-phrase <phrase>` | `MIC_TOOL_TS_COMMAND_PHRASE` | `command` |
-| `--section-end-phrase <phrase>` | `MIC_TOOL_TS_SECTION_END_PHRASE` | `command send` |
-| `--section-cancel-phrase <phrase>` | `MIC_TOOL_TS_SECTION_CANCEL_PHRASE` | `command cancel` |
-| `--literal-next-phrase <phrase>` | `MIC_TOOL_TS_LITERAL_NEXT_PHRASE` | `literal phrase` |
-| `--refine-default <on|off>` | `MIC_TOOL_TS_REFINE_DEFAULT` | `off` |
-| `--translate-default <on|off>` | `MIC_TOOL_TS_TRANSLATE_DEFAULT` | `off` |
-| `--translation-policy <opposite|to-en|to-el>` | `MIC_TOOL_TS_TRANSLATION_POLICY` | `opposite` |
-| `--clipboard-default <on|off>` | `MIC_TOOL_TS_CLIPBOARD_DEFAULT` | `off` |
-| `--input-default <on|off>` | `MIC_TOOL_TS_INPUT_DEFAULT` | `off` |
-| `--protocol-output <path>` | `MIC_TOOL_TS_PROTOCOL_OUTPUT` | required for `hybrid` |
+| `--interaction-mode <dictation|agent-protocol|hybrid>` | `UNTYPE_INTERACTION_MODE` | `dictation` |
+| `--command-phrase <phrase>` | `UNTYPE_COMMAND_PHRASE` | `command` |
+| `--section-end-phrase <phrase>` | `UNTYPE_SECTION_END_PHRASE` | `command send` |
+| `--section-cancel-phrase <phrase>` | `UNTYPE_SECTION_CANCEL_PHRASE` | `command cancel` |
+| `--literal-next-phrase <phrase>` | `UNTYPE_LITERAL_NEXT_PHRASE` | `literal phrase` |
+| `--refine-default <on|off>` | `UNTYPE_REFINE_DEFAULT` | `off` |
+| `--translate-default <on|off>` | `UNTYPE_TRANSLATE_DEFAULT` | `off` |
+| `--translation-policy <opposite|to-en|to-el>` | `UNTYPE_TRANSLATION_POLICY` | `opposite` |
+| `--clipboard-default <on|off>` | `UNTYPE_CLIPBOARD_DEFAULT` | `off` |
+| `--input-default <on|off>` | `UNTYPE_INPUT_DEFAULT` | `off` |
+| `--protocol-output <path>` | `UNTYPE_PROTOCOL_OUTPUT` | required for `hybrid` |
 
 ### 17.6 Implemented module layout
 - `src/protocol/types.ts` — event types, interaction modes, operator state, marker config.
@@ -1426,7 +1426,7 @@ Configuration keys:
 - `src/protocol/stateMachine.ts` — section capture, state command parsing, `command status` report, `command send` submit, `command cancel` discard, shutdown cancellation, and protocol settings snapshots.
 - `src/protocol/jsonlWriter.ts` — JSONL protocol sink with monotonic `seq` values.
 - `src/protocol/controller.ts` — connects renderer, refiner/translator, clipboard sink, and protocol writer.
-- `src/protocol/settingsStore.ts` — persists and restores non-secret runtime protocol settings in `~/.tool-agents/mic-tool-ts/state.json`.
+- `src/protocol/settingsStore.ts` — persists and restores non-secret runtime protocol settings in `~/.tool-agents/untype/state.json`.
 
 The orchestrator constructs `VoiceAgentProtocolController` and routes all finalized STT text through it. In `agent-protocol` mode, partial text and human transcript output are suppressed on stdout; only JSONL protocol events are written there. In `dictation` and `hybrid`, cleaned visible transcript text is still rendered through `StdoutRenderer`.
 
@@ -1435,20 +1435,20 @@ The orchestrator constructs `VoiceAgentProtocolController` and routes all finali
 `command status` is parsed through the same `command` marker as operator toggles, but it is not an operator and does not mutate state. The state machine emits `status.reported` with the current `refine`, `translate`, `clipboard`, and `input` booleans, the active `translation_policy`, and `pending_section` indicating whether the current section buffer contains unsent dictated text. The controller writes this event to the protocol writer in `agent-protocol` and `hybrid` modes. In human-facing modes, it renders a single status line such as:
 
 ```text
-[mic-tool-ts] status: refine=on, translate=off, clipboard=off, input=on, translation_policy=opposite, pending_section=yes
+[untype] status: refine=on, translate=off, clipboard=off, input=on, translation_policy=opposite, pending_section=yes
 ```
 
 ### 17.8 Focused input operator
 
-`command input` enables the focused-input operator, and `command input off` disables it. When enabled, the final processed output for a submitted section is sent to the currently focused macOS input control after refinement and translation complete. The implemented delivery path invokes the bundled Swift helper at `dist/native/macos/mic-tool-ts-input-helper`, writes the processed text to helper stdin, reads one JSON result from helper stdout, and maps helper failures into the existing fail-open protocol warning path.
+`command input` enables the focused-input operator, and `command input off` disables it. When enabled, the final processed output for a submitted section is sent to the currently focused macOS input control after refinement and translation complete. The implemented delivery path invokes the bundled Swift helper at `dist/native/macos/untype-input-helper`, writes the processed text to helper stdin, reads one JSON result from helper stdout, and maps helper failures into the existing fail-open protocol warning path.
 
-The helper's default `auto` method tries direct Accessibility insertion into the focused element first, then Unicode keyboard-event typing, then clipboard-preserving physical Command-V using virtual key code `9`. The user is responsible for focusing the target control before `command send` completes. macOS may require Accessibility permission for `mic-tool-ts-input-helper` and sometimes for the app that launched `mic-tool-ts`, such as Terminal, iTerm2, VS Code, or Cursor. Focused-input failures emit a non-fatal stderr warning plus a `protocol.warning` event in protocol modes, produce no `input.sent` event, and do not fail the process.
+The helper's default `auto` method tries direct Accessibility insertion into the focused element first, then Unicode keyboard-event typing, then clipboard-preserving physical Command-V using virtual key code `9`. The user is responsible for focusing the target control before `command send` completes. macOS may require Accessibility permission for `untype-input-helper` and sometimes for the app that launched `untype`, such as Terminal, iTerm2, VS Code, or Cursor. Focused-input failures emit a non-fatal stderr warning plus a `protocol.warning` event in protocol modes, produce no `input.sent` event, and do not fail the process.
 
 The previous `pbcopy` plus System Events path remains documented only as historical context. The current runtime does not silently fall back to it if the helper is missing; a missing or non-executable helper produces an explicit `helper_unavailable` warning so packaging defects are visible.
 
 ### 17.9 Remembered protocol settings
 
-Runtime protocol settings are persisted separately from configuration and secrets. `src/protocol/settingsStore.ts` owns the state file at `~/.tool-agents/mic-tool-ts/state.json`:
+Runtime protocol settings are persisted separately from configuration and secrets. `src/protocol/settingsStore.ts` owns the state file at `~/.tool-agents/untype/state.json`:
 
 ```json
 {
@@ -1487,15 +1487,15 @@ These do not block the design but should be revisited during Phase 5:
 
 Status: implemented 2026-05-16; runtime configuration fix documented in `docs/design/request-017-ui-runtime-configuration-transcription.md`. Implementation plan: `docs/design/plan-008-electron-ui-command.md`. Modern visual review: `docs/design/plan-009-modern-macos-ui-review.md`. Preferred revised visual: `docs/design/plan-009-modern-macos-ui-visual.html`. Implementation research: `docs/reference/investigation-010-electron-ui-implementation.md`.
 
-`mic-tool-ts ui` opens an Electron-based macOS UI for monitoring and controlling a live transcription session. The existing CLI invocation remains `mic-tool-ts`; the UI is an additional subcommand, not a replacement.
+`untype ui` opens an Electron-based macOS UI for monitoring and controlling a live transcription session. The existing CLI invocation remains `untype`; the UI is an additional subcommand, not a replacement.
 
 The orchestration now lives in `src/core/sessionRunner.ts`. `src/main.ts` is a compatibility wrapper for CLI mode, while `src/ui/electronMain.ts` runs the same session runner with UI event sinks. CLI mode continues to use `StdoutRenderer` and stderr diagnostics. UI mode uses `UiRenderer`, `SessionEvent` objects, and a preload-backed IPC bridge so human transcript text, partials, finals, readiness messages, warnings, and protocol status render inside the Electron window instead of stdout.
 
-The Electron main process owns the app lifecycle, window creation, native menu, session start/stop, configuration resolution, mic/STT lifecycle, secrets, protocol persistence, clipboard/input operations, and IPC. On UI load, Electron main resolves the same CLI configuration chain (`./.env` > `~/.tool-agents/mic-tool-ts/.env` > shell env) with persisted non-secret UI settings applied as CLI-equivalent arguments before strict validation, applies persisted protocol settings, and sends only non-secret renderer settings across IPC. API-key values never cross the preload boundary; the renderer receives only the active key name, configured/missing status, expiry reminder, and source tier such as `local .env`, `user .env`, or `shell env`. If strict startup config fails because LLM provider secrets are missing, the UI still shows the resolved STT configuration and credential status while reporting the blocking error. If the active STT API key itself is missing, the UI reports the typed configuration error and does not show a false-ready state.
+The Electron main process owns the app lifecycle, window creation, native menu, session start/stop, configuration resolution, mic/STT lifecycle, secrets, protocol persistence, clipboard/input operations, and IPC. On UI load, Electron main resolves the same CLI configuration chain (`./.env` > `~/.tool-agents/untype/.env` > shell env) with persisted non-secret UI settings applied as CLI-equivalent arguments before strict validation, applies persisted protocol settings, and sends only non-secret renderer settings across IPC. API-key values never cross the preload boundary; the renderer receives only the active key name, configured/missing status, expiry reminder, and source tier such as `local .env`, `user .env`, or `shell env`. If strict startup config fails because LLM provider secrets are missing, the UI still shows the resolved STT configuration and credential status while reporting the blocking error. If the active STT API key itself is missing, the UI reports the typed configuration error and does not show a false-ready state.
 
 The renderer loads local packaged files from `dist/ui/renderer/`, has no Node.js integration, uses context isolation and sandboxing, and communicates only through the narrow `window.micToolTs` preload API. The preload bridge is compiled as CommonJS (`src/ui/preload.cts` → `dist/ui/preload.cjs`) because the sandboxed preload environment cannot use ESM imports. If the bridge is unavailable, the renderer shows a visible `Bridge unavailable` error instead of falling back to fake demo behavior.
 
-The renderer exposes real form controls and switch buttons for provider, model, language hints, sample rate, endpoint detection, protocol mode, refine/translate/clipboard/focused-input defaults, translation policy, LLM enablement, LLM provider, and LLM model/deployment. The Settings and Protocol views present those controls only once as editable controls; they do not repeat the same values in read-only summary lists, and the right inspector is limited to credential status and recent events instead of duplicating settings controls. The center segmented control is limited to transcript and event monitoring; Protocol remains reachable through the sidebar and toolbar shortcut so the top control does not duplicate sidebar navigation. Setting edits are sent through `mic-tool-ts:settings:update`; Electron main validates and stores the typed settings, refreshes the active provider credential status from the config chain, and session start converts the current UI settings to explicit CLI-equivalent arguments before invoking the shared session runner. This keeps the normal resolver, env-chain precedence, and missing-required-config errors in force while allowing UI choices to override env settings for that UI-started session. The production renderer clears demo seed data when the preload bridge is available so dictated text is displayed only from live `transcript.partial`, `transcript.final`, and `transcript.refined` events.
+The renderer exposes real form controls and switch buttons for provider, model, language hints, sample rate, endpoint detection, protocol mode, refine/translate/clipboard/focused-input defaults, translation policy, LLM enablement, LLM provider, and LLM model/deployment. The Settings and Protocol views present those controls only once as editable controls; they do not repeat the same values in read-only summary lists, and the right inspector is limited to credential status and recent events instead of duplicating settings controls. The center segmented control is limited to transcript and event monitoring; Protocol remains reachable through the sidebar and toolbar shortcut so the top control does not duplicate sidebar navigation. Setting edits are sent through `untype:settings:update`; Electron main validates and stores the typed settings, refreshes the active provider credential status from the config chain, and session start converts the current UI settings to explicit CLI-equivalent arguments before invoking the shared session runner. This keeps the normal resolver, env-chain precedence, and missing-required-config errors in force while allowing UI choices to override env settings for that UI-started session. The production renderer clears demo seed data when the preload bridge is available so dictated text is displayed only from live `transcript.partial`, `transcript.final`, and `transcript.refined` events.
 
 The transcript timeline uses a renderer-local grouped turn model. `transcript.final` events append dictated text into the current raw text bubble, `transcript.turnBoundary` seals that group, and later `transcript.refined` events append processed-output bubbles to the latest group so refinement and translation stay visually attached to the turn that produced them. The clear transcript control resets only this renderer-local transcript state and live partial text; it does not stop the active session or modify protocol/operator settings. This behavior is specified by `docs/reference/refined-request-ui-transcript-bubbles-clear.md`, mapped in `docs/reference/codebase-scan-ui-transcript-bubbles-clear.md`, and implemented through `docs/design/plan-017-ui-transcript-bubbles-clear.md`.
 
@@ -1507,7 +1507,7 @@ The renderer implements the Plan 009 visual direction: a stable transcript conte
 
 Status: implemented 2026-05-20, extended for system-wide activation on 2026-05-20, updated to the `Command+'` default on 2026-05-20, extended with persisted UI settings on 2026-05-20, updated with warmed push-to-talk capture on 2026-05-20, and updated to the `Control+\`` default on 2026-05-21. Original refined request: `docs/reference/refined-request-ui-push-to-talk-hotkey.md`. System-wide refinement: `docs/reference/refined-request-system-wide-command-backtick-hotkey.md`. Command-apostrophe refinement: `docs/reference/refined-request-command-apostrophe-hotkey.md`. Persistence refinements: `docs/reference/refined-request-persist-push-to-talk-setting.md` and `docs/reference/refined-request-persist-all-ui-settings.md`. Warmed capture refinement: `docs/reference/refined-request-warm-push-to-talk.md`. Investigation: `docs/reference/investigation-system-wide-command-backtick-hotkey.md`. Codebase scans: `docs/reference/codebase-scan-system-wide-command-backtick-hotkey.md`, `docs/reference/codebase-scan-command-apostrophe-hotkey.md`, `docs/reference/codebase-scan-persist-push-to-talk-setting.md`, and `docs/reference/codebase-scan-persist-all-ui-settings.md`. Implementation plans: `docs/design/plan-010-ui-push-to-talk-hotkey.md`, `docs/design/plan-011-system-wide-command-backtick-hotkey.md`, `docs/design/plan-012-command-apostrophe-hotkey.md`, and `docs/design/plan-016-warm-push-to-talk.md`.
 
-The UI settings surface includes a push-to-talk enable switch and an editable accelerator string. The default accelerator is the explicit UI preference `Control+\``; invalid accelerator text is rejected by shared settings validation instead of being replaced by a hidden fallback. `src/ui/settingsStore.ts` persists all non-secret user-editable UI settings to `~/.tool-agents/mic-tool-ts/ui-state.json` with file mode `0600` under the existing `0700` per-user tool folder. Persisted settings include provider, model, language hints, sample rate, endpoint detection, protocol mode, operator defaults, translation policy, LLM enablement, push-to-talk enabled state, and the normalized hotkey accelerator. The persisted file does not contain API-key values, transcript text, protocol events, processed output, or derived credential status. `src/ui/runtimeSettings.ts` restores UI state during startup and recomputes credential status from the current env/config chain, and Electron main saves UI state whenever renderer settings are updated. Malformed or invalid persisted UI state is reported as `InvalidConfigurationError` rather than ignored. The parser accepts backquote aliases such as `Grave` and `Backquote`, and the system-wide native hook maps that key to `uiohook-napi`'s `Backquote` key code.
+The UI settings surface includes a push-to-talk enable switch and an editable accelerator string. The default accelerator is the explicit UI preference `Control+\``; invalid accelerator text is rejected by shared settings validation instead of being replaced by a hidden fallback. `src/ui/settingsStore.ts` persists all non-secret user-editable UI settings to `~/.tool-agents/untype/ui-state.json` with file mode `0600` under the existing `0700` per-user tool folder. Persisted settings include provider, model, language hints, sample rate, endpoint detection, protocol mode, operator defaults, translation policy, LLM enablement, push-to-talk enabled state, and the normalized hotkey accelerator. The persisted file does not contain API-key values, transcript text, protocol events, processed output, or derived credential status. `src/ui/runtimeSettings.ts` restores UI state during startup and recomputes credential status from the current env/config chain, and Electron main saves UI state whenever renderer settings are updated. Malformed or invalid persisted UI state is reported as `InvalidConfigurationError` rather than ignored. The parser accepts backquote aliases such as `Grave` and `Backquote`, and the system-wide native hook maps that key to `uiohook-napi`'s `Backquote` key code.
 
 The implementation combines Electron `globalShortcut` with `uiohook-napi`. `globalShortcut` reserves the configured accelerator for the press path so the foreground application does not receive `Control+\`` and beep. `uiohook-napi` remains responsible for system-wide key release because Electron does not expose a release event for registered global shortcuts. `src/ui/globalHotkeyManager.ts` dynamically loads the native hook module, registers the Electron global shortcut, listens for native global `keydown` and `keyup`, and matches those events against the current UI accelerator. Electron main owns session start/stop callbacks. Focused-window handling through `webContents.before-input-event` and the renderer fallback remain available if the native hook cannot start. Repeated keydown events while the key is held are ignored. Keyup stops only the hotkey-owned session. If macOS blocks the native release hook, the registered global shortcut remains active and falls back to press-to-toggle with a visible warning. Manual Start/Stop remains independent.
 
@@ -1535,23 +1535,23 @@ The active content view is a bounded grid area. Settings and protocol forms keep
 
 Status: implemented 2026-05-20. Refined requests: `docs/reference/refined-request-focused-input-helper-plan-design.md` and `docs/reference/refined-request-focused-input-helper-implementation.md`. Codebase scan: `docs/reference/codebase-scan-focused-input-helper-implementation.md`. Prior investigation: `docs/reference/investigation-focused-control-text-delivery.md`. Implementation plan: `docs/design/plan-014-focused-input-helper.md`. Focused design: `docs/design/focused-input-helper-design.md`.
 
-The focused-input helper is a bundled macOS user-level assistive binary named `mic-tool-ts-input-helper`. It is an internal component invoked by `mic-tool-ts`; it is not the primary user-facing command. The helper exists because there is no single universal macOS API for inserting arbitrary text into every active focused control. The chosen architecture is therefore ordered and fallback-capable: first try direct Accessibility insertion into the focused element, then try Unicode keyboard-event typing, then use clipboard-preserving physical key-code paste as the broad compatibility fallback.
+The focused-input helper is a bundled macOS user-level assistive binary named `untype-input-helper`. It is an internal component invoked by `untype`; it is not the primary user-facing command. The helper exists because there is no single universal macOS API for inserting arbitrary text into every active focused control. The chosen architecture is therefore ordered and fallback-capable: first try direct Accessibility insertion into the focused element, then try Unicode keyboard-event typing, then use clipboard-preserving physical key-code paste as the broad compatibility fallback.
 
 The TypeScript process remains the orchestrator. `VoiceAgentProtocolController` keeps ownership of the `input` operator and calls a focused-input adapter after section processing completes. The adapter locates the bundled helper under `dist/native/macos/`, spawns it as a short-lived child process, writes processed text to stdin, reads one structured JSON object from stdout, and maps failures into the existing `protocol.warning` path. Transcript text must never be passed as a command-line argument, echoed in diagnostics, or written to persistent helper files.
 
 The helper command surface is intentionally small:
 
 ```text
-mic-tool-ts-input-helper diagnose
-mic-tool-ts-input-helper send --method auto
-mic-tool-ts-input-helper send --method ax-value
-mic-tool-ts-input-helper send --method unicode-events
-mic-tool-ts-input-helper send --method paste-keycode
+untype-input-helper diagnose
+untype-input-helper send --method auto
+untype-input-helper send --method ax-value
+untype-input-helper send --method unicode-events
+untype-input-helper send --method paste-keycode
 ```
 
-`diagnose` is non-mutating and reports Accessibility trust plus focused-element capabilities. `send --method auto` reads stdin and runs the delivery cascade. A successful result returns JSON such as `{"ok":true,"method":"ax-value","target_role":"AXTextArea"}`. An actionable failure returns JSON such as `{"ok":false,"code":"accessibility_not_trusted","message":"Grant Accessibility permission to mic-tool-ts-input-helper."}` and exits with code `2`. Unexpected helper failures exit with code `1`.
+`diagnose` is non-mutating and reports Accessibility trust plus focused-element capabilities. `send --method auto` reads stdin and runs the delivery cascade. A successful result returns JSON such as `{"ok":true,"method":"ax-value","target_role":"AXTextArea"}`. An actionable failure returns JSON such as `{"ok":false,"code":"accessibility_not_trusted","message":"Grant Accessibility permission to untype-input-helper."}` and exits with code `2`. Unexpected helper failures exit with code `1`.
 
-Deployment is bundled rather than privileged. The build compiles `native/macos/input-helper/main.swift` with `swiftc` and copies the executable to `dist/native/macos/mic-tool-ts-input-helper`. No LaunchAgent, root daemon, or global system installation is required. macOS Accessibility permission applies to the process that performs UI control, so users may need to approve the helper binary, the launching terminal/app, or both depending on how macOS presents the permission request.
+Deployment is bundled rather than privileged. The build compiles `native/macos/input-helper/main.swift` with `swiftc` and copies the executable to `dist/native/macos/untype-input-helper`. No LaunchAgent, root daemon, or global system installation is required. macOS Accessibility permission applies to the process that performs UI control, so users may need to approve the helper binary, the launching terminal/app, or both depending on how macOS presents the permission request.
 
 Manual compatibility testing is part of the design, not an optional polish step. The implementation must record behavior for TextEdit, Notes, Terminal/iTerm2, Safari and Chrome textareas, Google Docs or another contenteditable web editor, VS Code, Cursor, and a chat app such as Slack or Discord, using English, Greek, mixed-language, punctuation-heavy, multiline, and long text payloads. Direct Accessibility insertion is expected to work only for some controls; paste remains the universal fallback.
 
@@ -1561,7 +1561,7 @@ Manual compatibility testing is part of the design, not an optional polish step.
 
 Status: implemented 2026-05-20. Refined requests: `docs/reference/refined-request-ui-llm-configuration.md` and `docs/reference/refined-request-google-llm-provider-ui.md`. Codebase scans: `docs/reference/codebase-scan-ui-llm-configuration.md` and `docs/reference/codebase-scan-google-llm-provider-ui.md`. Implementation plan: `docs/design/plan-015-ui-llm-configuration.md`.
 
-The Electron UI Protocol view exposes `LLM engine`, `LLM provider`, and `LLM model` controls. The provider selector mirrors the existing `LLM_PROVIDERS` configuration contract, and the model field maps to the existing provider-specific model/deployment setting. Both values are non-secret UI settings: they load from `SafeConfigSummary.llmProvider` and `SafeConfigSummary.llmModel`, persist to `~/.tool-agents/mic-tool-ts/ui-state.json`, and are sent to UI-started sessions as `--llm-provider` and `--llm-model`. When the UI provider is changed to `google`, the renderer switches the model field to the Google default `gemini-3.5-flash`.
+The Electron UI Protocol view exposes `LLM engine`, `LLM provider`, and `LLM model` controls. The provider selector mirrors the existing `LLM_PROVIDERS` configuration contract, and the model field maps to the existing provider-specific model/deployment setting. Both values are non-secret UI settings: they load from `SafeConfigSummary.llmProvider` and `SafeConfigSummary.llmModel`, persist to `~/.tool-agents/untype/ui-state.json`, and are sent to UI-started sessions as `--llm-provider` and `--llm-model`. When the UI provider is changed to `google`, the renderer switches the model field to the Google default `gemini-3.5-flash`.
 
 The UI does not collect LLM API keys or provider endpoints. Those remain in the normal configuration chain, and session startup keeps the existing typed failure behavior for missing Azure OpenAI credentials, missing `GOOGLE_API_KEY`, or currently unimplemented provider adapters. Older UI state files that predate the LLM provider/model controls remain readable and receive the current default `azure-openai` / `gpt-5.4` values during normalization.
 
@@ -1571,7 +1571,7 @@ The UI does not collect LLM API keys or provider endpoints. Those remain in the 
 
 Status: implemented 2026-05-21. Refined request: `docs/reference/refined-request-hotkey-transcription-overlay.md`. Investigation: `docs/reference/investigation-hotkey-transcription-overlay.md`. Codebase scan: `docs/reference/codebase-scan-hotkey-transcription-overlay.md`. Implementation plan: `docs/design/plan-020-hotkey-transcription-overlay.md`.
 
-The UI push-to-talk path now owns a separate display-only Electron overlay window for active hotkey capture. `src/ui/transcriptionOverlay.ts` manages the second `BrowserWindow`, and `src/ui/transcriptionOverlayState.ts` owns the pure reducer for event-to-overlay state transitions. The overlay loads local packaged renderer content from `dist/ui/renderer/overlay.html`, uses the existing sandboxed CommonJS preload bridge, has no Node integration, and receives only one-way overlay snapshots through `mic-tool-ts:overlay:snapshot`.
+The UI push-to-talk path now owns a separate display-only Electron overlay window for active hotkey capture. `src/ui/transcriptionOverlay.ts` manages the second `BrowserWindow`, and `src/ui/transcriptionOverlayState.ts` owns the pure reducer for event-to-overlay state transitions. The overlay loads local packaged renderer content from `dist/ui/renderer/overlay.html`, uses the existing sandboxed CommonJS preload bridge, has no Node integration, and receives only one-way overlay snapshots through `untype:overlay:snapshot`.
 
 Electron main remains the single owner of session and hotkey state. `emitSessionEvent()` and `emitCaptureState()` still deliver typed `SessionEvent` values to the main renderer, and they also pass those same events to the overlay manager with a `hotkeyOwned` context derived from `sessionOwner === "hotkey"`. Manual Start/Stop sessions therefore continue to render only in the main UI and do not show the overlay. The overlay reducer shows on hotkey-owned `capture.state: recording`, replaces live text on `transcript.partial`, briefly shows `transcript.final` or `transcript.refined`, surfaces hotkey-owned warnings/errors briefly, and hides on idle/stop. On hide, the manager sends a cleared snapshot before hiding the window so transcript text is removed from renderer state.
 
@@ -1587,7 +1587,7 @@ While the dictation hotkey is held, secondary keys toggle protocol operators: `R
 
 Status: diagnostics added 2026-05-21. Refined request: `docs/reference/refined-request-overlay-hide-diagnostics.md`. Implementation plan: `docs/design/plan-023-overlay-hide-diagnostics.md`.
 
-To investigate reports that the overlay may disappear while the user still considers dictation active, the UI now emits privacy-safe verbose diagnostics for the hotkey/capture/overlay lifecycle. When verbose mode is enabled through the existing `MIC_TOOL_TS_VERBOSE` configuration path, Electron main reports hotkey press/release source (`native-hook`, `global-shortcut`, `focused-window`, `renderer-ipc`, `settings-disabled`, or `app-blur`), session ownership, `hotkeyPressed`, warm-session activity, and audio-gate state. `emitCaptureState()` reports every `warm`, `recording`, and `idle` transition with its reason and warm recycle timer state. `TranscriptionOverlayManager` reports each non-noop overlay action, including `show`, `schedule-hide`, `hide`, the resulting phase, visibility, text-presence boolean, and scheduled hide delay. These diagnostics are sent to stderr and to the main UI event stream only; they are not routed back into the overlay, and they never include transcript text, processed output, provider endpoints, or API keys.
+To investigate reports that the overlay may disappear while the user still considers dictation active, the UI now emits privacy-safe verbose diagnostics for the hotkey/capture/overlay lifecycle. When verbose mode is enabled through the existing `UNTYPE_VERBOSE` configuration path, Electron main reports hotkey press/release source (`native-hook`, `global-shortcut`, `focused-window`, `renderer-ipc`, `settings-disabled`, or `app-blur`), session ownership, `hotkeyPressed`, warm-session activity, and audio-gate state. `emitCaptureState()` reports every `warm`, `recording`, and `idle` transition with its reason and warm recycle timer state. `TranscriptionOverlayManager` reports each non-noop overlay action, including `show`, `schedule-hide`, `hide`, the resulting phase, visibility, text-presence boolean, and scheduled hide delay. These diagnostics are sent to stderr and to the main UI event stream only; they are not routed back into the overlay, and they never include transcript text, processed output, provider endpoints, or API keys.
 
 ---
 

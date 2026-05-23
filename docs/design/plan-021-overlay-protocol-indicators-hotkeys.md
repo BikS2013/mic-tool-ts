@@ -36,3 +36,7 @@ Extend the independent push-to-talk overlay with protocol-feature indicators and
 - Runtime hotkeys produce normal `state.changed` events.
 - Spoken protocol state changes still update indicators.
 - Existing push-to-talk press/release behavior is unchanged.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

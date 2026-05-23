@@ -116,3 +116,7 @@ The overlay and protocol operators already exist. This request should extend tho
 ## Notes
 
 - System-wide secondary hotkeys are observable through the native hook, but the foreground app may still see modifier combinations because `globalShortcut` only reserves the main push-to-talk accelerator. This implementation keeps the existing behavior model and should avoid adding new native dependencies.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

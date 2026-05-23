@@ -1,10 +1,10 @@
 {
-  "name": "mic-tool-ts",
+  "name": "untype",
   "version": "0.1.0",
   "description": "CLI tool that streams microphone audio to Soniox or ElevenLabs real-time STT and prints transcripts to stdout",
   "type": "module",
   "bin": {
-    "mic-tool-ts": "./dist/index.js"
+    "untype": "./dist/index.js"
   },
   "engines": {
     "node": ">=20.12"

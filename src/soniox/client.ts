@@ -138,7 +138,7 @@ export class SonioxTranscriber implements Transcriber {
       this.preConnectError = this.mapSdkError(err);
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool-ts] soniox pre-connect error: ${err.message}\n`,
+          `[untype] soniox pre-connect error: ${err.message}\n`,
         );
       }
     };
@@ -150,7 +150,7 @@ export class SonioxTranscriber implements Transcriber {
 
     if (this.opts.verbose) {
       process.stderr.write(
-        `[mic-tool-ts] soniox: connecting (model=${this.opts.model}, languages=[${this.opts.languages.join(", ")}])\n`,
+        `[untype] soniox: connecting (model=${this.opts.model}, languages=[${this.opts.languages.join(", ")}])\n`,
       );
     }
 
@@ -172,14 +172,14 @@ export class SonioxTranscriber implements Transcriber {
     }
 
     if (this.opts.verbose) {
-      process.stderr.write("[mic-tool-ts] soniox: connected\n");
+      process.stderr.write("[untype] soniox: connected\n");
     }
 
     // Install the persistent mid-stream 'error' listener.
     this.session.on("error", (err: Error) => {
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool-ts] soniox mid-stream error: ${err.message}\n`,
+          `[untype] soniox mid-stream error: ${err.message}\n`,
         );
       }
       const mapped = this.mapSdkError(err);
@@ -192,7 +192,7 @@ export class SonioxTranscriber implements Transcriber {
     if (session === undefined || session.state !== "connected") {
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool-ts] dropped ${chunk.length} audio bytes (session state=${
+          `[untype] dropped ${chunk.length} audio bytes (session state=${
             session?.state ?? "uninitialised"
           })\n`,
         );
@@ -209,7 +209,7 @@ export class SonioxTranscriber implements Transcriber {
       const mapped = this.mapSdkError(err);
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool-ts] sendAudio threw synchronously: ${mapped.message}\n`,
+          `[untype] sendAudio threw synchronously: ${mapped.message}\n`,
         );
       }
       this.dispatchError(mapped);
@@ -222,7 +222,7 @@ export class SonioxTranscriber implements Transcriber {
     if (session.state !== "connected" && session.state !== "finishing") return;
 
     if (this.opts.verbose) {
-      process.stderr.write("[mic-tool-ts] soniox: finalize()\n");
+      process.stderr.write("[untype] soniox: finalize()\n");
     }
     try {
       session.finalize();
@@ -230,7 +230,7 @@ export class SonioxTranscriber implements Transcriber {
       const mapped = this.mapSdkError(err);
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool-ts] soniox: finalize() failed (${mapped.message})\n`,
+          `[untype] soniox: finalize() failed (${mapped.message})\n`,
         );
       }
       throw mapped;
@@ -275,7 +275,7 @@ export class SonioxTranscriber implements Transcriber {
     }
 
     if (this.opts.verbose) {
-      process.stderr.write("[mic-tool-ts] soniox: finish()\n");
+      process.stderr.write("[untype] soniox: finish()\n");
     }
     try {
       await Promise.race([
@@ -290,7 +290,7 @@ export class SonioxTranscriber implements Transcriber {
       if (this.opts.verbose) {
         const msg = err instanceof Error ? err.message : String(err);
         process.stderr.write(
-          `[mic-tool-ts] soniox: finish() failed (${msg}); calling close()\n`,
+          `[untype] soniox: finish() failed (${msg}); calling close()\n`,
         );
       }
       try {
@@ -346,7 +346,7 @@ export class SonioxTranscriber implements Transcriber {
     // verbose for diagnostics.
     session.on("endpoint", () => {
       if (this.opts.verbose) {
-        process.stderr.write("[mic-tool-ts] soniox: endpoint\n");
+        process.stderr.write("[untype] soniox: endpoint\n");
       }
       // Endpoint signals utterance completion. Commit any accumulated finals
       // as a single line and reset for the next utterance.
@@ -359,7 +359,7 @@ export class SonioxTranscriber implements Transcriber {
 
     session.on("finalized", () => {
       if (this.opts.verbose) {
-        process.stderr.write("[mic-tool-ts] soniox: finalized\n");
+        process.stderr.write("[untype] soniox: finalized\n");
       }
       // Flush any committed finals that did not produce an endpoint.
       if (this.committedFinals.trim().length > 0) {
@@ -371,7 +371,7 @@ export class SonioxTranscriber implements Transcriber {
 
     session.on("finished", () => {
       if (this.opts.verbose) {
-        process.stderr.write("[mic-tool-ts] soniox: finished\n");
+        process.stderr.write("[untype] soniox: finished\n");
       }
       this.settleFinish();
     });
@@ -379,7 +379,7 @@ export class SonioxTranscriber implements Transcriber {
     session.on("disconnected", (reason?: string) => {
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool-ts] soniox: disconnected${reason !== undefined ? ` (${reason})` : ""}\n`,
+          `[untype] soniox: disconnected${reason !== undefined ? ` (${reason})` : ""}\n`,
         );
       }
       if (this.shuttingDown) {
@@ -469,7 +469,7 @@ export class SonioxTranscriber implements Transcriber {
         // emitter. Log under verbose and drop.
         if (this.opts.verbose) {
           const msg = cbErr instanceof Error ? cbErr.message : String(cbErr);
-          process.stderr.write(`[mic-tool-ts] onError callback threw: ${msg}\n`);
+          process.stderr.write(`[untype] onError callback threw: ${msg}\n`);
         }
       }
     }

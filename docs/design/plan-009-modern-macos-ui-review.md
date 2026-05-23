@@ -76,3 +76,7 @@ The mockup represents:
 - Should the production UI use a persistent inspector or a sheet-based settings flow?
 - Should credentials be edited inline, or only in a dedicated credential sheet?
 - Should the default monitor tab show raw transcript chronology, submitted command sections, or a split view?
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

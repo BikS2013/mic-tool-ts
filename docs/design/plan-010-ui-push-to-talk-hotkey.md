@@ -39,3 +39,7 @@ Use focused Electron renderer keyboard events rather than a global shortcut. Thi
 
 - True global push-to-talk is not implemented in this plan. If required later, it needs a separate investigation for native key-release capture and macOS permissions.
 - Final transcript availability still depends on the active STT provider returning final tokens during transcriber stop/finalize.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

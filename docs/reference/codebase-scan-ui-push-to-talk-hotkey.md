@@ -93,3 +93,7 @@ generated_at: 2026-05-20
 ## Duplication Check
 
 No existing push-to-talk hotkey module was found. The closest existing behavior is manual Start/Stop in `src/ui/renderer/app.ts` and `src/ui/electronMain.ts`, plus protocol submission by spoken `command send`. The feature should extend these existing paths rather than introduce a parallel transcription pipeline.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

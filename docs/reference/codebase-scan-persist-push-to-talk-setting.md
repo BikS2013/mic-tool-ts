@@ -61,3 +61,7 @@ No existing UI settings store exists. Protocol settings persistence is separate 
 - A missing file should return `null`.
 - Invalid JSON or invalid shape should raise `InvalidConfigurationError`.
 - Apply persisted push-to-talk settings before calling `settingsFromConfig()` so the current settings parameter carries restored values.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

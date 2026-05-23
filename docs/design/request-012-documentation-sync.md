@@ -56,3 +56,7 @@ Out of scope:
 ## Original Request
 
 > I want you to update the README file and the rest of the documentation.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

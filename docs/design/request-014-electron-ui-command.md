@@ -77,3 +77,7 @@ Out of scope:
 > It is also important that the look and feel of the tool’s UI be very close to the look and feel of macOS, specifically the version we are currently on. It should have all those transparencies and animations supported by the design system proposed by the current version of macOS.
 >
 > I don’t want you to write code for me. I just want you to prepare and describe in a document the implementation approach and, possibly, also prepare some kind of visual that shows roughly what we expect it to look like. The visual must be in HTML; I don’t want it to be an embedded visual inside a markdown file.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

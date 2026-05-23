@@ -26,7 +26,7 @@ import {
   type PersistedUiSettings,
 } from "./settingsStore.js";
 
-const TOOL_NAME = "mic-tool-ts";
+const TOOL_NAME = "untype";
 const BASE_ARGV = ["node", TOOL_NAME] as const;
 
 export function loadRendererSettingsForUi(

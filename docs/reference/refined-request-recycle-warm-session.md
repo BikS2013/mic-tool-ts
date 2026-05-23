@@ -59,3 +59,7 @@ None blocking.
 ## Original Request
 
 > Given that this is just a warming-up process, can you enhance it so that it resets the connection and restarts the warming-up every, let’s say, five minutes, in case the process remains in “warming up” status for five minutes? It should reset the connection and the status, and start the warming-up process again from scratch to clean up any remaining long-running processes, tasks, or whatever else might be stuck.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

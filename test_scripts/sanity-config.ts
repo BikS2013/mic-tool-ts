@@ -69,7 +69,7 @@ const originalCwd = getCwd();
 const originalKey = process.env.SONIOX_API_KEY;
 
 function withTempCwd(envContents: string | null, body: () => void): void {
-  const dir = mkdtempSync(join(tmpdir(), "mic-tool-ts-sanity-"));
+  const dir = mkdtempSync(join(tmpdir(), "untype-sanity-"));
   if (envContents !== null) {
     writeFileSync(join(dir, ".env"), envContents, "utf8");
   }
@@ -95,7 +95,7 @@ function withShellEnv(value: string | undefined, body: () => void): void {
 }
 
 function argv(...flags: string[]): string[] {
-  return ["node", "mic-tool-ts", "--no-refine", ...flags];
+  return ["node", "untype", "--no-refine", ...flags];
 }
 
 // ---------------------------------------------------------------------------

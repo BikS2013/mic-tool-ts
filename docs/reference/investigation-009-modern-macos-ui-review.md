@@ -80,3 +80,7 @@ Use a calmer desktop utility layout:
 ## Original Request
 
 > Can you review the proposed UI design to try something more modern and closer to the recent macOS aesthetic?
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

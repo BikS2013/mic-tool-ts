@@ -46,3 +46,7 @@ None.
 
 ## Original Request
 > I want you to add scrolling capabilities for all the sections on the UI to support cases where the content exceeds the window size, either horizontally or vertically.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

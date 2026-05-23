@@ -106,3 +106,7 @@ No separate deep technical research is required. The implementation should use a
 > and proceed with any further processing and use e.g. refinement transcription, etc., after the hotkey release. 
 > So I want the hotkey to be used as the signal of starting voice capturing, and the hotkey release to be used as a signal for processing the captured, the transcribed content. 
 > I want you to make it available upon the use of the UI feature.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

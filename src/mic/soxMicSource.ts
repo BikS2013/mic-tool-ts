@@ -194,7 +194,7 @@ export class SoxMicSource implements MicSource {
         this.state = "stopped";
         if (!this.passthrough.writableEnded) this.passthrough.end();
         if (this.verbose) {
-          process.stderr.write("[mic-tool-ts] sox stopped\n");
+          process.stderr.write("[untype] sox stopped\n");
         }
         if (!wasIntentional) {
           // Unexpected: signal the orchestrator via 'error' on audio.
@@ -223,7 +223,7 @@ export class SoxMicSource implements MicSource {
         if (settled) return;
         this.state = "running";
         if (this.verbose) {
-          process.stderr.write(`[mic-tool-ts] sox started (pid=${child.pid})\n`);
+          process.stderr.write(`[untype] sox started (pid=${child.pid})\n`);
         }
         settle(() => resolve());
       }, START_GRACE_MS);

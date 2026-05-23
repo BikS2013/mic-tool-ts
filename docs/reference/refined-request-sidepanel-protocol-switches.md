@@ -54,3 +54,7 @@ None.
 ## Original Request
 > I want you to make the protocol switches (switches only, not the rest of the settings) available in the right sidepanel.
 > I want you also to allow me to change them while in warming or listening mode.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

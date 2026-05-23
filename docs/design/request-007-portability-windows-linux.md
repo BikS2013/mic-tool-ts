@@ -64,3 +64,7 @@ Out of scope:
 ## Original Request
 
 > I want you to investigate whether the current implementation is portable to other operating systems. I want you to study it thoroughly and understand whether I can port it to Windows and Linux platforms.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

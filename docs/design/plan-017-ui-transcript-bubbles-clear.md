@@ -39,3 +39,7 @@ Make the Electron UI transcript area clearable and render each dictated turn as 
 - `pnpm test`
 - `pnpm run build`
 - `pnpm exec electron test_scripts/verify-ui-bridge.cjs`
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

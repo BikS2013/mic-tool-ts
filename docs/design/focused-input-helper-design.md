@@ -398,3 +398,7 @@ Record for each target:
 - Whether clipboard preservation is mandatory from first helper release.
 - Whether helper result method metadata should be emitted in protocol/UI events.
 - Whether Accessibility permission instructions should name the helper, the launcher, or both.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

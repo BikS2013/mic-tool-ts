@@ -120,3 +120,7 @@ The project's dependency tree is **clean**:
 | 14 | `npm view vite@8.0.13 deprecated` | — | No output (not deprecated). |
 | 15 | `npm view rolldown@1.0.1 deprecated` | — | No output (not deprecated). |
 | 16 | `npm view @soniox/node dist-tags` | — | Confirmed latest: 2.0.3 (installed version is current). |
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

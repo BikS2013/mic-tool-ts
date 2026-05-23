@@ -179,3 +179,7 @@ Manual:
 ## Rollback Strategy
 
 Keep the existing paste implementation available behind the same focused-input abstraction until the helper has passed manual compatibility checks. If helper discovery fails unexpectedly, emit a clear warning and either use the current paste implementation as an explicitly documented temporary compatibility mode or leave delivery failed-open, depending on the implementation decision recorded at coding time.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

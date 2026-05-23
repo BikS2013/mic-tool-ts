@@ -45,3 +45,7 @@ generated_at: 2026-05-21T04:22:22Z
 ## Duplication Check
 
 The backend already has the correct runtime distinction through `HotkeySessionControl.open()` / `close()`, but the renderer only has `running`. There is no typed UI event that carries warmed idle versus active push-to-talk recording.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

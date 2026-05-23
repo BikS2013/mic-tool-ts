@@ -103,11 +103,11 @@ These instructions are adapted from `~/.claude/claude.md` for Codex and other ag
 
 ## Project Tool Invocation
 
-- The project/tool name is `mic-tool-ts`.
-- The supported user-facing invocation is the direct OS command `mic-tool-ts` on the user's `PATH`.
+- The project/tool name is `untype`.
+- The supported user-facing invocation is the direct OS command `untype` on the user's `PATH`.
 - Do not document or recommend `node dist/index.js`, `tsx src/index.ts`, `pnpm run dev`, or package-manager scripts as the installed-tool invocation. Those are development conveniences only.
-- The per-user configuration folder is `~/.tool-agents/mic-tool-ts/`; the secrets file is `~/.tool-agents/mic-tool-ts/.env`.
+- The per-user configuration folder is `~/.tool-agents/untype/`; the secrets file is `~/.tool-agents/untype/.env`.
 
 ## Tools
 
-- `mic-tool-ts` — TypeScript CLI that captures macOS microphone audio, streams it to a realtime STT provider, and supports a voice-agent protocol for refinement, translation, clipboard copy, focused-input delivery, and JSONL agent events. Tool reference: `docs/tools/mic-tool-ts.md`.
+- `untype` — TypeScript CLI that captures macOS microphone audio, streams it to a realtime STT provider, and supports a voice-agent protocol for refinement, translation, clipboard copy, focused-input delivery, and JSONL agent events. Tool reference: `docs/tools/untype.md`.

@@ -63,3 +63,7 @@ None.
 ## Original Request
 
 > I want you also to persist the push-to-talk setting from session to session.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

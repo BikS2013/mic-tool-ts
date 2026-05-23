@@ -83,3 +83,7 @@ The tool still attempts to run regardless — the user owns renewal.
 - Implementing the other 7 LLM providers.
 - Streaming the LLM response token-by-token.
 - Auto-renew of the API key.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

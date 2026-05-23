@@ -83,7 +83,7 @@ export class GoogleRefiner implements LLMRefiner {
     try {
       if (this.verbose) {
         process.stderr.write(
-          `[mic-tool-ts] llm: refining ${text.length} chars via google/${this.model}\n`,
+          `[untype] llm: refining ${text.length} chars via google/${this.model}\n`,
         );
       }
       response = await fetch(url, {

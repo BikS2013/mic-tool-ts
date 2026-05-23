@@ -130,3 +130,7 @@ The requested overlay is not currently implemented. A bottom capture bar exists 
 - macOS focus behavior is the main risk. The overlay should be shown without activating the Electron app or stealing focus from the foreground app.
 - Multi-display placement needs an explicit product decision. Best implementation default is the display containing the cursor or currently focused app if available; otherwise primary display.
 - Transparent/frameless Electron windows have platform limitations and should be visually verified on macOS.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

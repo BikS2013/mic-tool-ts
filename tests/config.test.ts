@@ -21,7 +21,7 @@
  *   - .env file parsing edge cases (comments, export prefix, quoted values)
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,24 +40,24 @@ import {
 // Test-wide helpers
 // ---------------------------------------------------------------------------
 
-/** Build an argv array as commander expects: ["node", "mic-tool-ts", ...flags].
+/** Build an argv array as commander expects: ["node", "untype", ...flags].
  *  Defaults to `--no-refine` so existing tests that don't care about the LLM
  *  feature aren't forced to set Azure OpenAI env vars. Tests that exercise
  *  refinement behavior use `argvRefine()` instead. */
 function argv(...flags: string[]): string[] {
-  return ["node", "mic-tool-ts", "--no-refine", ...flags];
+  return ["node", "untype", "--no-refine", ...flags];
 }
 
 /** argv for tests that need refinement enabled. Caller is responsible for
  *  setting the Azure OpenAI env vars (or expecting the LLMConfigurationError). */
 function argvRefine(...flags: string[]): string[] {
-  return ["node", "mic-tool-ts", ...flags];
+  return ["node", "untype", ...flags];
 }
 
 /** Create a temp directory, optionally writing a .env file into it, and
  *  return the directory path. The caller is responsible for cleanup. */
 function makeTmpdir(dotenvContents?: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "mic-tool-ts-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "untype-test-"));
   if (dotenvContents !== undefined) {
     writeFileSync(join(dir, ".env"), dotenvContents, "utf8");
   }
@@ -77,17 +77,17 @@ const TRACKED_ENV_KEYS = [
   "AZURE_OPENAI_DEPLOYMENT",
   "AZURE_OPENAI_API_VERSION",
   "GOOGLE_API_KEY",
-  "MIC_TOOL_TS_INTERACTION_MODE",
-  "MIC_TOOL_TS_COMMAND_PHRASE",
-  "MIC_TOOL_TS_SECTION_END_PHRASE",
-  "MIC_TOOL_TS_SECTION_CANCEL_PHRASE",
-  "MIC_TOOL_TS_LITERAL_NEXT_PHRASE",
-  "MIC_TOOL_TS_REFINE_DEFAULT",
-  "MIC_TOOL_TS_TRANSLATE_DEFAULT",
-  "MIC_TOOL_TS_TRANSLATION_POLICY",
-  "MIC_TOOL_TS_CLIPBOARD_DEFAULT",
-  "MIC_TOOL_TS_INPUT_DEFAULT",
-  "MIC_TOOL_TS_PROTOCOL_OUTPUT",
+  "UNTYPE_INTERACTION_MODE",
+  "UNTYPE_COMMAND_PHRASE",
+  "UNTYPE_SECTION_END_PHRASE",
+  "UNTYPE_SECTION_CANCEL_PHRASE",
+  "UNTYPE_LITERAL_NEXT_PHRASE",
+  "UNTYPE_REFINE_DEFAULT",
+  "UNTYPE_TRANSLATE_DEFAULT",
+  "UNTYPE_TRANSLATION_POLICY",
+  "UNTYPE_CLIPBOARD_DEFAULT",
+  "UNTYPE_INPUT_DEFAULT",
+  "UNTYPE_PROTOCOL_OUTPUT",
   "HOME",
 ] as const;
 const originalEnv: Record<string, string | undefined> = {};
@@ -105,7 +105,7 @@ beforeEach(() => {
   }
 
   // Point HOME at a clean tmpdir so loadEnvChain's user tier sees no file.
-  tmpHome = mkdtempSync(join(tmpdir(), "mic-tool-ts-home-"));
+  tmpHome = mkdtempSync(join(tmpdir(), "untype-home-"));
   process.env["HOME"] = tmpHome;
 
   // Capture stderr writes (for verbose tests)
@@ -447,8 +447,8 @@ describe("resolveConfig — --language validation", () => {
     ).toThrowError(InvalidConfigurationError);
   });
 
-  it("loads languages from MIC_TOOL_TS_LANGUAGES csv env var when no --language flag", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_LANGUAGES=fr,de,it\n");
+  it("loads languages from UNTYPE_LANGUAGES csv env var when no --language flag", () => {
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_LANGUAGES=fr,de,it\n");
     const cfg = resolveConfig(argv());
     expect(cfg.languages).toEqual(["fr", "de", "it"]);
   });
@@ -722,25 +722,25 @@ describe("resolveConfig — LLM refinement defaults", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5d. New env-var aliases (MIC_TOOL_TS_*)
+// 5d. New env-var aliases (UNTYPE_*)
 // ---------------------------------------------------------------------------
 
 describe("resolveConfig — env-var aliases for every flag", () => {
-  it("MIC_TOOL_TS_STT_PROVIDER selects ElevenLabs", () => {
-    setCwd("MIC_TOOL_TS_STT_PROVIDER=elevenlabs\nELEVENLABS_API_KEY=xi\n");
+  it("UNTYPE_STT_PROVIDER selects ElevenLabs", () => {
+    setCwd("UNTYPE_STT_PROVIDER=elevenlabs\nELEVENLABS_API_KEY=xi\n");
     const cfg = resolveConfig(argv());
     expect(cfg.sttProvider).toBe("elevenlabs");
   });
 
-  it("MIC_TOOL_TS_MODEL overrides the default model", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_MODEL=stt-async-v3\n");
+  it("UNTYPE_MODEL overrides the default model", () => {
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_MODEL=stt-async-v3\n");
     const cfg = resolveConfig(argv());
     expect(cfg.model).toBe("stt-async-v3");
   });
 
-  it("MIC_TOOL_TS_ENDPOINT overrides the default endpoint", () => {
+  it("UNTYPE_ENDPOINT overrides the default endpoint", () => {
     setCwd(
-      "SONIOX_API_KEY=k\nMIC_TOOL_TS_ENDPOINT=wss://stt-rt.eu.soniox.com/transcribe-websocket\n",
+      "SONIOX_API_KEY=k\nUNTYPE_ENDPOINT=wss://stt-rt.eu.soniox.com/transcribe-websocket\n",
     );
     const cfg = resolveConfig(argv());
     expect(cfg.endpoint).toBe(
@@ -749,82 +749,82 @@ describe("resolveConfig — env-var aliases for every flag", () => {
   });
 
   it("rejects a non-wss endpoint", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_ENDPOINT=http://example.com\n");
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_ENDPOINT=http://example.com\n");
     expect(() => resolveConfig(argv())).toThrowError(InvalidConfigurationError);
   });
 
-  it("MIC_TOOL_TS_SAMPLE_RATE overrides default", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_SAMPLE_RATE=24000\n");
+  it("UNTYPE_SAMPLE_RATE overrides default", () => {
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_SAMPLE_RATE=24000\n");
     const cfg = resolveConfig(argv());
     expect(cfg.sampleRate).toBe(24000);
   });
 
   it("rejects sample rate below 8000", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_SAMPLE_RATE=4000\n");
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_SAMPLE_RATE=4000\n");
     expect(() => resolveConfig(argv())).toThrowError(InvalidConfigurationError);
   });
 
   it("rejects sample rate above 48000", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_SAMPLE_RATE=96000\n");
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_SAMPLE_RATE=96000\n");
     expect(() => resolveConfig(argv())).toThrowError(InvalidConfigurationError);
   });
 
-  it("MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION=false disables endpoint detection", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION=false\n");
+  it("UNTYPE_ENABLE_ENDPOINT_DETECTION=false disables endpoint detection", () => {
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_ENABLE_ENDPOINT_DETECTION=false\n");
     const cfg = resolveConfig(argv());
     expect(cfg.enableEndpointDetection).toBe(false);
   });
 
   it("--no-endpoint-detection wins over env var", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION=true\n");
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_ENABLE_ENDPOINT_DETECTION=true\n");
     const cfg = resolveConfig(argv("--no-endpoint-detection"));
     expect(cfg.enableEndpointDetection).toBe(false);
   });
 
   it("--endpoint-detection wins over env var", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION=false\n");
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_ENABLE_ENDPOINT_DETECTION=false\n");
     const cfg = resolveConfig(argv("--endpoint-detection"));
     expect(cfg.enableEndpointDetection).toBe(true);
   });
 
-  it("MIC_TOOL_TS_GUARD_PHRASE overrides the default", () => {
-    setCwd('SONIOX_API_KEY=k\nMIC_TOOL_TS_GUARD_PHRASE="end command"\n');
+  it("UNTYPE_GUARD_PHRASE overrides the default", () => {
+    setCwd('SONIOX_API_KEY=k\nUNTYPE_GUARD_PHRASE="end command"\n');
     const cfg = resolveConfig(argv());
     expect(cfg.guardPhrase).toBe("end command");
   });
 
-  it("MIC_TOOL_TS_OUTPUT_MODE overrides the default", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_OUTPUT_MODE=append\n");
+  it("UNTYPE_OUTPUT_MODE overrides the default", () => {
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_OUTPUT_MODE=append\n");
     const cfg = resolveConfig(argv());
     expect(cfg.outputMode).toBe("append");
   });
 
-  it("MIC_TOOL_TS_VERBOSE=true enables verbose", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_VERBOSE=true\n");
+  it("UNTYPE_VERBOSE=true enables verbose", () => {
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_VERBOSE=true\n");
     const cfg = resolveConfig(argv());
     expect(cfg.verbose).toBe(true);
   });
 
-  it("MIC_TOOL_TS_REFINE=false disables LLM refinement", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_REFINE=false\n");
+  it("UNTYPE_REFINE=false disables LLM refinement", () => {
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_REFINE=false\n");
     const cfg = resolveConfig(argvRefine());
     expect(cfg.llm.enabled).toBe(false);
   });
 
-  it("MIC_TOOL_TS_LLM_PROVIDER overrides the default provider", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_REFINE=false\nMIC_TOOL_TS_LLM_PROVIDER=openai\n");
+  it("UNTYPE_LLM_PROVIDER overrides the default provider", () => {
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_REFINE=false\nUNTYPE_LLM_PROVIDER=openai\n");
     const cfg = resolveConfig(argvRefine());
     expect(cfg.llm.provider).toBe("openai");
   });
 
-  it("MIC_TOOL_TS_LLM_MODEL overrides the default model", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_REFINE=false\nMIC_TOOL_TS_LLM_MODEL=my-deploy\n");
+  it("UNTYPE_LLM_MODEL overrides the default model", () => {
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_REFINE=false\nUNTYPE_LLM_MODEL=my-deploy\n");
     const cfg = resolveConfig(argvRefine());
     expect(cfg.llm.model).toBe("my-deploy");
   });
 
-  it("MIC_TOOL_TS_INTERACTION_MODE enables agent protocol mode", () => {
-    setCwd("SONIOX_API_KEY=k\nMIC_TOOL_TS_INTERACTION_MODE=agent-protocol\n");
+  it("UNTYPE_INTERACTION_MODE enables agent protocol mode", () => {
+    setCwd("SONIOX_API_KEY=k\nUNTYPE_INTERACTION_MODE=agent-protocol\n");
     const cfg = resolveConfig(argv());
     expect(cfg.protocol.interactionMode).toBe("agent-protocol");
   });
@@ -833,15 +833,15 @@ describe("resolveConfig — env-var aliases for every flag", () => {
     setCwd(
       [
         "SONIOX_API_KEY=k",
-        "MIC_TOOL_TS_COMMAND_PHRASE=εντολή",
-        "MIC_TOOL_TS_SECTION_END_PHRASE=τέλος",
-        "MIC_TOOL_TS_SECTION_CANCEL_PHRASE=άκυρο",
-        "MIC_TOOL_TS_LITERAL_NEXT_PHRASE=κυριολεκτικά",
-        "MIC_TOOL_TS_REFINE_DEFAULT=on",
-        "MIC_TOOL_TS_TRANSLATE_DEFAULT=yes",
-        "MIC_TOOL_TS_CLIPBOARD_DEFAULT=1",
-        "MIC_TOOL_TS_INPUT_DEFAULT=true",
-        "MIC_TOOL_TS_TRANSLATION_POLICY=to-en",
+        "UNTYPE_COMMAND_PHRASE=εντολή",
+        "UNTYPE_SECTION_END_PHRASE=τέλος",
+        "UNTYPE_SECTION_CANCEL_PHRASE=άκυρο",
+        "UNTYPE_LITERAL_NEXT_PHRASE=κυριολεκτικά",
+        "UNTYPE_REFINE_DEFAULT=on",
+        "UNTYPE_TRANSLATE_DEFAULT=yes",
+        "UNTYPE_CLIPBOARD_DEFAULT=1",
+        "UNTYPE_INPUT_DEFAULT=true",
+        "UNTYPE_TRANSLATION_POLICY=to-en",
       ].join("\n"),
     );
     const cfg = resolveConfig(argv());
@@ -872,11 +872,11 @@ describe("resolveConfig — env-var aliases for every flag", () => {
         "--interaction-mode",
         "hybrid",
         "--protocol-output",
-        "/tmp/mic-tool-ts-protocol.jsonl",
+        "/tmp/untype-protocol.jsonl",
       ),
     );
     expect(cfg.protocol.interactionMode).toBe("hybrid");
-    expect(cfg.protocol.protocolOutput).toBe("/tmp/mic-tool-ts-protocol.jsonl");
+    expect(cfg.protocol.protocolOutput).toBe("/tmp/untype-protocol.jsonl");
   });
 
   it("rejects an unknown interaction mode", () => {
@@ -922,7 +922,7 @@ describe("resolveConfig — --verbose flag (FR-9)", () => {
     setShellKey("sk_v");
     resolveConfig(argv("--verbose"));
     const combined = stderrChunks.join("");
-    expect(combined).toContain("[mic-tool-ts]");
+    expect(combined).toContain("[untype]");
   });
 
   it("when verbose=true, the stderr message does NOT contain the key value", () => {
@@ -1086,5 +1086,46 @@ describe("resolveConfig — .env parsing edge cases", () => {
     setShellKey("sk_shell_fallthrough");
     const cfg = resolveConfig(argv());
     expect(cfg.apiKey).toBe("sk_shell_fallthrough");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Legacy folder detection (rename migration hint)
+// ---------------------------------------------------------------------------
+
+describe("resolveConfig — legacy ~/.tool-agents/mic-tool-ts folder detection", () => {
+  it("throws MissingConfigurationError with migration hint when only the legacy folder exists", () => {
+    setCwd(); // no .env file
+    setShellKey("sk_test");
+    // tmpHome is set in beforeEach. Create the legacy folder but NOT the new one.
+    mkdirSync(join(tmpHome!, ".tool-agents", "mic-tool-ts"), { recursive: true });
+
+    let threw: unknown = null;
+    try {
+      resolveConfig(argv());
+    } catch (err) {
+      threw = err;
+    }
+    expect(threw).toBeInstanceOf(MissingConfigurationError);
+    expect((threw as Error).message).toBe(
+      "Config folder not found at ~/.tool-agents/untype/. Detected legacy folder at ~/.tool-agents/mic-tool-ts/. Migrate with: mv ~/.tool-agents/mic-tool-ts ~/.tool-agents/untype",
+    );
+  });
+
+  it("does not throw when the new folder exists (even if legacy is also present)", () => {
+    setCwd();
+    setShellKey("sk_test");
+    mkdirSync(join(tmpHome!, ".tool-agents", "untype"), { recursive: true });
+    mkdirSync(join(tmpHome!, ".tool-agents", "mic-tool-ts"), { recursive: true });
+    const cfg = resolveConfig(argv());
+    expect(cfg.apiKey).toBe("sk_test");
+  });
+
+  it("does not throw when neither folder exists (no migration in progress)", () => {
+    setCwd();
+    setShellKey("sk_test");
+    // tmpHome from beforeEach is empty; no folders created here.
+    const cfg = resolveConfig(argv());
+    expect(cfg.apiKey).toBe("sk_test");
   });
 });

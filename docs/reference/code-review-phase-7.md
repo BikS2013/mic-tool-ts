@@ -118,3 +118,7 @@ All executed from project root.
 3. **Phase 8 (Dependency Validator / docs polish)**: optionally add `docs/design/configuration-guide.md` per the project's "configuration-guide" convention.
 
 No blockers remain in the implementation surface. The TDZ race uncovered during this review has been fixed in-place and re-verified.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

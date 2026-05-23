@@ -2,11 +2,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HELPER="${ROOT}/dist/native/macos/mic-tool-ts-input-helper"
+HELPER="${ROOT}/dist/native/macos/untype-input-helper"
 
 if [[ ! -x "${HELPER}" ]]; then
   echo "Missing helper binary: ${HELPER}" >&2
-  echo "Build mic-tool-ts before running this smoke script." >&2
+  echo "Build untype before running this smoke script." >&2
   exit 1
 fi
 

@@ -54,3 +54,7 @@ None.
 
 ## Original Request
 > I want you to make the llm used for refinement and translation configurable through the UI
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

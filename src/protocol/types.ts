@@ -66,7 +66,7 @@ export interface ProtocolRuntimeConfig {
 export type ProtocolEvent =
   | {
       type: "session.started";
-      protocol: "mic-tool-ts.voice-agent.v1";
+      protocol: "untype.voice-agent.v1";
     }
   | {
       type: "session.ended";

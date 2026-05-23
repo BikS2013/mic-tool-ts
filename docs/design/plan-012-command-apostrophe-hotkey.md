@@ -32,3 +32,7 @@ Reuse the current push-to-talk implementation. Extend the shared hotkey parser a
 - UI hotkey parsing accepts `Command+'`, `Command-'`, `Command+Quote`, and `Command+Apostrophe` as the same accelerator.
 - System-wide native hook matching maps apostrophe to `Quote`.
 - Focused tests and type checking pass.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

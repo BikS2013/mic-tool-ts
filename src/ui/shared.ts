@@ -40,7 +40,7 @@ export interface UiSettingsLoadResult {
   readonly error?: UiSettingsError;
 }
 
-export interface MicToolTsPreloadApi {
+export interface UntypePreloadApi {
   loadSettings(): Promise<UiSettingsLoadResult>;
   updateSettings(settings: Partial<RendererSettings>): Promise<RendererSettings>;
   startSession(options?: StartSessionOptions): Promise<void>;

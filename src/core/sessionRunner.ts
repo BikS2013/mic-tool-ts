@@ -38,9 +38,9 @@ type TtyWritable = NodeJS.WritableStream & Partial<Writable> & { isTTY?: boolean
 
 const TRANSLATION_SYSTEM_PROMPT =
   "You are a translation assistant for live dictated agent commands. Translate the user's text to the requested target language. Preserve technical terms, filenames, command names, and code identifiers. Respond with ONLY the translated text — no preamble, no quotes, no markdown, no explanation.";
-const TOOL_NAME = "mic-tool-ts";
+const TOOL_NAME = "untype";
 const READY_MESSAGE =
-  "[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.";
+  "[untype] Ready to listen. Press Control-C to stop the listening tool.";
 
 export interface RunMicSessionOptions {
   readonly frontend?: "cli" | "ui";
@@ -120,9 +120,9 @@ export async function runMicSession(
 
   if (config.verbose) {
     writeDiagnostic(
-      `[mic-tool-ts] config: sttProvider=${config.sttProvider}, outputMode=${config.outputMode}, languages=[${config.languages.join(", ")}], verbose=true`,
+      `[untype] config: sttProvider=${config.sttProvider}, outputMode=${config.outputMode}, languages=[${config.languages.join(", ")}], verbose=true`,
     );
-    writeDiagnostic(`[mic-tool-ts] platform=${process.platform}, node=${process.version}`);
+    writeDiagnostic(`[untype] platform=${process.platform}, node=${process.version}`);
   }
 
   let protocolConfig: ProtocolRuntimeConfig;
@@ -131,7 +131,7 @@ export async function runMicSession(
     protocolConfig = applyPersistedProtocolSettings(config.protocol, persisted);
     if (config.verbose && persisted !== null) {
       writeDiagnostic(
-        `[mic-tool-ts] restored protocol settings: refine=${protocolConfig.initialOperators.refine ? "on" : "off"}, translate=${protocolConfig.initialOperators.translate ? "on" : "off"}, clipboard=${protocolConfig.initialOperators.clipboard ? "on" : "off"}, input=${protocolConfig.initialOperators.input ? "on" : "off"}, translation_policy=${protocolConfig.translationPolicy}`,
+        `[untype] restored protocol settings: refine=${protocolConfig.initialOperators.refine ? "on" : "off"}, translate=${protocolConfig.initialOperators.translate ? "on" : "off"}, clipboard=${protocolConfig.initialOperators.clipboard ? "on" : "off"}, input=${protocolConfig.initialOperators.input ? "on" : "off"}, translation_policy=${protocolConfig.translationPolicy}`,
       );
     }
   } catch (err) {
@@ -209,7 +209,7 @@ export async function runMicSession(
       reason === "ui-stop" && shouldSubmitPendingOnUiStop(opts.abortSignal?.reason);
     emit({ type: "session.state", state: "stopping", reason });
     if (config.verbose) {
-      writeDiagnostic(`[mic-tool-ts] shutting down: ${reason}`);
+      writeDiagnostic(`[untype] shutting down: ${reason}`);
     }
     void (async () => {
       if (micStarted && mic !== undefined) {
@@ -218,7 +218,7 @@ export async function runMicSession(
         } catch (err) {
           if (config.verbose) {
             writeDiagnostic(
-              `[mic-tool-ts] mic.stop() error: ${err instanceof Error ? err.message : String(err)}`,
+              `[untype] mic.stop() error: ${err instanceof Error ? err.message : String(err)}`,
               true,
             );
           }
@@ -231,7 +231,7 @@ export async function runMicSession(
         } catch (err) {
           if (config.verbose) {
             writeDiagnostic(
-              `[mic-tool-ts] transcriber.stop() error: ${err instanceof Error ? err.message : String(err)}`,
+              `[untype] transcriber.stop() error: ${err instanceof Error ? err.message : String(err)}`,
               true,
             );
           }
@@ -272,7 +272,7 @@ export async function runMicSession(
     if (shuttingDown || !transcriberStarted) return;
     try {
       if (config.verbose) {
-        writeDiagnostic("[mic-tool-ts] committing pending push-to-talk utterance");
+        writeDiagnostic("[untype] committing pending push-to-talk utterance");
       }
       await transcriber.commit();
       await renderer.submitPending();
@@ -350,14 +350,14 @@ export async function runMicSession(
 
   const onSigint = (): void => {
     if (shuttingDown && !shutdownDone) {
-      stderr.write("[mic-tool-ts] force quit\n");
+      stderr.write("[untype] force quit\n");
       process.exit(130);
     }
     shutdown("SIGINT");
   };
   const onSigterm = (): void => {
     if (shuttingDown && !shutdownDone) {
-      stderr.write("[mic-tool-ts] force quit\n");
+      stderr.write("[untype] force quit\n");
       process.exit(143);
     }
     shutdown("SIGTERM");
@@ -474,7 +474,7 @@ function persistProtocolSettings(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     writeDiagnostic(
-      `[mic-tool-ts] WARNING: failed to persist protocol settings: ${message}`,
+      `[untype] WARNING: failed to persist protocol settings: ${message}`,
       true,
     );
     if (verbose && err instanceof Error && err.stack !== undefined) {

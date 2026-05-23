@@ -76,7 +76,7 @@ type SessionEvent =
   | { type: "config.loaded"; settings?: Partial<RendererSettings>; summary?: string }
   | { type: "config.saved"; message?: string };
 
-interface MicToolTsApi {
+interface UntypeApi {
   loadSettings(): Promise<unknown>;
   updateSettings(settings: Partial<RendererSettings>): Promise<unknown>;
   startSession(options?: { hotkey?: boolean }): Promise<unknown>;
@@ -88,7 +88,7 @@ interface MicToolTsApi {
 
 declare global {
   interface Window {
-    micToolTs?: MicToolTsApi;
+    untype?: UntypeApi;
   }
 }
 
@@ -706,12 +706,12 @@ function mergeSettingsFromControls(): void {
 }
 
 async function persistSettings(patch: Partial<RendererSettings>): Promise<void> {
-  if (state.demoMode || window.micToolTs === undefined) {
+  if (state.demoMode || window.untype === undefined) {
     addEvent("Settings unavailable", "preload bridge unavailable");
     return;
   }
   try {
-    const updated = await window.micToolTs.updateSettings(patch);
+    const updated = await window.untype.updateSettings(patch);
     mergeSettings(parseSettings(updated));
     renderSettings();
   } catch (error) {
@@ -1010,7 +1010,7 @@ function handleEvent(event: SessionEvent): void {
   switch (event.type) {
     case "session.ready":
       setSessionState("running");
-      sessionSummary.textContent = event.message.replace(/^\[mic-tool-ts\]\s*/, "");
+      sessionSummary.textContent = event.message.replace(/^\[untype\]\s*/, "");
       addEvent("Session ready", "settings loaded");
       return;
     case "session.state":
@@ -1103,7 +1103,7 @@ function handleEvent(event: SessionEvent): void {
 }
 
 async function loadSettings(): Promise<void> {
-  if (window.micToolTs === undefined) {
+  if (window.untype === undefined) {
     state.demoMode = false;
     appShell.dataset.demo = "false";
     demoPill.textContent = "Bridge unavailable";
@@ -1119,7 +1119,7 @@ async function loadSettings(): Promise<void> {
   demoPill.textContent = "";
   resetProductionData();
   try {
-    const loaded = await window.micToolTs.loadSettings();
+    const loaded = await window.untype.loadSettings();
     const result = parseSettingsLoadResult(loaded);
     mergeSettings(result.settings);
     renderSettings();
@@ -1161,7 +1161,7 @@ async function toggleSession(): Promise<void> {
 }
 
 async function startSession(options: { hotkey?: boolean } = {}): Promise<void> {
-  if (window.micToolTs === undefined) {
+  if (window.untype === undefined) {
     setSessionState("error");
     addEvent("Start failed", "preload bridge unavailable");
     return;
@@ -1172,7 +1172,7 @@ async function startSession(options: { hotkey?: boolean } = {}): Promise<void> {
     setSessionState("loading");
   }
   try {
-    await window.micToolTs.startSession(options);
+    await window.untype.startSession(options);
   } catch (error) {
     setSessionState("error");
     addEvent("Start failed", errorMessage(error));
@@ -1180,7 +1180,7 @@ async function startSession(options: { hotkey?: boolean } = {}): Promise<void> {
 }
 
 async function stopSession(options: { submitPending?: boolean } = {}): Promise<void> {
-  if (window.micToolTs === undefined) {
+  if (window.untype === undefined) {
     setSessionState("error");
     addEvent("Stop failed", "preload bridge unavailable");
     return;
@@ -1189,7 +1189,7 @@ async function stopSession(options: { submitPending?: boolean } = {}): Promise<v
     setSessionState("stopping");
   }
   try {
-    await window.micToolTs.stopSession(options);
+    await window.untype.stopSession(options);
   } catch (error) {
     setSessionState("error");
     addEvent("Stop failed", errorMessage(error));
@@ -1246,12 +1246,12 @@ function protocolFeatureKeyForEvent(event: KeyboardEvent, hotkey: ParsedHotkey):
 }
 
 async function toggleProtocolFeature(key: OperatorKey): Promise<void> {
-  if (window.micToolTs === undefined) {
+  if (window.untype === undefined) {
     addEvent("Protocol hotkey failed", "preload bridge unavailable");
     return;
   }
   try {
-    await window.micToolTs.toggleProtocolFeature(key);
+    await window.untype.toggleProtocolFeature(key);
   } catch (error) {
     addEvent("Protocol hotkey failed", errorMessage(error));
   }
@@ -1349,7 +1349,7 @@ function bindControls(): void {
     void stopHotkeySession();
   });
 
-  const unsubscribe = window.micToolTs?.onSessionEvent((rawEvent: unknown) => {
+  const unsubscribe = window.untype?.onSessionEvent((rawEvent: unknown) => {
     const event = parseEvent(rawEvent);
     if (event !== null) handleEvent(event);
   });

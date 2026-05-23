@@ -33,3 +33,7 @@ Rename the project identity to `mic-tool-ts` and keep runtime behavior, document
 
 - This rename is intentionally breaking for local shell aliases and per-user config paths. Users should move or recreate secrets under `~/.tool-agents/mic-tool-ts/.env`.
 - Development commands such as `pnpm run dev` remain available for contributors, but installed/user-facing invocation is the direct OS command `mic-tool-ts`.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

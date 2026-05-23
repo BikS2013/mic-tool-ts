@@ -35,3 +35,7 @@ Add privacy-safe verbose diagnostics around the hotkey/capture/overlay lifecycle
 - Overlay diagnostics include action and phase data without transcript text.
 - Verbose disabled remains quiet.
 - Focused tests and type checking pass.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

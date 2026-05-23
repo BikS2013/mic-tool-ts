@@ -1,5 +1,5 @@
 /**
- * Shared error taxonomy for mic-tool-ts.
+ * Shared error taxonomy for untype.
  *
  * Every error class derived from {@link MicToolError} carries a stable string
  * `code` slug (for log/grep diagnostics) and a process `exitCode` that the

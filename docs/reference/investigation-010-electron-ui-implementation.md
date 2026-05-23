@@ -28,3 +28,7 @@ Verify the Electron dependency choice immediately before implementing `mic-tool-
 - Keep Electron renderer content local and packaged under `dist/ui/renderer/`.
 - Use `BrowserWindow` with macOS titlebar integration, vibrancy, `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`, and a preload bridge that exposes only `loadSettings`, `startSession`, `stopSession`, and `onSessionEvent`.
 - Reuse the shared transcription session runner so CLI and UI mode share config validation, protocol behavior, mic/STT lifecycle, shutdown, and persistence.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

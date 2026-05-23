@@ -90,7 +90,7 @@ export class AzureOpenAIRefiner implements LLMRefiner {
     try {
       if (this.verbose) {
         process.stderr.write(
-          `[mic-tool-ts] llm: refining ${text.length} chars via azure-openai/${this.deployment}\n`,
+          `[untype] llm: refining ${text.length} chars via azure-openai/${this.deployment}\n`,
         );
       }
       response = await fetch(url, {

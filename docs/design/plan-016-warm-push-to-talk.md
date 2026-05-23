@@ -37,3 +37,7 @@ Keep UI push-to-talk ready before the first word by warming the existing microph
 ## Verification
 - `pnpm exec tsc -p . --noEmit`
 - Focused Vitest runs for session runner, UI settings, and hotkey behavior.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

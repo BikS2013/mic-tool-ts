@@ -173,3 +173,7 @@ compiled artifact.
 | 9 | `node dist/index.js --api-key 'sk_demo' --output-mode invalid` | 2 | InvalidConfigurationError on stderr |
 | 10 | `pnpm tsx test_scripts/sanity-config.ts` | 0 | 18/18 sanity assertions |
 | 11 | `pnpm tsx test_scripts/sanity-renderer.ts` | 0 | 7/7 cases |
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

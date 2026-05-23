@@ -69,3 +69,7 @@ None blocking.
 > I want you to add a button to clear the transcript area in the tool 
 > I want you to collect all the dictated text from a turn into a bubble 
 > so I want a bubble with the text i dictate, the bubble with the refined/translated version after, the other translated text after, the other refined version after etc ...
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

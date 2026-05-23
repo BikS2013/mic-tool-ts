@@ -48,3 +48,7 @@ None.
 
 ## Original Request
 > when i try the google model i get this
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

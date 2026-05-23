@@ -86,3 +86,7 @@ The feature is partially implemented only as flat timeline rows:
 - There is no grouped turn model that keeps raw dictated text and follow-up processed outputs visually associated.
 
 Implementation should extend the existing renderer timeline rather than add a second transcript pane.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

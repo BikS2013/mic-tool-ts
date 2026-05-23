@@ -24,3 +24,7 @@ Make the UI state indicator distinguish warmed idle push-to-talk sessions from a
 - `pnpm test`
 - `pnpm run build`
 - `pnpm exec electron test_scripts/verify-ui-bridge.cjs`
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

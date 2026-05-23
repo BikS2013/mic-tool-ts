@@ -36,32 +36,32 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 
 const api = {
   async loadSettings(): Promise<unknown> {
-    return ipcRenderer.invoke("mic-tool-ts:settings:load");
+    return ipcRenderer.invoke("untype:settings:load");
   },
 
   async updateSettings(settings: Partial<RendererSettings>): Promise<unknown> {
-    return ipcRenderer.invoke("mic-tool-ts:settings:update", settings);
+    return ipcRenderer.invoke("untype:settings:update", settings);
   },
 
   async startSession(options?: StartSessionOptions): Promise<void> {
-    await ipcRenderer.invoke("mic-tool-ts:session:start", options ?? {});
+    await ipcRenderer.invoke("untype:session:start", options ?? {});
   },
 
   async stopSession(options?: StopSessionOptions): Promise<void> {
-    await ipcRenderer.invoke("mic-tool-ts:session:stop", options ?? {});
+    await ipcRenderer.invoke("untype:session:stop", options ?? {});
   },
 
   async toggleProtocolFeature(key: OperatorKey): Promise<void> {
-    await ipcRenderer.invoke("mic-tool-ts:protocol:toggle", key);
+    await ipcRenderer.invoke("untype:protocol:toggle", key);
   },
 
   onSessionEvent(callback: (event: SessionEvent) => void): () => void {
     const listener = (_event: IpcRendererEvent, payload: SessionEvent): void => {
       callback(payload);
     };
-    ipcRenderer.on("mic-tool-ts:session:event", listener);
+    ipcRenderer.on("untype:session:event", listener);
     return () => {
-      ipcRenderer.off("mic-tool-ts:session:event", listener);
+      ipcRenderer.off("untype:session:event", listener);
     };
   },
 
@@ -69,11 +69,11 @@ const api = {
     const listener = (_event: IpcRendererEvent, payload: OverlaySnapshot): void => {
       callback(payload);
     };
-    ipcRenderer.on("mic-tool-ts:overlay:snapshot", listener);
+    ipcRenderer.on("untype:overlay:snapshot", listener);
     return () => {
-      ipcRenderer.off("mic-tool-ts:overlay:snapshot", listener);
+      ipcRenderer.off("untype:overlay:snapshot", listener);
     };
   },
 };
 
-contextBridge.exposeInMainWorld("micToolTs", api);
+contextBridge.exposeInMainWorld("untype", api);

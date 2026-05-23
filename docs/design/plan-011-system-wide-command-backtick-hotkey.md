@@ -41,3 +41,7 @@ Add `uiohook-napi` as a vetted runtime dependency and isolate it behind `src/ui/
 - macOS may require Accessibility/Input Monitoring permissions for the launching app.
 - `Command+\`` may still trigger frontmost-app window cycling because this feature observes the key, it does not promise to suppress the OS/app shortcut.
 - Native module packaging may need additional work if the project later ships a signed standalone app.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

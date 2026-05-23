@@ -1,6 +1,6 @@
-# mic-tool-ts — Functional Requirements
+# untype — Functional Requirements
 
-This document captures the functional and non-functional requirements for the `mic-tool-ts` CLI (microphone live-transcription through Soniox or ElevenLabs).
+This document captures the functional and non-functional requirements for the `untype` CLI (microphone live-transcription through Soniox or ElevenLabs).
 Source: `docs/design/refined-request-soniox-mic-transcriber.md` (refined spec).
 
 ## Functional Requirements
@@ -36,7 +36,7 @@ The tool MUST resolve the Soniox API key from one of the following sources, in t
 
 1. `--api-key <value>` CLI flag.
 2. Local `.env` file in the working directory (variable `SONIOX_API_KEY`).
-3. Per-user secret store `~/.tool-agents/mic-tool-ts/.env`.
+3. Per-user secret store `~/.tool-agents/untype/.env`.
 4. Shell environment variable `SONIOX_API_KEY`.
 
 If no key is found through any of these sources, the tool MUST raise a named `MissingConfigurationError` and exit with a non-zero code. No fallback, default, or placeholder key is permitted.
@@ -101,20 +101,20 @@ A user-facing `README.md` MUST document: installation, prerequisites (`brew inst
 The following FRs cover plans 002 (turn detection), 003 (LLM refinement), and 004 (full env-var fallbacks + key-expiry tracking).
 
 ### FR-12 — Guard-phrase turn detection
-The tool MUST detect a configurable *guard phrase* in the recent finalized transcript and treat its appearance as a *turn boundary*. On detection the renderer MUST emit a single blank line on stdout. Matching MUST be insensitive to case, accents (NFD-decomposed combining marks stripped), and surrounding punctuation. The guard phrase MUST match whether it appears inside a single final OR across consecutive recent finals (rolling buffer, capped at 2000 characters). Default phrase: `τέλος εντολής`. Configurable via `--guard-phrase` / `MIC_TOOL_TS_GUARD_PHRASE`. The phrase remains visible in the line that triggered the boundary — it is NOT stripped from the rendered transcript.
+The tool MUST detect a configurable *guard phrase* in the recent finalized transcript and treat its appearance as a *turn boundary*. On detection the renderer MUST emit a single blank line on stdout. Matching MUST be insensitive to case, accents (NFD-decomposed combining marks stripped), and surrounding punctuation. The guard phrase MUST match whether it appears inside a single final OR across consecutive recent finals (rolling buffer, capped at 2000 characters). Default phrase: `τέλος εντολής`. Configurable via `--guard-phrase` / `UNTYPE_GUARD_PHRASE`. The phrase remains visible in the line that triggered the boundary — it is NOT stripped from the rendered transcript.
 
 ### FR-13 — LLM refinement of each closed turn
 When LLM refinement is enabled, the tool MUST, after each turn boundary, capture the turn's verbatim text (with the guard phrase removed for the LLM input only), send it asynchronously to the configured LLM, and on success render the refined text on its own line followed by an additional blank line. Refinement is non-blocking: subsequent transcription continues immediately. If the LLM call fails (auth, network, timeout, server, malformed response), the failure MUST be logged under `--verbose` and skipped — the verbatim transcript above the blank line is the user's fallback. If the renderer has been disposed before the refinement resolves, the result MUST be dropped silently.
 
 ### FR-14 — LLM provider abstraction
-The tool MUST support the eight standard LLM provider names mandated by the project's tool conventions: `azure-openai`, `openai`, `anthropic`, `google`, `azure-ai-inference`, `ollama`, `litellm`, `openai-compat`. `azure-openai` and `google` are implemented. The other six MUST be accepted by configuration validation but MUST throw `LLMConfigurationError` at refiner construction with a message naming the env vars to set when the provider lands. Provider selection is via `--llm-provider` / `MIC_TOOL_TS_LLM_PROVIDER` (default: `azure-openai`); model/deployment selection is via `--llm-model` / `MIC_TOOL_TS_LLM_MODEL` (default: `gpt-5.4`). Refinement is toggled by `--refine` / `--no-refine` / `MIC_TOOL_TS_REFINE` (default: on). Google Gemini refinement MUST require `GOOGLE_API_KEY` when `--llm-provider=google` and refinement is enabled.
+The tool MUST support the eight standard LLM provider names mandated by the project's tool conventions: `azure-openai`, `openai`, `anthropic`, `google`, `azure-ai-inference`, `ollama`, `litellm`, `openai-compat`. `azure-openai` and `google` are implemented. The other six MUST be accepted by configuration validation but MUST throw `LLMConfigurationError` at refiner construction with a message naming the env vars to set when the provider lands. Provider selection is via `--llm-provider` / `UNTYPE_LLM_PROVIDER` (default: `azure-openai`); model/deployment selection is via `--llm-model` / `UNTYPE_LLM_MODEL` (default: `gpt-5.4`). Refinement is toggled by `--refine` / `--no-refine` / `UNTYPE_REFINE` (default: on). Google Gemini refinement MUST require `GOOGLE_API_KEY` when `--llm-provider=google` and refinement is enabled.
 
 ### FR-15 — Four-tier env-var resolution chain
 Every CLI flag MUST have a documented env-var alias. The resolver MUST consult sources in this priority order (highest first):
 
 1. CLI flag value.
 2. `<cwd>/.env` (project-local).
-3. `~/.tool-agents/mic-tool-ts/.env` (per-user; folder mode `0700`, file mode `0600`).
+3. `~/.tool-agents/untype/.env` (per-user; folder mode `0700`, file mode `0600`).
 4. Shell environment (`process.env`).
 
 The resolver MUST NOT mutate `process.env`. Whitespace-only values from any tier MUST be treated as missing. Malformed `.env` files MUST raise `InvalidConfigurationError` rather than be silently ignored.
@@ -124,31 +124,31 @@ The tool MUST expose configuration for every non-secret Soniox session parameter
 
 | Aspect                  | CLI flag                  | Env var                              | Default                                                |
 |-------------------------|---------------------------|--------------------------------------|--------------------------------------------------------|
-| Real-time model         | `--model`                 | `MIC_TOOL_TS_MODEL`                     | `stt-rt-v4`                                            |
-| WebSocket endpoint      | `--endpoint`              | `MIC_TOOL_TS_ENDPOINT`                  | `wss://stt-rt.soniox.com/transcribe-websocket`         |
-| Language hints (repeat) | `--language` (variadic)   | `MIC_TOOL_TS_LANGUAGES` (CSV)           | `el,en`                                                |
-| PCM sample rate         | `--sample-rate`           | `MIC_TOOL_TS_SAMPLE_RATE`               | `16000`                                                |
-| Endpoint detection      | `--endpoint-detection` / `--no-endpoint-detection` | `MIC_TOOL_TS_ENABLE_ENDPOINT_DETECTION` | `true`                                                 |
+| Real-time model         | `--model`                 | `UNTYPE_MODEL`                     | `stt-rt-v4`                                            |
+| WebSocket endpoint      | `--endpoint`              | `UNTYPE_ENDPOINT`                  | `wss://stt-rt.soniox.com/transcribe-websocket`         |
+| Language hints (repeat) | `--language` (variadic)   | `UNTYPE_LANGUAGES` (CSV)           | `el,en`                                                |
+| PCM sample rate         | `--sample-rate`           | `UNTYPE_SAMPLE_RATE`               | `16000`                                                |
+| Endpoint detection      | `--endpoint-detection` / `--no-endpoint-detection` | `UNTYPE_ENABLE_ENDPOINT_DETECTION` | `true`                                                 |
 
 `--language auto` MUST translate to `enable_language_identification: true` with no `language_hints`, and MUST NOT be combinable with other codes. The sample rate fed to `sox` and to the Soniox session MUST be the same value.
 
 ### FR-17 — API-key expiry tracking
 The tool MUST accept an optional ISO date (`YYYY-MM-DD`) via `--api-key-expires-at` / `SONIOX_API_KEY_EXPIRES_AT` that records the renewal deadline of the Soniox key. At startup the tool MUST evaluate the date:
 
-- If the date is in the past → emit a single stderr line `[mic-tool-ts] WARNING: SONIOX_API_KEY expired N days ago (YYYY-MM-DD). Renew at https://console.soniox.com.`
-- Else if the date is within 14 days of today → emit `[mic-tool-ts] WARNING: SONIOX_API_KEY expires in N days (YYYY-MM-DD). Plan a renewal.`
+- If the date is in the past → emit a single stderr line `[untype] WARNING: SONIOX_API_KEY expired N days ago (YYYY-MM-DD). Renew at https://console.soniox.com.`
+- Else if the date is within 14 days of today → emit `[untype] WARNING: SONIOX_API_KEY expires in N days (YYYY-MM-DD). Plan a renewal.`
 - Else only emit a status line when `--verbose` is set.
 
 Expiry is operational; the tool MUST NOT refuse to run because of it. The user owns renewal.
 
 ### FR-18 — Renamed command and config namespace
-The project package and user-facing OS command MUST be named `mic-tool-ts`. The supported end-user invocation is the direct OS command `mic-tool-ts` on the user's `PATH`, not a `node`, `tsx`, `pnpm`, or npm-script wrapper. The per-user configuration folder MUST be `~/.tool-agents/mic-tool-ts/`, and project-specific environment variables MUST use the `MIC_TOOL_TS_*` prefix.
+The project package and user-facing OS command MUST be named `untype`. The supported end-user invocation is the direct OS command `untype` on the user's `PATH`, not a `node`, `tsx`, `pnpm`, or npm-script wrapper. The per-user configuration folder MUST be `~/.tool-agents/untype/`, and project-specific environment variables MUST use the `UNTYPE_*` prefix.
 
 ### FR-19 — Startup readiness message
-After the selected STT provider has connected, the microphone source has started, and signal handlers are installed, the tool MUST write a startup readiness line to stderr: `[mic-tool-ts] Ready to listen. Press Control-C to stop the listening tool.` This message is unconditional, because it is operational guidance, but it MUST NOT be written to stdout so transcript output remains pipe-safe.
+After the selected STT provider has connected, the microphone source has started, and signal handlers are installed, the tool MUST write a startup readiness line to stderr: `[untype] Ready to listen. Press Control-C to stop the listening tool.` This message is unconditional, because it is operational guidance, but it MUST NOT be written to stdout so transcript output remains pipe-safe.
 
 ### FR-20 — Alternative ElevenLabs transcription provider
-The tool MUST support `--stt-provider soniox|elevenlabs` / `MIC_TOOL_TS_STT_PROVIDER`, with `soniox` as the default. When `elevenlabs` is selected, the resolver MUST require `ELEVENLABS_API_KEY` or `--elevenlabs-api-key` and MUST NOT require `SONIOX_API_KEY`. The ElevenLabs provider MUST stream the existing PCM microphone chunks to the ElevenLabs realtime STT WebSocket endpoint, emit partial transcripts from `partial_transcript`, emit finals from `committed_transcript`, and map provider failures into typed auth/network/protocol errors. ElevenLabs language config MUST accept `auto` or one explicit language code; multiple language hints are rejected for this provider. When endpoint detection is enabled, ElevenLabs MUST use VAD commit strategy.
+The tool MUST support `--stt-provider soniox|elevenlabs` / `UNTYPE_STT_PROVIDER`, with `soniox` as the default. When `elevenlabs` is selected, the resolver MUST require `ELEVENLABS_API_KEY` or `--elevenlabs-api-key` and MUST NOT require `SONIOX_API_KEY`. The ElevenLabs provider MUST stream the existing PCM microphone chunks to the ElevenLabs realtime STT WebSocket endpoint, emit partial transcripts from `partial_transcript`, emit finals from `committed_transcript`, and map provider failures into typed auth/network/protocol errors. ElevenLabs language config MUST accept `auto` or one explicit language code; multiple language hints are rejected for this provider. When endpoint detection is enabled, ElevenLabs MUST use VAD commit strategy.
 
 ## Non-Functional Requirements added since v0.1.0
 
@@ -169,7 +169,7 @@ Source: `docs/design/request-008-voice-agent-command-protocol.md`, `docs/design/
 Status: implemented 2026-05-16.
 
 ### FR-21 — Interaction modes
-The tool MUST support `--interaction-mode dictation|agent-protocol|hybrid` / `MIC_TOOL_TS_INTERACTION_MODE`. `dictation` preserves human-facing transcript and processed-section output. `agent-protocol` emits machine-readable JSONL protocol events for downstream agents. `hybrid` requires `--protocol-output` / `MIC_TOOL_TS_PROTOCOL_OUTPUT` and MUST NOT silently mix human transcript text and protocol events in the same stream.
+The tool MUST support `--interaction-mode dictation|agent-protocol|hybrid` / `UNTYPE_INTERACTION_MODE`. `dictation` preserves human-facing transcript and processed-section output. `agent-protocol` emits machine-readable JSONL protocol events for downstream agents. `hybrid` requires `--protocol-output` / `UNTYPE_PROTOCOL_OUTPUT` and MUST NOT silently mix human transcript text and protocol events in the same stream.
 
 ### FR-22 — Spoken control markers
 The protocol MUST recognize configurable spoken markers for state commands, section submission, section cancellation, and literal-marker escape, with defaults `command`, `command send`, `command cancel`, and `literal phrase`. Marker matching MUST run on finalized STT text only. Slash-marker intent MUST be preserved for explicitly configured slash markers so they do not degrade to bare-word matches after punctuation normalization.
@@ -184,7 +184,7 @@ Agent protocol mode MUST emit one UTF-8 JSON object per line with monotonically 
 Operators MUST run only on complete submitted sections, never partial words. The active pipeline at `command send` is raw section → refine if enabled → translate if enabled → render or emit final output → copy to clipboard if enabled → send to focused input if enabled. The default translation policy translates Greek source text to English and English source text to Greek, with language detection based on the complete submitted section.
 
 ### FR-26 — Remembered protocol settings
-The tool MUST remember non-secret voice-agent protocol settings across graceful restarts. On shutdown it MUST persist the current `refine`, `translate`, `clipboard`, `input`, and `translation_policy` values to `~/.tool-agents/mic-tool-ts/state.json` using file mode `0600` in a `0700` per-user tool folder. On startup it MUST restore those values when the corresponding CLI/env default was not explicitly configured. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, and `--translation-policy` values MUST override saved state. The persisted file MUST NOT contain API keys, provider endpoints, prompts, transcript text, or processed section content. Invalid persisted state at startup MUST raise a typed configuration error.
+The tool MUST remember non-secret voice-agent protocol settings across graceful restarts. On shutdown it MUST persist the current `refine`, `translate`, `clipboard`, `input`, and `translation_policy` values to `~/.tool-agents/untype/state.json` using file mode `0600` in a `0700` per-user tool folder. On startup it MUST restore those values when the corresponding CLI/env default was not explicitly configured. Explicit `--refine-default`, `--translate-default`, `--clipboard-default`, `--input-default`, and `--translation-policy` values MUST override saved state. The persisted file MUST NOT contain API keys, provider endpoints, prompts, transcript text, or processed section content. Invalid persisted state at startup MUST raise a typed configuration error.
 
 ### FR-27 — Focused input operator
 When the `input` operator is enabled, the tool MUST send the final processed section output to the currently focused macOS input control after the section pipeline completes. The implementation MUST use the bundled macOS focused-input helper and MUST emit `input.sent` only after the helper reports successful delivery. Focused-input failures, including missing Accessibility permission, missing helper binary, or unsupported focused controls, MUST be fail-open: they emit a non-fatal stderr warning and a `protocol.warning` event in protocol modes, and they MUST NOT cause the process to exit non-zero.
@@ -193,7 +193,7 @@ When the `input` operator is enabled, the tool MUST send the final processed sec
 Source: `docs/reference/refined-request-focused-input-helper-plan-design.md`, `docs/reference/refined-request-focused-input-helper-implementation.md`, `docs/reference/codebase-scan-focused-input-helper-implementation.md`, `docs/reference/investigation-focused-control-text-delivery.md`, `docs/design/plan-014-focused-input-helper.md`, and `docs/design/focused-input-helper-design.md`.
 Status: implemented 2026-05-20.
 
-The focused-input implementation uses a bundled macOS user-level helper invoked by `mic-tool-ts`. The helper MUST read processed text from stdin, never from command-line arguments, and MUST return a structured JSON delivery result on stdout. Its default `auto` strategy MUST attempt direct Accessibility insertion first, Unicode keyboard-event typing second, and clipboard-preserving physical key-code paste as the universal fallback. The helper MUST expose a non-mutating `diagnose` mode for permission and focused-element troubleshooting. The public user-facing invocation remains `mic-tool-ts`; the helper is an internal implementation component, not a separate primary command.
+The focused-input implementation uses a bundled macOS user-level helper invoked by `untype`. The helper MUST read processed text from stdin, never from command-line arguments, and MUST return a structured JSON delivery result on stdout. Its default `auto` strategy MUST attempt direct Accessibility insertion first, Unicode keyboard-event typing second, and clipboard-preserving physical key-code paste as the universal fallback. The helper MUST expose a non-mutating `diagnose` mode for permission and focused-element troubleshooting. The public user-facing invocation remains `untype`; the helper is an internal implementation component, not a separate primary command.
 
 ## Non-Functional Requirements — Voice Agent Command Protocol
 
@@ -214,13 +214,13 @@ Source: `docs/design/request-014-electron-ui-command.md`, `docs/design/plan-008-
 Status: implemented 2026-05-16.
 
 ### FR-28 — Electron UI subcommand
-The tool MUST support `mic-tool-ts ui` as a user-facing subcommand that opens an Electron-based UI while preserving the existing `mic-tool-ts` CLI behavior.
+The tool MUST support `untype ui` as a user-facing subcommand that opens an Electron-based UI while preserving the existing `untype` CLI behavior.
 
 ### FR-29 — UI-owned transcript rendering
 When UI mode is active, human-facing partial transcripts, final transcripts, refined or translated outputs, readiness messages, warnings, and session status MUST render in the UI instead of stdout/stderr. Console output MUST be limited to fatal bootstrap or crash diagnostics that cannot be delivered to the UI.
 
 ### FR-30 — UI configuration surface
-The UI MUST expose editable controls for the existing major runtime configuration categories: STT provider, API-key status and expiry, model, language hints, sample rate, endpoint detection, protocol mode, operator defaults, translation policy, LLM refinement settings, and diagnostics. On UI load, the displayed values MUST be resolved from the same configuration chain used by the CLI and persisted protocol settings, then overlaid with non-secret UI preferences from `~/.tool-agents/mic-tool-ts/ui-state.json`. UI edits MUST cross the context-isolated preload IPC boundary as typed settings, MUST be validated in the Electron main process, MUST be persisted to `ui-state.json`, and MUST be applied to the next started session as explicit CLI-equivalent settings. The UI state file MUST NOT contain API-key values, transcript text, protocol events, processed output, or derived credential status. Missing required configuration MUST still raise typed configuration errors; the UI MUST NOT substitute fallback values.
+The UI MUST expose editable controls for the existing major runtime configuration categories: STT provider, API-key status and expiry, model, language hints, sample rate, endpoint detection, protocol mode, operator defaults, translation policy, LLM refinement settings, and diagnostics. On UI load, the displayed values MUST be resolved from the same configuration chain used by the CLI and persisted protocol settings, then overlaid with non-secret UI preferences from `~/.tool-agents/untype/ui-state.json`. UI edits MUST cross the context-isolated preload IPC boundary as typed settings, MUST be validated in the Electron main process, MUST be persisted to `ui-state.json`, and MUST be applied to the next started session as explicit CLI-equivalent settings. The UI state file MUST NOT contain API-key values, transcript text, protocol events, processed output, or derived credential status. Missing required configuration MUST still raise typed configuration errors; the UI MUST NOT substitute fallback values.
 
 ### FR-30.1 — UI credential status
 The UI MUST never receive API-key values. It MUST display only the active provider key name, configured/missing status, expiry reminder, and source tier (`CLI flag`, `local .env`, `user .env`, `shell env`, or `not found`). Switching provider in the UI MUST refresh the credential status for that provider before the next session starts.
@@ -238,7 +238,7 @@ The UI transcript timeline MUST expose a clear action that removes only the rend
 The UI MUST target the current macOS Tahoe 26 design language with native-feeling traffic lights, a translucent sidebar/control layer, restrained animation, system typography, and high-legibility content surfaces. The implementation MUST use Electron's macOS vibrancy/window APIs and local CSS to approximate Liquid Glass while respecting light mode, dark mode, reduced-motion, and reduced-transparency accessibility settings. The preferred visual direction is the Plan 009 revision: transcript content remains the primary stable content plane, while glass-like styling is reserved mainly for navigation, toolbars, segmented controls, and capture controls.
 
 ### FR-33 — UI push-to-talk hotkey
-The UI MUST expose a push-to-talk hotkey setting with an enable/disable control and an editable Electron-style accelerator string. The default hotkey MUST be `Control+\``. The enabled state and hotkey accelerator are part of the non-secret UI settings persisted in `~/.tool-agents/mic-tool-ts/ui-state.json`. Invalid persisted UI state MUST produce a typed configuration error. When enabled and `mic-tool-ts ui` is running, the app MUST warm a UI-owned microphone/STT session before the first hotkey press when configuration is valid. While warmed and idle, real microphone chunks MUST NOT be sent to the STT provider; the session MUST send same-length PCM silence chunks to keep the provider stream alive. Hotkey keydown MUST open the warmed audio gate immediately, even when another macOS app has focus. The press path MUST reserve the configured shortcut with the OS where Electron supports the accelerator so foreground apps do not receive the shortcut. System-wide hotkey keyup MUST close the audio gate and commit the provider utterance when the native release hook is available. Hotkey release MUST submit any finalized pending section to the existing protocol operator pipeline so configured refinement, translation, clipboard, and focused-input processing can run after release without tearing down the warmed session. Repeated keydown events while held MUST NOT start duplicate sessions. Manual Start/Stop sessions MUST remain independent and MUST NOT submit pending text on stop unless explicitly requested by the hotkey release path. If the native release hook cannot start, the UI MUST warn and the registered hotkey MUST fall back to press-to-toggle so the feature remains usable from other apps. Invalid hotkey strings MUST be rejected and reported in the UI rather than replaced with a hidden fallback.
+The UI MUST expose a push-to-talk hotkey setting with an enable/disable control and an editable Electron-style accelerator string. The default hotkey MUST be `Control+\``. The enabled state and hotkey accelerator are part of the non-secret UI settings persisted in `~/.tool-agents/untype/ui-state.json`. Invalid persisted UI state MUST produce a typed configuration error. When enabled and `untype ui` is running, the app MUST warm a UI-owned microphone/STT session before the first hotkey press when configuration is valid. While warmed and idle, real microphone chunks MUST NOT be sent to the STT provider; the session MUST send same-length PCM silence chunks to keep the provider stream alive. Hotkey keydown MUST open the warmed audio gate immediately, even when another macOS app has focus. The press path MUST reserve the configured shortcut with the OS where Electron supports the accelerator so foreground apps do not receive the shortcut. System-wide hotkey keyup MUST close the audio gate and commit the provider utterance when the native release hook is available. Hotkey release MUST submit any finalized pending section to the existing protocol operator pipeline so configured refinement, translation, clipboard, and focused-input processing can run after release without tearing down the warmed session. Repeated keydown events while held MUST NOT start duplicate sessions. Manual Start/Stop sessions MUST remain independent and MUST NOT submit pending text on stop unless explicitly requested by the hotkey release path. If the native release hook cannot start, the UI MUST warn and the registered hotkey MUST fall back to press-to-toggle so the feature remains usable from other apps. Invalid hotkey strings MUST be rejected and reported in the UI rather than replaced with a hidden fallback.
 
 When the push-to-talk session is warmed but the hotkey is not held, the UI MUST show a non-recording warm/ready state rather than active listening. While the hotkey is held and the audio gate is open, the UI MUST show an active recording state. The renderer MUST receive this distinction through typed UI events, not by parsing diagnostic text.
 
@@ -262,7 +262,7 @@ While a UI push-to-talk hotkey is held, the user MUST be able to toggle protocol
 
 The right inspector sidepanel MUST expose only the four protocol operator switches: `refine`, `translate`, `clipboard`, and `input`. These switches MUST remain enabled during warmed, recording, and manual listening states while non-protocol settings remain disabled. Switch changes during an active session MUST update the active protocol controller through typed runtime state changes before the next section submission, and the Protocol view switches, inspector switches, overlay indicators, and protocol events MUST stay synchronized.
 
-When verbose diagnostics are enabled through the existing `MIC_TOOL_TS_VERBOSE` configuration path, UI push-to-talk MUST emit privacy-safe diagnostic info for hotkey press/release sources, capture state transitions, and overlay actions. These diagnostics MUST identify whether overlay hiding follows a release, warm/idle capture transition, stop/error, or scheduled hide action. They MUST NOT include transcript text, processed output, provider endpoints, API keys, or secret values.
+When verbose diagnostics are enabled through the existing `UNTYPE_VERBOSE` configuration path, UI push-to-talk MUST emit privacy-safe diagnostic info for hotkey press/release sources, capture state transitions, and overlay actions. These diagnostics MUST identify whether overlay hiding follows a release, warm/idle capture transition, stop/error, or scheduled hide action. They MUST NOT include transcript text, processed output, provider endpoints, API keys, or secret values.
 
 ## Non-Functional Requirements — Electron UI Command
 

@@ -70,3 +70,7 @@ Out of scope:
 
 > I want you to create a plan and a design document to describe how to approach & proceed 
 > to the implementation of this approach
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

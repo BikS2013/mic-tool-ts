@@ -11,7 +11,7 @@ import {
 } from "../src/platform/macos/focusedInputHelper.js";
 
 function writeHelper(source: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "mic-tool-ts-helper-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "untype-helper-test-"));
   const path = join(dir, "fake-helper");
   writeFileSync(path, `#!/usr/bin/env node\n${source}`, { mode: 0o755 });
   chmodSync(path, 0o755);
@@ -50,7 +50,7 @@ describe("focused input helper adapter", () => {
       accessFile: () => {},
     });
 
-    expect(path).toBe("/project/dist/native/macos/mic-tool-ts-input-helper");
+    expect(path).toBe("/project/dist/native/macos/untype-input-helper");
   });
 
   it("fails explicitly when the helper is unavailable", () => {
@@ -104,7 +104,7 @@ process.stdin.on("end", () => {
   console.log(JSON.stringify({
     ok: false,
     code: "accessibility_not_trusted",
-    message: "Grant Accessibility permission to mic-tool-ts-input-helper."
+    message: "Grant Accessibility permission to untype-input-helper."
   }));
   process.exit(2);
 });
@@ -113,7 +113,7 @@ process.stdin.on("end", () => {
     await expect(deliverToFocusedInput("hello", { helperPath })).resolves.toEqual({
       ok: false,
       code: "accessibility_not_trusted",
-      message: "Grant Accessibility permission to mic-tool-ts-input-helper.",
+      message: "Grant Accessibility permission to untype-input-helper.",
       method: undefined,
       targetRole: undefined,
       targetSubrole: undefined,

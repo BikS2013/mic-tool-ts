@@ -80,7 +80,7 @@ export class VoiceAgentProtocolController {
     this.sessionStarted = true;
     this.writeProtocol({
       type: "session.started",
-      protocol: "mic-tool-ts.voice-agent.v1",
+      protocol: "untype.voice-agent.v1",
     });
   }
 
@@ -158,7 +158,7 @@ export class VoiceAgentProtocolController {
         });
         if (this.verbose) {
           this.diagnosticWriter(
-            `[mic-tool-ts] protocol state: ${action.key}=${action.value ? "on" : "off"}`,
+            `[untype] protocol state: ${action.key}=${action.value ? "on" : "off"}`,
             false,
           );
         }
@@ -176,7 +176,7 @@ export class VoiceAgentProtocolController {
         }
         if (this.verbose) {
           this.diagnosticWriter(
-            `[mic-tool-ts] protocol status: ${formatStatusSummary(action)}`,
+            `[untype] protocol status: ${formatStatusSummary(action)}`,
             false,
           );
         }
@@ -204,7 +204,7 @@ export class VoiceAgentProtocolController {
         });
         if (this.verbose) {
           this.diagnosticWriter(
-            `[mic-tool-ts] protocol section cancelled: ${action.sectionId} (${action.reason})`,
+            `[untype] protocol section cancelled: ${action.sectionId} (${action.reason})`,
             false,
           );
         }
@@ -216,7 +216,7 @@ export class VoiceAgentProtocolController {
       }
       case "section.empty": {
         if (this.verbose) {
-          this.diagnosticWriter("[mic-tool-ts] protocol: empty section ignored", false);
+          this.diagnosticWriter("[untype] protocol: empty section ignored", false);
         }
         return;
       }
@@ -316,7 +316,7 @@ export class VoiceAgentProtocolController {
   }
 
   private warn(message: string): void {
-    this.diagnosticWriter(`[mic-tool-ts] protocol warning: ${message}`, true);
+    this.diagnosticWriter(`[untype] protocol warning: ${message}`, true);
     this.writeProtocol({
       type: "protocol.warning",
       message,
@@ -329,7 +329,7 @@ export class VoiceAgentProtocolController {
       err instanceof LLMRefinementError ? `llm-${err.kind}` : operator;
     const message = err instanceof Error ? err.message : String(err);
     this.diagnosticWriter(
-      `[mic-tool-ts] protocol ${operator} failed (${tag}): ${message}`,
+      `[untype] protocol ${operator} failed (${tag}): ${message}`,
       true,
     );
   }
@@ -352,12 +352,12 @@ function inputFailureRemediation(err: unknown): string {
   if (err instanceof FocusedInputDeliveryError) {
     if (err.code === "accessibility_not_trusted") {
       return [
-        "Open System Settings > Privacy & Security > Accessibility and enable mic-tool-ts-input-helper, plus the app that launched mic-tool-ts if macOS lists it separately.",
+        "Open System Settings > Privacy & Security > Accessibility and enable untype-input-helper, plus the app that launched untype if macOS lists it separately.",
         "Restart the launching app after changing the permission, then focus the target input control before command send completes.",
       ].join(" ");
     }
     if (err.code === "helper_unavailable") {
-      return "Rebuild mic-tool-ts so dist/native/macos/mic-tool-ts-input-helper exists and is executable.";
+      return "Rebuild untype so dist/native/macos/untype-input-helper exists and is executable.";
     }
     if (err.code === "unsupported_platform") {
       return "Focused input delivery is currently macOS-only.";
@@ -370,11 +370,11 @@ function inputFailureRemediation(err: unknown): string {
   ) {
     return [
       "macOS blocked System Events keystrokes.",
-      "Open System Settings > Privacy & Security > Accessibility and enable the app that launched mic-tool-ts, such as Terminal, iTerm2, VS Code, or Cursor.",
+      "Open System Settings > Privacy & Security > Accessibility and enable the app that launched untype, such as Terminal, iTerm2, VS Code, or Cursor.",
       "Restart that app after changing the permission, then focus the target input control before command send completes.",
     ].join(" ");
   }
-  return "Check that the target control is focused before command send completes, and grant Accessibility permission to the terminal app running mic-tool-ts.";
+  return "Check that the target control is focused before command send completes, and grant Accessibility permission to the terminal app running untype.";
 }
 
 function formatStatusReport(report: {
@@ -382,7 +382,7 @@ function formatStatusReport(report: {
   translation_policy: TranslationPolicy;
   pending_section: boolean;
 }): string {
-  return `[mic-tool-ts] status: ${formatStatusSummary(report)}`;
+  return `[untype] status: ${formatStatusSummary(report)}`;
 }
 
 function formatStatusSummary(report: {

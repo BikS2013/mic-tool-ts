@@ -46,3 +46,7 @@ The transcript timeline and inspector already have vertical `overflow: auto`, bu
 - The renderer uses a fixed `100vw` x `100vh` `.app-shell` grid and keeps `body` overflow hidden.
 - Content surfaces use `min-width: 0` / `min-height: 0` to let CSS grid children shrink.
 - The app avoids nested card styling; panels are unframed layout regions inside the main content area.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

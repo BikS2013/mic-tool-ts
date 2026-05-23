@@ -285,3 +285,7 @@ The section between the state commands and `command send` is processed through t
 ## Recommendation
 
 Build this as a protocol layer with explicit operator state, `command status` reporting, `command send` section submission, remembered non-secret runtime settings, and JSONL events. Do not expand the existing guard phrase into a general-purpose command parser. Keep dictation as the default, make protocol events opt-in, and let active operators process complete submitted sections only.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

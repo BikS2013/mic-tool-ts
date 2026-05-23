@@ -72,3 +72,7 @@ Out of scope:
 
 > I want you to change the hotkey to Command-`
 > And I want you to make it system-wide, not needed to focus the UI window to activate it.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

@@ -5,15 +5,15 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const source = resolve(root, "native/macos/input-helper/main.swift");
-const output = resolve(root, "dist/native/macos/mic-tool-ts-input-helper");
+const output = resolve(root, "dist/native/macos/untype-input-helper");
 
 if (process.platform !== "darwin") {
-  console.error("[mic-tool-ts] native focused-input helper build requires macOS.");
+  console.error("[untype] native focused-input helper build requires macOS.");
   process.exit(1);
 }
 
 if (!existsSync(source)) {
-  console.error(`[mic-tool-ts] missing native helper source: ${source}`);
+  console.error(`[untype] missing native helper source: ${source}`);
   process.exit(1);
 }
 
@@ -24,7 +24,7 @@ const result = spawnSync("swiftc", [source, "-o", output], {
 });
 
 if (result.error !== undefined) {
-  console.error(`[mic-tool-ts] failed to start swiftc: ${result.error.message}`);
+  console.error(`[untype] failed to start swiftc: ${result.error.message}`);
   process.exit(1);
 }
 
@@ -33,4 +33,4 @@ if (result.status !== 0) {
 }
 
 chmodSync(output, 0o755);
-console.error(`[mic-tool-ts] built native focused-input helper: ${output}`);
+console.error(`[untype] built native focused-input helper: ${output}`);

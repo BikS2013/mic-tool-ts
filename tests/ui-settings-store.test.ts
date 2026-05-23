@@ -26,7 +26,7 @@ import {
 let home: string;
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), "mic-tool-ts-ui-store-test-"));
+  home = mkdtempSync(join(tmpdir(), "untype-ui-store-test-"));
 });
 
 afterEach(() => {
@@ -35,7 +35,7 @@ afterEach(() => {
 
 describe("UI settings store", () => {
   it("returns null when no UI state file exists", () => {
-    expect(loadPersistedUiSettings({ toolName: "mic-tool-ts", home })).toBeNull();
+    expect(loadPersistedUiSettings({ toolName: "untype", home })).toBeNull();
   });
 
   it("saves and loads all non-secret UI settings with restrictive modes", () => {
@@ -67,11 +67,11 @@ describe("UI settings store", () => {
 
     savePersistedUiSettings(
       settings,
-      { toolName: "mic-tool-ts", home },
+      { toolName: "untype", home },
     );
 
-    const path = uiSettingsPath({ toolName: "mic-tool-ts", home });
-    expect(loadPersistedUiSettings({ toolName: "mic-tool-ts", home }))
+    const path = uiSettingsPath({ toolName: "untype", home });
+    expect(loadPersistedUiSettings({ toolName: "untype", home }))
       .toEqual({
         provider: "elevenlabs",
         model: "scribe_v2_realtime",
@@ -111,7 +111,7 @@ describe("UI settings store", () => {
   });
 
   it("keeps reading push-to-talk-only UI state files", () => {
-    const path = uiSettingsPath({ toolName: "mic-tool-ts", home });
+    const path = uiSettingsPath({ toolName: "untype", home });
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(
       path,
@@ -126,11 +126,11 @@ describe("UI settings store", () => {
       "utf8",
     );
 
-    expect(loadPersistedUiSettings({ toolName: "mic-tool-ts", home })).toEqual({
+    expect(loadPersistedUiSettings({ toolName: "untype", home })).toEqual({
       hotkeyEnabled: true,
       hotkey: "CommandOrControl+Shift+Space",
     });
-    expect(loadPersistedPushToTalkSettings({ toolName: "mic-tool-ts", home }))
+    expect(loadPersistedPushToTalkSettings({ toolName: "untype", home }))
       .toEqual({
         enabled: true,
         hotkey: "CommandOrControl+Shift+Space",
@@ -138,7 +138,7 @@ describe("UI settings store", () => {
   });
 
   it("keeps reading UI state files saved before LLM provider controls existed", () => {
-    const path = uiSettingsPath({ toolName: "mic-tool-ts", home });
+    const path = uiSettingsPath({ toolName: "untype", home });
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(
       path,
@@ -165,7 +165,7 @@ describe("UI settings store", () => {
       "utf8",
     );
 
-    expect(loadPersistedUiSettings({ toolName: "mic-tool-ts", home }))
+    expect(loadPersistedUiSettings({ toolName: "untype", home }))
       .toMatchObject({
         llmProvider: "azure-openai",
         llmModel: "gpt-5.4",
@@ -178,10 +178,10 @@ describe("UI settings store", () => {
         enabled: true,
         hotkey: "CmdOrCtrl+Shift+Space",
       },
-      { toolName: "mic-tool-ts", home },
+      { toolName: "untype", home },
     );
 
-    expect(loadPersistedPushToTalkSettings({ toolName: "mic-tool-ts", home }))
+    expect(loadPersistedPushToTalkSettings({ toolName: "untype", home }))
       .toEqual({
         enabled: true,
         hotkey: "CommandOrControl+Shift+Space",
@@ -189,7 +189,7 @@ describe("UI settings store", () => {
   });
 
   it("rejects invalid persisted UI state", () => {
-    const path = uiSettingsPath({ toolName: "mic-tool-ts", home });
+    const path = uiSettingsPath({ toolName: "untype", home });
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(
       path,
@@ -205,7 +205,7 @@ describe("UI settings store", () => {
     );
 
     expect(() =>
-      loadPersistedUiSettings({ toolName: "mic-tool-ts", home }),
+      loadPersistedUiSettings({ toolName: "untype", home }),
     ).toThrow(InvalidConfigurationError);
   });
 });

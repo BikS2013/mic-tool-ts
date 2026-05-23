@@ -777,3 +777,7 @@ SONIOX_API_KEY=sk-... node dist/index.js --language en
 - TTY output coloring, progress bars, TUI.
 - `--keepalive-interval-ms` flag (SDK default is correct for v1).
 - Periodic `total_audio_proc_ms` logging under verbose (mentioned in research as nice-to-have; defer unless requested).
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

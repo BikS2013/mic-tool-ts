@@ -24,8 +24,8 @@ const TRACKED_ENV_KEYS = [
   "ELEVENLABS_API_KEY",
   "AZURE_OPENAI_API_KEY",
   "AZURE_OPENAI_ENDPOINT",
-  "MIC_TOOL_TS_LLM_PROVIDER",
-  "MIC_TOOL_TS_LLM_MODEL",
+  "UNTYPE_LLM_PROVIDER",
+  "UNTYPE_LLM_MODEL",
   "GOOGLE_API_KEY",
 ] as const;
 
@@ -35,7 +35,7 @@ let tmpHome: string | null = null;
 let cwdSpy: ReturnType<typeof vi.spyOn> | null = null;
 
 function setCwd(dotenvContents: string): void {
-  tmpDir = mkdtempSync(join(tmpdir(), "mic-tool-ts-ui-test-"));
+  tmpDir = mkdtempSync(join(tmpdir(), "untype-ui-test-"));
   writeFileSync(join(tmpDir, ".env"), dotenvContents, "utf8");
   cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
 }
@@ -45,7 +45,7 @@ beforeEach(() => {
     originalEnv[key] = process.env[key];
     delete process.env[key];
   }
-  tmpHome = mkdtempSync(join(tmpdir(), "mic-tool-ts-ui-home-"));
+  tmpHome = mkdtempSync(join(tmpdir(), "untype-ui-home-"));
   process.env["HOME"] = tmpHome;
 });
 
@@ -72,13 +72,13 @@ describe("UI runtime settings", () => {
     setCwd(
       [
         "SONIOX_API_KEY=sk_configured",
-        "MIC_TOOL_TS_REFINE=false",
-        "MIC_TOOL_TS_LLM_PROVIDER=litellm",
-        "MIC_TOOL_TS_LLM_MODEL=local-refiner",
-        "MIC_TOOL_TS_MODEL=stt-custom",
-        "MIC_TOOL_TS_LANGUAGES=el,en,fr",
-        "MIC_TOOL_TS_SAMPLE_RATE=24000",
-        "MIC_TOOL_TS_INPUT_DEFAULT=on",
+        "UNTYPE_REFINE=false",
+        "UNTYPE_LLM_PROVIDER=litellm",
+        "UNTYPE_LLM_MODEL=local-refiner",
+        "UNTYPE_MODEL=stt-custom",
+        "UNTYPE_LANGUAGES=el,en,fr",
+        "UNTYPE_SAMPLE_RATE=24000",
+        "UNTYPE_INPUT_DEFAULT=on",
         "",
       ].join("\n"),
     );
@@ -101,7 +101,7 @@ describe("UI runtime settings", () => {
   });
 
   it("restores persisted UI settings on UI load", () => {
-    setCwd("SONIOX_API_KEY=sk_configured\nELEVENLABS_API_KEY=xi_configured\nMIC_TOOL_TS_REFINE=false\n");
+    setCwd("SONIOX_API_KEY=sk_configured\nELEVENLABS_API_KEY=xi_configured\nUNTYPE_REFINE=false\n");
     savePersistedUiSettings(
       mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {
         provider: "elevenlabs",
@@ -121,7 +121,7 @@ describe("UI runtime settings", () => {
         hotkeyEnabled: true,
         hotkey: "CmdOrCtrl+Shift+Space",
       }),
-      { toolName: "mic-tool-ts", home: tmpHome ?? undefined },
+      { toolName: "untype", home: tmpHome ?? undefined },
     );
 
     const result = loadRendererSettingsForUi();
@@ -155,7 +155,7 @@ describe("UI runtime settings", () => {
         llmProvider: "google",
         llmModel: "gemini-3.5-flash",
       }),
-      { toolName: "mic-tool-ts", home: tmpHome ?? undefined },
+      { toolName: "untype", home: tmpHome ?? undefined },
     );
 
     const result = loadRendererSettingsForUi();
@@ -167,16 +167,16 @@ describe("UI runtime settings", () => {
   });
 
   it("reports invalid persisted UI settings as a UI settings error", () => {
-    setCwd("SONIOX_API_KEY=sk_configured\nMIC_TOOL_TS_REFINE=false\n");
+    setCwd("SONIOX_API_KEY=sk_configured\nUNTYPE_REFINE=false\n");
     const statePath = join(
       tmpHome ?? "",
       ".tool-agents",
-      "mic-tool-ts",
+      "untype",
       "ui-state.json",
     );
     savePersistedUiSettings(
       mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {}),
-      { toolName: "mic-tool-ts", home: tmpHome ?? undefined },
+      { toolName: "untype", home: tmpHome ?? undefined },
     );
     writeFileSync(
       statePath,
@@ -214,7 +214,7 @@ describe("UI runtime settings", () => {
   });
 
   it("refreshes credential status when the UI switches provider", () => {
-    setCwd("SONIOX_API_KEY=sk_configured\nMIC_TOOL_TS_REFINE=false\n");
+    setCwd("SONIOX_API_KEY=sk_configured\nUNTYPE_REFINE=false\n");
     const elevenlabsSettings = mergeRendererSettings(DEFAULT_RENDERER_SETTINGS, {
       provider: "elevenlabs",
       model: "scribe_v2_realtime",

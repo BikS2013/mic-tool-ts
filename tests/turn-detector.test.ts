@@ -147,7 +147,7 @@ describe("GuardPhraseTurnDetector", () => {
     });
     d.final("we stop now please");
     expect(stderr).toHaveBeenCalledWith(
-      "[mic-tool-ts] turn boundary detected\n",
+      "[untype] turn boundary detected\n",
     );
     stderr.mockRestore();
   });

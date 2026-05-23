@@ -31,3 +31,7 @@ Reuse the existing renderer settings model and protocol runtime toggle path. Add
 - Protocol switches remain enabled in `running`, `warm`, and `recording`; other settings remain disabled.
 - Active sessions receive runtime protocol state changes from switch edits.
 - `pnpm typecheck`, focused tests, `pnpm test`, `pnpm build`, and the Electron bridge verification pass.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

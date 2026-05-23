@@ -2,7 +2,7 @@
  * ElevenLabs Scribe Realtime STT client.
  *
  * Uses the public WebSocket API directly instead of the ElevenLabs SDK because
- * `mic-tool-ts` already owns mic capture, chunking, lifecycle, and rendering.
+ * `untype` already owns mic capture, chunking, lifecycle, and rendering.
  * The wrapper adapts ElevenLabs events to the provider-neutral Transcriber
  * contract used by the orchestrator.
  */
@@ -63,7 +63,7 @@ export class ElevenLabsTranscriber implements Transcriber {
 
     if (this.opts.verbose) {
       process.stderr.write(
-        `[mic-tool-ts] elevenlabs: connecting (model=${this.opts.model}, languages=[${this.opts.languages.join(", ")}])\n`,
+        `[untype] elevenlabs: connecting (model=${this.opts.model}, languages=[${this.opts.languages.join(", ")}])\n`,
       );
     }
 
@@ -122,7 +122,7 @@ export class ElevenLabsTranscriber implements Transcriber {
           ws.off("close", onPreClose);
           this.state = "connected";
           if (this.opts.verbose) {
-            process.stderr.write("[mic-tool-ts] elevenlabs: connected\n");
+            process.stderr.write("[untype] elevenlabs: connected\n");
           }
           resolve();
         });
@@ -140,7 +140,7 @@ export class ElevenLabsTranscriber implements Transcriber {
     if (ws === undefined || this.state !== "connected" || ws.readyState !== WebSocket.OPEN) {
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool-ts] dropped ${chunk.length} audio bytes (elevenlabs state=${this.state})\n`,
+          `[untype] dropped ${chunk.length} audio bytes (elevenlabs state=${this.state})\n`,
         );
       }
       return;
@@ -217,7 +217,7 @@ export class ElevenLabsTranscriber implements Transcriber {
       }
       this.state = "closing";
       try {
-        ws.close(1000, "mic-tool-ts shutdown");
+        ws.close(1000, "untype shutdown");
       } catch {
         /* best effort */
       }
@@ -261,7 +261,7 @@ export class ElevenLabsTranscriber implements Transcriber {
     ws.on("close", (code, reason) => {
       if (this.opts.verbose) {
         process.stderr.write(
-          `[mic-tool-ts] elevenlabs: disconnected (code=${code})\n`,
+          `[untype] elevenlabs: disconnected (code=${code})\n`,
         );
       }
       this.state = "closed";
@@ -287,7 +287,7 @@ export class ElevenLabsTranscriber implements Transcriber {
       case "session_started":
         if (this.opts.verbose) {
           process.stderr.write(
-            `[mic-tool-ts] elevenlabs: session_started${parsed.session_id !== undefined ? ` (${parsed.session_id})` : ""}\n`,
+            `[untype] elevenlabs: session_started${parsed.session_id !== undefined ? ` (${parsed.session_id})` : ""}\n`,
           );
         }
         return;
@@ -310,7 +310,7 @@ export class ElevenLabsTranscriber implements Transcriber {
       default:
         if (this.opts.verbose) {
           process.stderr.write(
-            `[mic-tool-ts] elevenlabs: ignored event ${String(parsed.message_type ?? "unknown")}\n`,
+            `[untype] elevenlabs: ignored event ${String(parsed.message_type ?? "unknown")}\n`,
           );
         }
     }
@@ -323,7 +323,7 @@ export class ElevenLabsTranscriber implements Transcriber {
     } catch (cbErr) {
       if (this.opts.verbose) {
         const msg = cbErr instanceof Error ? cbErr.message : String(cbErr);
-        process.stderr.write(`[mic-tool-ts] onError callback threw: ${msg}\n`);
+        process.stderr.write(`[untype] onError callback threw: ${msg}\n`);
       }
     }
   }

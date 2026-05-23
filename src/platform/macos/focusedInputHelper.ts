@@ -36,7 +36,7 @@ type SpawnProcess = (
 ) => ChildProcessWithoutNullStreams;
 
 const HELPER_RELATIVE_TO_COMPILED_MODULE =
-  "../../native/macos/mic-tool-ts-input-helper";
+  "../../native/macos/untype-input-helper";
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 export class FocusedInputDeliveryError extends Error {
@@ -186,7 +186,7 @@ export function resolveFocusedInputHelperPath(
     accessFile(helperPath, constants.X_OK);
   } catch (err) {
     throw new FocusedInputDeliveryError(
-      `Focused input helper is not installed or executable at ${helperPath}. Rebuild mic-tool-ts so the native helper is bundled.`,
+      `Focused input helper is not installed or executable at ${helperPath}. Rebuild untype so the native helper is bundled.`,
       { code: "helper_unavailable", cause: err },
     );
   }

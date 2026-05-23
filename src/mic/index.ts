@@ -23,6 +23,6 @@ export function createMicSource(opts: CreateMicSourceOptions = {}): MicSource {
     });
   }
   throw new UnsupportedPlatformError(
-    `mic-tool-ts v1 supports macOS only (detected ${process.platform})`,
+    `untype v1 supports macOS only (detected ${process.platform})`,
   );
 }

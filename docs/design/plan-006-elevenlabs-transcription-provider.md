@@ -57,3 +57,7 @@ Add ElevenLabs Scribe Realtime as an alternative transcription provider for `mic
 - Unit tests for ElevenLabs client event handling and error mapping.
 - Orchestrator tests for provider factory dispatch.
 - Run `pnpm typecheck`, `pnpm test`, and `pnpm audit --audit-level=high`.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

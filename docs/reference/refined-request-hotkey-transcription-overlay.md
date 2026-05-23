@@ -73,3 +73,7 @@ Investigate how `mic-tool-ts` can show an independent bottom-center overlay wind
 
 ## Original Request
 The user wants to investigate how, when they use the hotkey for recording/transcription, an independent bottom-center window can appear like the provided screenshot, showing that recording/transcription is in progress and displaying live transcribed text as it is recorded. This window should be independent from the current tool UI.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

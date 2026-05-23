@@ -45,3 +45,7 @@ Default guard phrase (Greek): `τέλος εντολής`.
 - Auto-detect language for the phrase. (User configures.)
 - Multiple guard phrases. (Single phrase only; user can pick one.)
 - Stop transcription on turn boundary. (We continue listening; the boundary is purely a console-rendering marker.)
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

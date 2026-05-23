@@ -59,3 +59,7 @@ Add compact protocol-feature indicators to the independent transcription overlay
 ## Original Request
 Nice, now I want you to add small indicators to the overlay at the bottom that show whether refinement, transcription, copy to clipboard, and input in the active control are enabled.
 Also, I  want you to enable hotkeys that allow the user, while holding down the dictation hotkey, to enable or disable these protocol features.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

@@ -376,3 +376,7 @@ If the project later prioritizes a single capture stack over minimal change, mig
 - Debian `arecord` manpage: https://manpages.debian.org/alsa-utils/arecord.1.en.html
 - Debian `parec` / `pacat` manpage: https://manpages.debian.org/testing/pulseaudio-utils/parec.1.en.html
 - PortAudio docs: https://portaudio.com/docs/v19-doxydocs/
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

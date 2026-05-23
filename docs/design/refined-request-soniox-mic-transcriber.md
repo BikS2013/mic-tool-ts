@@ -124,3 +124,7 @@ The following questions should be resolved during the investigation/planning pha
 > I want you to create a command line tool capable of listening to the microphone and transcribing the input through the Soniox API.
 > The user will provide the API key required by Soniox.
 > The tool must stream the transcribed text to the console.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

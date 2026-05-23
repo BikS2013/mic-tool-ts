@@ -109,3 +109,7 @@ You are a transcript-cleanup assistant. The input is a verbatim transcript of so
 - Conversation history across turns. (Each turn is independent.)
 - A "regenerate" command. (One-shot per turn; if it fails, it fails.)
 - Implementing every provider end-to-end. (Azure OpenAI fully; others scaffolded + stubbed for v2.)
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

@@ -21,7 +21,7 @@ import { InvalidConfigurationError } from "../src/errors.js";
 let home: string;
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), "mic-tool-ts-state-"));
+  home = mkdtempSync(join(tmpdir(), "untype-state-"));
 });
 
 afterEach(() => {
@@ -35,17 +35,17 @@ describe("protocol settings persistence", () => {
         operators: { refine: true, translate: false, clipboard: true, input: true },
         translation_policy: "to-en",
       },
-      { toolName: "mic-tool-ts", home },
+      { toolName: "untype", home },
     );
 
-    const path = protocolSettingsPath({ toolName: "mic-tool-ts", home });
+    const path = protocolSettingsPath({ toolName: "untype", home });
     const raw = readFileSync(path, "utf8");
     expect(raw).toContain('"version": 1');
     expect(raw).toContain('"translation_policy": "to-en"');
     expect(raw).not.toContain("API_KEY");
 
     expect(
-      loadPersistedProtocolSettings({ toolName: "mic-tool-ts", home }),
+      loadPersistedProtocolSettings({ toolName: "untype", home }),
     ).toEqual({
       operators: { refine: true, translate: false, clipboard: true, input: true },
       translation_policy: "to-en",
@@ -81,23 +81,23 @@ describe("protocol settings persistence", () => {
 
   it("returns null when no state file exists", () => {
     expect(
-      loadPersistedProtocolSettings({ toolName: "mic-tool-ts", home }),
+      loadPersistedProtocolSettings({ toolName: "untype", home }),
     ).toBeNull();
   });
 
   it("raises a typed config error for invalid persisted state", () => {
-    const path = protocolSettingsPath({ toolName: "mic-tool-ts", home });
-    mkdirSync(join(home, ".tool-agents", "mic-tool-ts"), { recursive: true });
+    const path = protocolSettingsPath({ toolName: "untype", home });
+    mkdirSync(join(home, ".tool-agents", "untype"), { recursive: true });
     writeFileSync(path, '{"version":1,"saved_at":"now","protocol":{}}', "utf8");
 
     expect(() =>
-      loadPersistedProtocolSettings({ toolName: "mic-tool-ts", home }),
+      loadPersistedProtocolSettings({ toolName: "untype", home }),
     ).toThrow(InvalidConfigurationError);
   });
 
   it("loads old state files without input as input off", () => {
-    const path = protocolSettingsPath({ toolName: "mic-tool-ts", home });
-    mkdirSync(join(home, ".tool-agents", "mic-tool-ts"), { recursive: true });
+    const path = protocolSettingsPath({ toolName: "untype", home });
+    mkdirSync(join(home, ".tool-agents", "untype"), { recursive: true });
     writeFileSync(
       path,
       JSON.stringify({
@@ -112,7 +112,7 @@ describe("protocol settings persistence", () => {
     );
 
     expect(
-      loadPersistedProtocolSettings({ toolName: "mic-tool-ts", home }),
+      loadPersistedProtocolSettings({ toolName: "untype", home }),
     ).toEqual({
       operators: { refine: true, translate: false, clipboard: true, input: false },
       translation_policy: "opposite",

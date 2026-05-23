@@ -53,3 +53,7 @@ generated_at: 2026-05-20
 ## Duplication Check
 
 No existing system-wide hook module exists. The focused-window hotkey path exists in `src/ui/electronMain.ts` and `src/ui/renderer/app.ts`; the new global manager should call the same start/stop functions and avoid duplicating transcription/session logic.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

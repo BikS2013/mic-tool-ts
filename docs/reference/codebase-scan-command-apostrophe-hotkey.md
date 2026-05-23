@@ -51,3 +51,7 @@ The configurable UI hotkey and system-wide manager already exist. The requested 
 - UI settings validation rejects invalid hotkey strings through shared normalization in `src/ui/shared.ts`.
 - System-wide hotkey startup failures are warnings, preserving focused-window fallback behavior.
 - Tests are TypeScript/Vitest files under `tests/`; standalone scripts belong under `test_scripts/`, but no new script is needed for this change.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

@@ -80,3 +80,7 @@ Protocol settings persistence is separate and should remain in `src/protocol/set
   - `storageStatus`
   - `inputStatus`
 - Reuse `mergeRendererSettings()` for normalization where possible.
+
+
+---
+> **Historical note:** project renamed from `mic-tool-ts` to `untype` on 2026-05-23. References to `mic-tool-ts` in this document are preserved verbatim for historical accuracy.

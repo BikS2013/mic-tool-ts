@@ -584,7 +584,7 @@ describe("JSONL protocol controller", () => {
     const out = new PassThrough();
     const inputWriter = vi.fn(async () => {
       throw new FocusedInputDeliveryError(
-        "accessibility_not_trusted: Grant Accessibility permission to mic-tool-ts-input-helper.",
+        "accessibility_not_trusted: Grant Accessibility permission to untype-input-helper.",
         { code: "accessibility_not_trusted" },
       );
     });
@@ -609,7 +609,7 @@ describe("JSONL protocol controller", () => {
     expect(parseJsonl(out)).toContainEqual(
       expect.objectContaining({
         type: "protocol.warning",
-        message: expect.stringContaining("mic-tool-ts-input-helper"),
+        message: expect.stringContaining("untype-input-helper"),
       }),
     );
   });
@@ -670,7 +670,7 @@ describe("JSONL protocol controller", () => {
 
     expect(renderer.final).not.toHaveBeenCalled();
     expect(renderer.refined).toHaveBeenCalledWith(
-      "[mic-tool-ts] status: refine=off, translate=on, clipboard=off, input=off, translation_policy=opposite, pending_section=no",
+      "[untype] status: refine=off, translate=on, clipboard=off, input=off, translation_policy=opposite, pending_section=no",
     );
   });
 });

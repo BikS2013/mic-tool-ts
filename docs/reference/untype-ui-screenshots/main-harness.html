@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>untype capture harness</title>
+    <link rel="stylesheet" href="/dist/ui/renderer/styles.css">
+    <script>
+      (() => {
+        const settings = {
+          provider: 'soniox',
+          model: 'stt-rt-v4',
+          languages: ['el', 'en'],
+          sampleRate: 16000,
+          endpointDetection: true,
+          protocolMode: 'dictation',
+          refine: true,
+          translate: false,
+          clipboard: true,
+          focusedInput: false,
+          translationPolicy: 'opposite',
+          llmEnabled: true,
+          llmProvider: 'azure-openai',
+          llmModel: 'gpt-5.4',
+          apiKeyName: 'SONIOX_API_KEY',
+          apiKeyStatus: 'configured',
+          expiryStatus: '2026-11-15',
+          storageStatus: 'user .env',
+          inputStatus: 'Off',
+          hotkeyEnabled: true,
+          hotkey: 'Control+`'
+        };
+        const sessionCallbacks = [];
+        const emit = (event) => sessionCallbacks.forEach((callback) => callback(event));
+        const merge = (patch) => Object.assign(settings, patch);
+        window.untype = {
+          loadSettings: async () => ({ ok: true, settings: { ...settings } }),
+          updateSettings: async (patch) => {
+            merge(patch || {});
+            emit({ type: 'config.saved', message: 'settings persisted' });
+            return { ...settings };
+          },
+          startSession: async () => {
+            emit({ type: 'session.state', state: 'starting', reason: 'connecting to realtime STT provider' });
+            emit({ type: 'session.ready', message: '[untype] Ready to listen. Press Control-C to stop the listening tool.' });
+            emit({ type: 'session.started' });
+            emit({ type: 'capture.state', state: 'recording', reason: 'push-to-talk active' });
+            emit({ type: 'transcript.partial', text: 'open the project design and summarize the UI plan...', language: 'en' });
+            emit({ type: 'audio.level', level: 0.74 });
+          },
+          stopSession: async () => {
+            emit({ type: 'transcript.final', text: 'Open the project design and summarize the UI plan.', language: 'en' });
+            emit({ type: 'transcript.refined', text: 'Open the project design document and summarize the UI plan.', target: 'clipboard copied' });
+            emit({ type: 'protocol.status', status: 'refine=on, translate=off, clipboard=on, input=off, pending_section=no' });
+            emit({ type: 'capture.state', state: 'idle', reason: 'released' });
+            emit({ type: 'session.stopped' });
+          },
+          toggleProtocolFeature: async (key) => {
+            const map = { refine: 'refine', translate: 'translate', clipboard: 'clipboard', input: 'focusedInput' };
+            const settingKey = map[key];
+            if (!settingKey) return;
+            settings[settingKey] = !settings[settingKey];
+            settings.inputStatus = settings.focusedInput ? 'Ready' : 'Off';
+            emit({ type: 'protocol.event', status: `${key}=${settings[settingKey] ? 'on' : 'off'}`, event: { type: 'state.changed', key, value: settings[settingKey] } });
+          },
+          onSessionEvent: (callback) => {
+            sessionCallbacks.push(callback);
+            return () => {
+              const index = sessionCallbacks.indexOf(callback);
+              if (index >= 0) sessionCallbacks.splice(index, 1);
+            };
+          },
+          onOverlaySnapshot: () => () => {}
+        };
+
+        window.addEventListener('load', () => {
+          const params = new URLSearchParams(window.location.search);
+          const view = params.get('view') || 'monitor';
+          const variant = params.get('variant') || '';
+          setTimeout(() => {
+            emit({ type: 'session.ready', message: '[untype] Ready to listen. Press Control-C to stop the listening tool.' });
+            emit({ type: 'transcript.final', text: 'Command refine. Capture the current meeting note and clean it up before sending.', language: 'en' });
+            emit({ type: 'transcript.refined', text: 'Capture the current meeting note and clean it up before sending.', target: 'processed' });
+            emit({ type: 'transcript.turnBoundary' });
+            emit({ type: 'transcript.partial', text: 'now switch to translation and copy the result...', language: 'streaming' });
+            emit({ type: 'protocol.event', status: 'clipboard=on', event: { type: 'state.changed', key: 'clipboard', value: true } });
+            emit({ type: 'protocol.status', status: 'refine=on, translate=off, clipboard=on, input=off, translation_policy=opposite, pending_section=yes' });
+            emit({ type: 'diagnostic.info', message: 'Hotkey Control+` is registered for push-to-talk.' });
+            if (variant === 'elevenlabs') {
+              const provider = document.querySelector('#providerControl');
+              if (provider) {
+                provider.value = 'elevenlabs';
+                provider.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }
+            if (variant === 'agent') {
+              const mode = document.querySelector('#protocolModeControl');
+              if (mode) {
+                mode.value = 'agent-protocol';
+                mode.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+              ['#translateControl', '#focusedInputControl', '#inspectorTranslateControl', '#inspectorFocusedInputControl'].forEach((selector) => {
+                const control = document.querySelector(selector);
+                if (control && !control.checked) {
+                  control.checked = true;
+                  control.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              });
+            }
+            const button = document.querySelector(`[data-view-button="${view}"]`);
+            if (button) button.click();
+          }, 250);
+        });
+      })();
+    </script>
+    <script type="module" src="/dist/ui/renderer/app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell" data-demo="false">
+      <header class="toolbar">
+        <div class="traffic-space" aria-hidden="true"></div>
+        <div class="session-heading">
+          <h1>Live Transcription</h1>
+          <p id="sessionSummary">Loading settings...</p>
+        </div>
+        <div class="toolbar-actions">
+          <div class="toolbar-group" aria-label="View controls">
+            <button class="icon-button" type="button" data-view-button="monitor" aria-label="Show monitor">M</button>
+            <button class="icon-button" type="button" data-view-button="settings" aria-label="Show settings">S</button>
+            <button class="icon-button" type="button" data-view-button="protocol" aria-label="Show protocol">P</button>
+          </div>
+          <div class="status-chip" id="sessionStatus">
+            <span class="status-light" aria-hidden="true"></span>
+            <span id="sessionStatusText">Idle</span>
+          </div>
+        </div>
+      </header>
+
+      <nav class="sidebar" aria-label="Primary">
+        <div class="brand">untype</div>
+        <div class="nav-list">
+          <button class="nav-item active" type="button" data-view-button="monitor">
+            <span class="nav-icon" aria-hidden="true">1</span>
+            <span>Monitor</span>
+            <span class="badge" id="transcriptCount">0</span>
+          </button>
+          <button class="nav-item" type="button" data-view-button="settings">
+            <span class="nav-icon" aria-hidden="true">2</span>
+            <span>Settings</span>
+          </button>
+          <button class="nav-item" type="button" data-view-button="protocol">
+            <span class="nav-icon" aria-hidden="true">3</span>
+            <span>Protocol</span>
+          </button>
+          <button class="nav-item" type="button" data-view-button="logs">
+            <span class="nav-icon" aria-hidden="true">4</span>
+            <span>Logs</span>
+            <span class="badge" id="eventCount">0</span>
+          </button>
+        </div>
+
+        <div class="source-list" aria-label="Session source summary">
+          <div class="source-row">
+            <span>Provider</span>
+            <strong id="providerValue">--</strong>
+          </div>
+          <div class="source-row">
+            <span>Mode</span>
+            <strong id="modeValue">--</strong>
+          </div>
+          <div class="source-row">
+            <span>Input</span>
+            <strong id="inputValue">Ready</strong>
+          </div>
+        </div>
+      </nav>
+
+      <main class="content">
+        <div class="content-topline">
+          <div class="segmented" role="tablist" aria-label="Monitor views">
+            <button class="selected" type="button" data-view-button="monitor">Transcript</button>
+            <button type="button" data-view-button="logs">Events</button>
+          </div>
+          <div class="monitor-actions">
+            <button class="icon-button" type="button" id="clearTranscript" aria-label="Clear transcript">C</button>
+            <span class="demo-pill" id="demoPill"></span>
+          </div>
+        </div>
+
+        <section class="view-panel active" id="monitorView" aria-label="Transcript timeline">
+          <div class="timeline" id="timeline" aria-live="polite"></div>
+        </section>
+
+        <section class="view-panel" id="settingsView" aria-label="Settings overview">
+          <form class="settings-form" id="settingsForm">
+            <label class="field-row">
+              <span>Provider</span>
+              <select id="providerControl" data-setting-control>
+                <option value="soniox">Soniox</option>
+                <option value="elevenlabs">ElevenLabs</option>
+              </select>
+            </label>
+            <label class="field-row">
+              <span>Model</span>
+              <input id="modelControl" data-setting-control type="text" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="field-row">
+              <span>Languages</span>
+              <input id="languagesControl" data-setting-control type="text" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="field-row">
+              <span>Sample rate</span>
+              <select id="sampleRateControl" data-setting-control>
+                <option value="8000">8000 Hz</option>
+                <option value="16000">16000 Hz</option>
+                <option value="22050">22050 Hz</option>
+                <option value="24000">24000 Hz</option>
+                <option value="44100">44100 Hz</option>
+                <option value="48000">48000 Hz</option>
+              </select>
+            </label>
+            <label class="check-row">
+              <span>Endpoint detection</span>
+              <input id="endpointControl" data-setting-control type="checkbox">
+            </label>
+            <label class="check-row">
+              <span>Push-to-talk</span>
+              <input id="hotkeyEnabledControl" data-setting-control type="checkbox">
+            </label>
+            <label class="field-row">
+              <span>Hotkey</span>
+              <input id="hotkeyControl" data-setting-control type="text" autocomplete="off" spellcheck="false">
+            </label>
+          </form>
+        </section>
+
+        <section class="view-panel" id="protocolView" aria-label="Protocol overview">
+          <form class="settings-form" id="protocolForm">
+            <label class="field-row">
+              <span>Mode</span>
+              <select id="protocolModeControl" data-setting-control>
+                <option value="dictation">dictation</option>
+                <option value="agent-protocol">agent-protocol</option>
+                <option value="hybrid">hybrid</option>
+              </select>
+            </label>
+            <label class="check-row">
+              <span>Refine sections</span>
+              <input id="refineControl" data-protocol-switch="refine" type="checkbox">
+            </label>
+            <label class="check-row">
+              <span>Translate sections</span>
+              <input id="translateControl" data-protocol-switch="translate" type="checkbox">
+            </label>
+            <label class="check-row">
+              <span>Clipboard</span>
+              <input id="clipboardControl" data-protocol-switch="clipboard" type="checkbox">
+            </label>
+            <label class="check-row">
+              <span>Focused input</span>
+              <input id="focusedInputControl" data-protocol-switch="input" type="checkbox">
+            </label>
+            <label class="field-row">
+              <span>Translation policy</span>
+              <select id="translationPolicyControl" data-setting-control>
+                <option value="opposite">opposite</option>
+                <option value="to-en">to-en</option>
+                <option value="to-el">to-el</option>
+              </select>
+            </label>
+            <label class="check-row">
+              <span>LLM engine</span>
+              <input id="llmEnabledControl" data-setting-control type="checkbox">
+            </label>
+            <label class="field-row">
+              <span>LLM provider</span>
+              <select id="llmProviderControl" data-setting-control>
+                <option value="azure-openai">azure-openai</option>
+                <option value="openai">openai</option>
+                <option value="anthropic">anthropic</option>
+                <option value="google">google</option>
+                <option value="azure-ai-inference">azure-ai-inference</option>
+                <option value="ollama">ollama</option>
+                <option value="litellm">litellm</option>
+                <option value="openai-compat">openai-compat</option>
+              </select>
+            </label>
+            <label class="field-row">
+              <span>LLM model</span>
+              <input id="llmModelControl" data-setting-control type="text" autocomplete="off" spellcheck="false">
+            </label>
+          </form>
+        </section>
+
+        <section class="view-panel" id="logsView" aria-label="Session event log">
+          <div class="event-list" id="eventList"></div>
+        </section>
+      </main>
+
+      <aside class="inspector" aria-label="Inspector">
+        <section class="setting-group">
+          <h2>Protocol</h2>
+          <label class="setting-row protocol-switch-row">
+            <span>Refine sections</span>
+            <input id="inspectorRefineControl" data-protocol-switch="refine" type="checkbox">
+          </label>
+          <label class="setting-row protocol-switch-row">
+            <span>Translate sections</span>
+            <input id="inspectorTranslateControl" data-protocol-switch="translate" type="checkbox">
+          </label>
+          <label class="setting-row protocol-switch-row">
+            <span>Clipboard</span>
+            <input id="inspectorClipboardControl" data-protocol-switch="clipboard" type="checkbox">
+          </label>
+          <label class="setting-row protocol-switch-row">
+            <span>Focused input</span>
+            <input id="inspectorFocusedInputControl" data-protocol-switch="input" type="checkbox">
+          </label>
+        </section>
+
+        <section class="setting-group">
+          <h2>Credentials</h2>
+          <div class="setting-row"><span id="apiKeyName">API key</span><strong class="value" id="apiKeyStatus">unknown</strong></div>
+          <div class="setting-row"><span>Expiry</span><strong class="warning" id="expiryStatus">unknown</strong></div>
+          <div class="setting-row"><span>Storage</span><strong class="value" id="storageStatus">user .env</strong></div>
+        </section>
+
+        <section class="setting-group">
+          <h2>Recent Events</h2>
+          <div class="event-list compact" id="recentEvents"></div>
+        </section>
+      </aside>
+
+      <footer class="capture-bar">
+        <div class="meter" aria-hidden="true">
+          <span class="meter-bar"></span>
+          <span class="meter-bar"></span>
+          <span class="meter-bar"></span>
+          <span class="meter-bar"></span>
+          <span class="meter-bar"></span>
+        </div>
+        <div class="capture-copy">
+          <div class="capture-label">Live partial</div>
+          <div class="live-text" id="liveText">Waiting for audio...</div>
+        </div>
+        <div class="capture-actions">
+          <button class="icon-button" type="button" data-view-button="logs" aria-label="Show logs">L</button>
+          <button class="start-button" type="button" id="sessionToggle">Start Listening</button>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

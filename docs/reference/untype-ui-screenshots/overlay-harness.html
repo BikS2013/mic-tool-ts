@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>untype overlay capture harness</title>
+    <link rel="stylesheet" href="/dist/ui/renderer/overlay.css">
+    <script>
+      (() => {
+        const callbacks = [];
+        const snapshots = {
+          recording: {
+            visible: true,
+            phase: 'recording',
+            tone: 'recording',
+            label: 'RECORDING',
+            detail: 'Push-to-talk active',
+            text: 'Drafting a cleaned status update while the hotkey is held...',
+            hotkey: 'Control+`',
+            protocolFeatures: { refine: true, translate: false, clipboard: true, input: false }
+          },
+          processed: {
+            visible: true,
+            phase: 'processed',
+            tone: 'success',
+            label: 'PROCESSED',
+            detail: 'Copied to clipboard',
+            text: 'Draft a cleaned status update and copy it to the clipboard.',
+            hotkey: 'Control+`',
+            protocolFeatures: { refine: true, translate: true, clipboard: true, input: true }
+          },
+          warning: {
+            visible: true,
+            phase: 'warning',
+            tone: 'warning',
+            label: 'WARNING',
+            detail: 'Input permission needed',
+            text: 'Focused-input delivery needs macOS Accessibility permission.',
+            hotkey: 'Control+`',
+            protocolFeatures: { refine: true, translate: false, clipboard: false, input: true }
+          }
+        };
+        window.untype = {
+          onOverlaySnapshot: (callback) => {
+            callbacks.push(callback);
+            return () => {};
+          }
+        };
+        window.addEventListener('load', () => {
+          const phase = new URLSearchParams(window.location.search).get('phase') || 'recording';
+          setTimeout(() => callbacks.forEach((callback) => callback(snapshots[phase] || snapshots.recording)), 100);
+        });
+      })();
+    </script>
+    <script type="module" src="/dist/ui/renderer/overlay.js"></script>
+  </head>
+  <body>
+    <main class="overlay-shell" data-phase="hidden" data-tone="neutral">
+      <section class="overlay-bar" aria-live="polite" aria-atomic="true">
+        <div class="meter" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="copy">
+          <div class="meta">
+            <span id="overlayLabel">IDLE</span>
+            <strong id="overlayDetail">Idle</strong>
+          </div>
+          <p id="overlayText"></p>
+          <div id="overlayFeatures" class="feature-strip" aria-label="Protocol features"></div>
+        </div>
+        <kbd id="overlayHotkey"></kbd>
+      </section>
+    </main>
+  </body>
+</html>
